@@ -106,10 +106,7 @@ function onGlobalStoreChange() {
 
     // lazy-load 플래그 리셋 (탭 전환 시 새 매장 데이터로 다시 로드하도록)
     window._predAccuracyLoaded = false;
-    window._predBlendingLoaded = false;
     window._weeklyLoaded = false;
-    window._rulesLoaded = false;
-
     // 현재 활성 탭 데이터 재로드
     reloadActiveTab();
 }
@@ -126,32 +123,25 @@ function reloadActiveTab() {
         if (typeof resetHomeCards === 'function') resetHomeCards();
         if (typeof loadHomeData === 'function') loadHomeData();
     }
-    if (tab === 'prediction') {
-        if (typeof loadPredSummary === 'function') loadPredSummary();
-        // 현재 활성 서브뷰에 따라 상세 데이터도 재로드
-        if (typeof loadAccuracyDetail === 'function') loadAccuracyDetail();
-        if (typeof loadBlendingDetail === 'function') loadBlendingDetail();
+    if (tab === 'analytics') {
+        // 현재 활성 analytics 서브뷰에 따라 재로드
+        var activeBtn = document.querySelector('.analytics-tab-btn.active');
+        var activeView = activeBtn ? activeBtn.dataset.analytics : 'daily';
+        if (activeView === 'daily' && typeof loadDailyReport === 'function') {
+            loadDailyReport();
+        } else if (activeView === 'weekly' && typeof loadWeeklyReport === 'function') {
+            loadWeeklyReport();
+        } else if (activeView === 'accuracy' && typeof loadPredSummary === 'function') {
+            loadPredSummary();
+            if (typeof loadAccuracyDetail === 'function') loadAccuracyDetail();
+        }
+        if (typeof loadCategoryList === 'function') loadCategoryList();
     }
     if (tab === 'order') {
         if (typeof loadPartialCategories === 'function') loadPartialCategories();
         if (typeof loadExclusions === 'function') loadExclusions();
     }
-    if (tab === 'report') {
-        // 현재 활성 리포트 서브뷰에 따라 재로드
-        var activeReportBtn = document.querySelector('.report-type-btn.active');
-        var activeReport = activeReportBtn ? activeReportBtn.dataset.report : 'daily';
-        if (activeReport === 'daily' && typeof loadDailyReport === 'function') {
-            loadDailyReport();
-        } else if (activeReport === 'weekly' && typeof loadWeeklyReport === 'function') {
-            loadWeeklyReport();
-        }
-        // 카테고리 목록도 새 매장으로 갱신
-        if (typeof loadCategoryList === 'function') loadCategoryList();
-    }
-    if (tab === 'rules') {
-        if (typeof loadRulesData === 'function') loadRulesData();
-    }
-    if (tab === 'users') {
+    if (tab === 'settings') {
         if (typeof loadUsersTab === 'function') loadUsersTab();
     }
 }
@@ -172,39 +162,48 @@ document.querySelectorAll('.nav-tab').forEach(tab => {
         document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
         document.getElementById('tab-' + target).classList.add('active');
 
-        // 홈 탭 활성화 시 데이터 갱신
+        // 오늘 요약 탭 활성화 시 데이터 갱신
         if (target === 'home' && typeof loadHomeData === 'function') {
             loadHomeData();
         }
-        // 예측분석 탭 활성화 시 데이터 로드
-        if (target === 'prediction' && typeof loadPredSummary === 'function') {
-            loadPredSummary();
-            if (!window._predAccuracyLoaded && typeof loadAccuracyDetail === 'function') loadAccuracyDetail();
+        // 매출/분석 탭 활성화 시 현재 서브뷰 데이터 로드
+        if (target === 'analytics') {
+            var activeBtn = document.querySelector('.analytics-tab-btn.active');
+            var activeView = activeBtn ? activeBtn.dataset.analytics : 'daily';
+            if (activeView === 'daily' && typeof loadDailyReport === 'function') loadDailyReport();
+            else if (activeView === 'weekly' && !window._weeklyLoaded && typeof loadWeeklyReport === 'function') loadWeeklyReport();
+            else if (activeView === 'accuracy' && typeof loadPredSummary === 'function') {
+                loadPredSummary();
+                if (!window._predAccuracyLoaded && typeof loadAccuracyDetail === 'function') loadAccuracyDetail();
+            }
         }
-        // 규칙 현황판 탭 활성화 시 데이터 로드
-        if (target === 'rules' && typeof loadRulesData === 'function') {
-            loadRulesData();
-        }
-        // 사용자 관리 탭 활성화 시 데이터 로드
-        if (target === 'users' && typeof loadUsersTab === 'function') {
+        // 설정 탭 활성화 시 데이터 로드
+        if (target === 'settings' && typeof loadUsersTab === 'function') {
             loadUsersTab();
         }
     });
 });
 
-// === 리포트 서브탭 전환 ===
-document.querySelectorAll('.sub-tab').forEach(tab => {
-    tab.addEventListener('click', e => {
+// === 매출/분석 서브탭 전환 ===
+document.querySelectorAll('.analytics-tab-btn').forEach(function(tab) {
+    tab.addEventListener('click', function(e) {
         e.preventDefault();
-        const target = tab.dataset.report;
-        document.querySelectorAll('.sub-tab').forEach(t => t.classList.remove('active'));
+        var target = tab.dataset.analytics;
+        document.querySelectorAll('.analytics-tab-btn').forEach(function(t) { t.classList.remove('active'); });
         tab.classList.add('active');
-        document.querySelectorAll('.report-view').forEach(v => v.classList.remove('active'));
-        document.getElementById('report-' + target).classList.add('active');
+        document.querySelectorAll('.analytics-view').forEach(function(v) { v.classList.remove('active'); });
+        document.getElementById('analytics-' + target).classList.add('active');
 
         // lazy load
-        if (target === 'weekly' && !window._weeklyLoaded) {
+        if (target === 'daily' && typeof loadDailyReport === 'function') {
+            loadDailyReport();
+        }
+        if (target === 'weekly' && !window._weeklyLoaded && typeof loadWeeklyReport === 'function') {
             loadWeeklyReport();
+        }
+        if (target === 'accuracy' && typeof loadPredSummary === 'function') {
+            loadPredSummary();
+            if (!window._predAccuracyLoaded && typeof loadAccuracyDetail === 'function') loadAccuracyDetail();
         }
     });
 });
@@ -565,9 +564,13 @@ async function checkSession() {
             // admin: 매장 선택 표시
             var storePicker = document.getElementById('navStorePicker');
             if (storePicker) storePicker.style.display = '';
-            // admin: 사용자 관리 탭 표시
-            var usersTab = document.getElementById('navTabUsers');
-            if (usersTab) usersTab.style.display = '';
+            // admin: 설정 탭 표시
+            var settingsTab = document.getElementById('navTabSettings');
+            if (settingsTab) settingsTab.style.display = '';
+            // admin: admin-only 요소 표시
+            document.querySelectorAll('[data-admin-only]').forEach(function(el) {
+                el.style.display = '';
+            });
             // admin: 가입 요청 로드
             loadSignupRequests();
         }

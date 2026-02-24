@@ -75,6 +75,8 @@ def status():
         "recent_events": svc.get_recent_events(),
         "fail_reasons": svc.get_fail_reasons(),
         "order_trend_7d": svc.get_order_trend_7d(),
+        "sales_trend_7d": svc.get_sales_trend_7d(),
+        "waste_trend_7d": svc.get_waste_trend_7d(),
     }
 
     _status_cache[cache_key] = {"data": data, "expires": now + _STATUS_CACHE_TTL}

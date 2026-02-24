@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}?v=14">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}?v=16">
     <script>
         /* FOUC 방지: 페이지 로드 전 저장된 테마 즉시 적용 */
         (function() {
@@ -23,12 +23,10 @@
     <nav class="top-nav">
         <div class="nav-brand">BGF 발주 시스템</div>
         <div class="nav-tabs">
-            <a href="#" class="nav-tab active" data-tab="home">홈</a>
-            <a href="#" class="nav-tab" data-tab="prediction">예측분석</a>
-            <a href="#" class="nav-tab" data-tab="order">발주</a>
-            <a href="#" class="nav-tab" data-tab="report">리포트</a>
-            <a href="#" class="nav-tab" data-tab="rules">규칙 현황판</a>
-            <a href="#" class="nav-tab" data-tab="users" id="navTabUsers" style="display:none">사용자 관리</a>
+            <a href="#" class="nav-tab active" data-tab="home">오늘 요약</a>
+            <a href="#" class="nav-tab" data-tab="analytics">매출/분석</a>
+            <a href="#" class="nav-tab" data-tab="order">발주 관리</a>
+            <a href="#" class="nav-tab" data-tab="settings" id="navTabSettings" style="display:none">설정</a>
         </div>
         <div class="nav-right">
             <!-- 사용자 정보 -->
@@ -72,29 +70,13 @@
     </nav>
 
     <!-- =============================== -->
-    <!-- =============================== -->
-    <!-- 홈 탭                             -->
+    <!-- 오늘 요약 탭                       -->
     <!-- =============================== -->
     <main id="tab-home" class="tab-content active">
 
-        <!-- 메인 메트릭 카드 (Bento Grid) -->
+        <!-- 4개 메트릭 카드 -->
         <div class="home-bento">
-            <!-- 스케줄러 카드 -->
-            <div class="metric-card metric-primary" id="homeCardScheduler" onclick="openSchedulerModal()">
-                <div class="metric-icon">
-                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none">
-                        <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
-                        <path d="M12 6v6l4 2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                    </svg>
-                </div>
-                <div class="metric-body">
-                    <div class="metric-label">스케줄러</div>
-                    <div class="metric-value" id="homeSchedulerValue">확인중</div>
-                    <div class="metric-sub" id="homeSchedulerSub"></div>
-                </div>
-            </div>
-
-            <!-- 발주 현황 카드 -->
+            <!-- 오늘 발주 카드 -->
             <div class="metric-card metric-success" id="homeCardOrder">
                 <div class="metric-icon">
                     <svg width="40" height="40" viewBox="0 0 24 24" fill="none">
@@ -110,74 +92,150 @@
                 </div>
             </div>
 
-            <!-- 폐기 위험 카드 -->
+            <!-- 폐기 주의 카드 -->
             <div class="metric-card metric-danger" id="homeCardExpiry" onclick="openExpiryModal()">
                 <div class="metric-icon">
                     <svg width="40" height="40" viewBox="0 0 24 24" fill="none">
-                        <path d="M12 2L2 7l10 5 10-5-10-5z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
-                        <path d="M2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" stroke="currentColor" stroke-width="2"/>
+                        <line x1="12" y1="9" x2="12" y2="13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                        <line x1="12" y1="17" x2="12.01" y2="17" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
                     </svg>
                 </div>
                 <div class="metric-body">
-                    <div class="metric-label">폐기 위험</div>
+                    <div class="metric-label">폐기 주의</div>
                     <div class="metric-value" id="homeExpiryValue">0</div>
-                    <div class="metric-sub" id="homeExpirySub"></div>
+                    <div class="metric-sub" id="homeExpirySub">위험 상품</div>
                 </div>
             </div>
 
+            <!-- 오늘 매출 카드 -->
+            <div class="metric-card metric-info" id="homeCardSales">
+                <div class="metric-icon">
+                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none">
+                        <line x1="12" y1="1" x2="12" y2="23" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                        <path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
+                </div>
+                <div class="metric-body">
+                    <div class="metric-label">오늘 매출</div>
+                    <div class="metric-value" id="homeSalesValue">-</div>
+                    <div class="metric-sub" id="homeSalesSub"></div>
+                </div>
+            </div>
+
+            <!-- 시스템 상태 카드 -->
+            <div class="metric-card metric-primary" id="homeCardScheduler" onclick="openSchedulerModal()">
+                <div class="metric-icon">
+                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none">
+                        <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
+                        <path d="M12 6v6l4 2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
+                </div>
+                <div class="metric-body">
+                    <div class="metric-label">시스템 상태</div>
+                    <div class="metric-value" id="homeSchedulerValue">확인중</div>
+                    <div class="metric-sub" id="homeSchedulerSub"></div>
+                </div>
+            </div>
         </div>
 
-        <!-- 파이프라인 상태 + 최근 이벤트 -->
-        <div class="home-grid-2col">
-            <!-- 파이프라인 상태 -->
-            <div class="home-panel">
-                <div class="home-panel-header">
-                    <h3 class="home-panel-title">파이프라인 상태</h3>
+        <!-- 7일 스파크라인 추이 -->
+        <div class="home-sparkline-row">
+            <div class="sparkline-card">
+                <div class="sparkline-header">
+                    <span class="sparkline-title">발주량 추이 (7일)</span>
+                    <span class="sparkline-value" id="sparkOrderValue">-</span>
                 </div>
-                <div class="home-panel-body" id="homePipelineBody">
-                    <div class="pipeline-steps">
-                        <div class="pipeline-step" id="pipeCollect">
-                            <div class="pipeline-dot"></div>
-                            <div class="pipeline-info">
-                                <div class="pipeline-name">데이터 수집</div>
-                                <div class="pipeline-time" id="pipeCollectTime">-</div>
-                            </div>
-                        </div>
-                        <div class="pipeline-connector"></div>
-                        <div class="pipeline-step" id="pipePrediction">
-                            <div class="pipeline-dot"></div>
-                            <div class="pipeline-info">
-                                <div class="pipeline-name">예측</div>
-                                <div class="pipeline-time" id="pipePredictionTime">-</div>
-                            </div>
-                        </div>
-                        <div class="pipeline-connector"></div>
-                        <div class="pipeline-step" id="pipeOrder">
-                            <div class="pipeline-dot"></div>
-                            <div class="pipeline-info">
-                                <div class="pipeline-name">발주</div>
-                                <div class="pipeline-time" id="pipeOrderTime">-</div>
-                            </div>
-                        </div>
-                        <div class="pipeline-connector"></div>
-                        <div class="pipeline-step" id="pipeEval">
-                            <div class="pipeline-dot"></div>
-                            <div class="pipeline-info">
-                                <div class="pipeline-name">평가</div>
-                                <div class="pipeline-time" id="pipeEvalTime">-</div>
-                            </div>
-                        </div>
-                    </div>
+                <canvas id="sparkOrderChart" height="50"></canvas>
+            </div>
+            <div class="sparkline-card">
+                <div class="sparkline-header">
+                    <span class="sparkline-title">매출 추이 (7일)</span>
+                    <span class="sparkline-value" id="sparkSalesValue">-</span>
+                </div>
+                <canvas id="sparkSalesChart" height="50"></canvas>
+            </div>
+            <div class="sparkline-card">
+                <div class="sparkline-header">
+                    <span class="sparkline-title">폐기 추이 (7일)</span>
+                    <span class="sparkline-value" id="sparkWasteValue">-</span>
+                </div>
+                <canvas id="sparkWasteChart" height="50"></canvas>
+            </div>
+        </div>
+
+        <!-- 폐기 주의 상품 인라인 리스트 -->
+        <div class="home-panel" id="homeExpiryInline">
+            <div class="home-panel-header">
+                <h3 class="home-panel-title">폐기 주의 상품 (상위 5개)</h3>
+                <button class="btn btn-sm" onclick="openExpiryModal()">더 보기</button>
+            </div>
+            <div class="home-panel-body" id="homeExpiryListBody">
+                <div class="hint">로딩중...</div>
+            </div>
+        </div>
+
+        <!-- 발주 실패 사유 -->
+        <div class="home-panel" id="homeFailPanel" style="display:none">
+            <div class="home-panel-header">
+                <h3 class="home-panel-title">오늘 발주 실패 사유</h3>
+                <span class="home-panel-badge" id="homeFailCount">0</span>
+            </div>
+            <div class="home-panel-body">
+                <div class="report-table-wrapper">
+                    <table class="report-table" id="homeFailTable">
+                        <thead>
+                            <tr>
+                                <th data-sort="text">상품명</th>
+                                <th data-sort="text">카테고리</th>
+                                <th data-sort="text">사유</th>
+                                <th data-sort="text">상태</th>
+                            </tr>
+                        </thead>
+                        <tbody id="homeFailTableBody"></tbody>
+                    </table>
                 </div>
             </div>
+        </div>
 
-            <!-- 최근 이벤트 -->
-            <div class="home-panel">
-                <div class="home-panel-header">
-                    <h3 class="home-panel-title">최근 이벤트</h3>
-                </div>
-                <div class="home-panel-body" id="homeEventsBody">
-                    <div class="hint">로딩중...</div>
+        <!-- 작업 진행 상황 (admin only) -->
+        <div class="home-panel" id="homePipelinePanel" data-admin-only style="display:none">
+            <div class="home-panel-header">
+                <h3 class="home-panel-title">작업 진행 상황</h3>
+            </div>
+            <div class="home-panel-body" id="homePipelineBody">
+                <div class="pipeline-steps">
+                    <div class="pipeline-step" id="pipeCollect">
+                        <div class="pipeline-dot"></div>
+                        <div class="pipeline-info">
+                            <div class="pipeline-name">데이터 수집</div>
+                            <div class="pipeline-time" id="pipeCollectTime">-</div>
+                        </div>
+                    </div>
+                    <div class="pipeline-connector"></div>
+                    <div class="pipeline-step" id="pipePrediction">
+                        <div class="pipeline-dot"></div>
+                        <div class="pipeline-info">
+                            <div class="pipeline-name">예측</div>
+                            <div class="pipeline-time" id="pipePredictionTime">-</div>
+                        </div>
+                    </div>
+                    <div class="pipeline-connector"></div>
+                    <div class="pipeline-step" id="pipeOrder">
+                        <div class="pipeline-dot"></div>
+                        <div class="pipeline-info">
+                            <div class="pipeline-name">발주</div>
+                            <div class="pipeline-time" id="pipeOrderTime">-</div>
+                        </div>
+                    </div>
+                    <div class="pipeline-connector"></div>
+                    <div class="pipeline-step" id="pipeEval">
+                        <div class="pipeline-dot"></div>
+                        <div class="pipeline-info">
+                            <div class="pipeline-name">평가</div>
+                            <div class="pipeline-time" id="pipeEvalTime">-</div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -206,105 +264,229 @@
             </div>
         </div>
 
-        <!-- 발주 실패 사유 -->
-        <div class="home-panel" id="homeFailPanel" style="display:none">
-            <div class="home-panel-header">
-                <h3 class="home-panel-title">오늘 발주 실패 사유</h3>
-                <span class="home-panel-badge" id="homeFailCount">0</span>
-            </div>
-            <div class="home-panel-body">
-                <div class="report-table-wrapper">
-                    <table class="report-table" id="homeFailTable">
-                        <thead>
-                            <tr>
-                                <th data-sort="text">상품명</th>
-                                <th data-sort="text">카테고리</th>
-                                <th data-sort="text">사유</th>
-                                <th data-sort="text">상태</th>
-                            </tr>
-                        </thead>
-                        <tbody id="homeFailTableBody"></tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-
     </main>
 
     <!-- =============================== -->
-    <!-- 예측분석 탭                       -->
+    <!-- 매출/분석 탭                       -->
     <!-- =============================== -->
-    <main id="tab-prediction" class="tab-content">
+    <main id="tab-analytics" class="tab-content">
 
-        <!-- 요약 카드 4개 -->
-        <div class="pred-summary-grid">
-            <div class="pred-summary-card pred-card-info" id="predHitRate">
-                <div class="pred-card-icon">
-                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
-                        <path d="M22 12h-4l-3 9L9 3l-3 9H2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                    </svg>
+        <!-- 서브탭 선택기 (pill style) -->
+        <div class="analytics-tab-selector">
+            <button class="analytics-tab-btn active" data-analytics="daily">일일 현황</button>
+            <button class="analytics-tab-btn" data-analytics="weekly">주간 추이</button>
+            <button class="analytics-tab-btn" data-analytics="category">카테고리</button>
+            <button class="analytics-tab-btn" data-analytics="accuracy" data-admin-only style="display:none">예측 정확도</button>
+        </div>
+
+        <!-- 서브뷰 1: 일일 현황 (기존 report-daily) -->
+        <div id="analytics-daily" class="analytics-view active">
+            <div class="report-summary-cards" id="dailySummaryCards"></div>
+
+            <div class="report-charts-grid">
+                <div class="report-chart-card">
+                    <div class="chart-card-header">
+                        <h3 class="chart-title">카테고리별 발주량</h3>
+                    </div>
+                    <div class="chart-card-body">
+                        <canvas id="dailyCategoryChart"></canvas>
+                    </div>
                 </div>
-                <div class="pred-card-body">
-                    <div class="pred-card-label">예측 적중률</div>
-                    <div class="pred-card-value" id="predHitRateValue">-</div>
-                    <div class="pred-card-sub" id="predHitRateSub"></div>
+
+                <div class="report-chart-card">
+                    <div class="chart-card-header">
+                        <h3 class="chart-title">발주량 분포</h3>
+                    </div>
+                    <div class="chart-card-body">
+                        <canvas id="dailySafetyHist" height="200"></canvas>
+                    </div>
                 </div>
             </div>
 
-            <div class="pred-summary-card pred-card-success" id="predQtyAccuracy">
-                <div class="pred-card-icon">
-                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
-                        <path d="M9 11l3 3L22 4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                        <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" stroke="currentColor" stroke-width="2"/>
-                    </svg>
+            <div class="report-table-card" id="dailyTablePanel">
+                <div class="table-card-header">
+                    <h3 class="chart-title">상품별 상세</h3>
+                    <input type="text" id="dailySearch" class="report-search" placeholder="상품명, 카테고리 검색...">
                 </div>
-                <div class="pred-card-body">
-                    <div class="pred-card-label">정량 정확도</div>
-                    <div class="pred-card-value" id="predQtyAccuracyValue">-</div>
-                    <div class="pred-card-sub" id="predQtyAccuracySub"></div>
-                </div>
-            </div>
-
-            <div class="pred-summary-card pred-card-accent" id="predMLStatus">
-                <div class="pred-card-icon">
-                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
-                        <rect x="2" y="3" width="20" height="14" rx="2" stroke="currentColor" stroke-width="2"/>
-                        <path d="M8 21h8M12 17v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                    </svg>
-                </div>
-                <div class="pred-card-body">
-                    <div class="pred-card-label">ML 모델</div>
-                    <div class="pred-card-value" id="predMLStatusValue">-</div>
-                    <div class="pred-card-sub" id="predMLStatusSub"></div>
-                </div>
-            </div>
-
-            <div class="pred-summary-card pred-card-warning" id="predModelMix">
-                <div class="pred-card-icon">
-                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
-                        <path d="M18 20V10M12 20V4M6 20v-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                    </svg>
-                </div>
-                <div class="pred-card-body">
-                    <div class="pred-card-label">예측 방식 비율</div>
-                    <div class="pred-card-value" id="predModelMixValue">-</div>
-                    <div class="pred-card-sub" id="predModelMixSub"></div>
+                <div class="table-card-body">
+                    <div class="report-table-wrapper">
+                        <table id="dailyTable" class="report-table">
+                            <thead>
+                                <tr>
+                                    <th data-sort="text">상품명</th>
+                                    <th data-sort="text">카테고리</th>
+                                    <th data-sort="num" class="text-right">일평균</th>
+                                    <th data-sort="num" class="text-right">안전재고</th>
+                                    <th data-sort="num" class="text-right">현재고</th>
+                                    <th data-sort="num" class="text-right">발주량</th>
+                                    <th data-sort="text" class="text-center">신뢰도</th>
+                                </tr>
+                            </thead>
+                            <tbody id="dailyTableBody"></tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
 
-        <!-- 서브탭 선택기 -->
-        <div class="pred-type-selector">
-            <button class="pred-type-btn active" data-pred-view="accuracy">적중률 상세</button>
-            <button class="pred-type-btn" data-pred-view="ml">ML 모델</button>
-            <button class="pred-type-btn" data-pred-view="blending">예측 비중</button>
-        </div>
+        <!-- 서브뷰 2: 주간 추이 (기존 report-weekly) -->
+        <div id="analytics-weekly" class="analytics-view">
+            <div class="report-summary-cards" id="weeklySummaryCards"></div>
 
-        <!-- 서브뷰 1: 적중률 상세 -->
-        <div id="pred-view-accuracy" class="pred-view active">
             <div class="report-chart-card full-width">
                 <div class="chart-card-header">
-                    <h3 class="chart-title">일별 MAPE 추이 (14일)</h3>
+                    <h3 class="chart-title">카테고리별 판매 추이</h3>
+                </div>
+                <div class="chart-card-body">
+                    <canvas id="weeklyTrendChart" height="300"></canvas>
+                </div>
+            </div>
+
+            <div class="report-charts-grid">
+                <div class="report-chart-card">
+                    <div class="chart-card-header">
+                        <h3 class="chart-title">예측 정확도</h3>
+                    </div>
+                    <div class="chart-card-body">
+                        <canvas id="weeklyAccuracyChart" height="250"></canvas>
+                    </div>
+                </div>
+
+                <div class="report-chart-card">
+                    <div class="chart-card-header">
+                        <h3 class="chart-title">요일별 판매 패턴</h3>
+                    </div>
+                    <div class="chart-card-body">
+                        <div id="weeklyHeatmap"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="report-table-card">
+                <div class="table-card-header">
+                    <h3 class="chart-title">판매 상위 TOP 10</h3>
+                </div>
+                <div class="table-card-body">
+                    <div id="weeklyTopItems"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 서브뷰 3: 카테고리 분석 (기존 report-category) -->
+        <div id="analytics-category" class="analytics-view">
+            <div class="category-selector-card">
+                <label class="category-label">카테고리 선택</label>
+                <div class="category-selector-controls">
+                    <select id="categorySelect" class="category-select"></select>
+                    <button id="btnLoadCategory" class="btn-analyze">분석 시작</button>
+                </div>
+            </div>
+
+            <div id="categoryContent" style="display:none">
+                <div class="report-summary-cards" id="catSummaryCards"></div>
+
+                <div class="report-chart-card full-width">
+                    <div class="chart-card-header">
+                        <h3 class="chart-title">요일별 판매 패턴</h3>
+                    </div>
+                    <div class="chart-card-body">
+                        <canvas id="catRadarChart" height="280"></canvas>
+                    </div>
+                </div>
+
+                <div class="report-charts-grid">
+                    <div class="report-chart-card">
+                        <div class="chart-card-header">
+                            <h3 class="chart-title">상품 회전 현황</h3>
+                        </div>
+                        <div class="chart-card-body">
+                            <canvas id="catDoughnutChart"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="report-chart-card">
+                        <div class="chart-card-header">
+                            <h3 class="chart-title">안전재고 설정</h3>
+                        </div>
+                        <div class="chart-card-body">
+                            <div id="catSafetyTable"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="report-table-card">
+                    <div class="table-card-header">
+                        <h3 class="chart-title">상품별 7일 추이</h3>
+                    </div>
+                    <div class="table-card-body">
+                        <div id="catSparklines"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 서브뷰 4: 예측 정확도 (admin only, 기존 prediction accuracy) -->
+        <div id="analytics-accuracy" class="analytics-view">
+            <!-- 요약 카드 -->
+            <div class="pred-summary-grid">
+                <div class="pred-summary-card pred-card-info" id="predHitRate">
+                    <div class="pred-card-icon">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+                            <path d="M22 12h-4l-3 9L9 3l-3 9H2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </div>
+                    <div class="pred-card-body">
+                        <div class="pred-card-label">예측 맞힌 비율</div>
+                        <div class="pred-card-value" id="predHitRateValue">-</div>
+                        <div class="pred-card-sub" id="predHitRateSub"></div>
+                    </div>
+                </div>
+
+                <div class="pred-summary-card pred-card-success" id="predQtyAccuracy">
+                    <div class="pred-card-icon">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+                            <path d="M9 11l3 3L22 4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                            <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" stroke="currentColor" stroke-width="2"/>
+                        </svg>
+                    </div>
+                    <div class="pred-card-body">
+                        <div class="pred-card-label">수량 정확도</div>
+                        <div class="pred-card-value" id="predQtyAccuracyValue">-</div>
+                        <div class="pred-card-sub" id="predQtyAccuracySub"></div>
+                    </div>
+                </div>
+
+                <div class="pred-summary-card pred-card-accent" id="predMLStatus">
+                    <div class="pred-card-icon">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+                            <rect x="2" y="3" width="20" height="14" rx="2" stroke="currentColor" stroke-width="2"/>
+                            <path d="M8 21h8M12 17v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                        </svg>
+                    </div>
+                    <div class="pred-card-body">
+                        <div class="pred-card-label">ML 모델</div>
+                        <div class="pred-card-value" id="predMLStatusValue">-</div>
+                        <div class="pred-card-sub" id="predMLStatusSub"></div>
+                    </div>
+                </div>
+
+                <div class="pred-summary-card pred-card-warning" id="predModelMix">
+                    <div class="pred-card-icon">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+                            <path d="M18 20V10M12 20V4M6 20v-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                        </svg>
+                    </div>
+                    <div class="pred-card-body">
+                        <div class="pred-card-label">예측 방식 비율</div>
+                        <div class="pred-card-value" id="predModelMixValue">-</div>
+                        <div class="pred-card-sub" id="predModelMixSub"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="report-chart-card full-width">
+                <div class="chart-card-header">
+                    <h3 class="chart-title">예측 오차 추이 (14일)</h3>
                 </div>
                 <div class="chart-card-body">
                     <canvas id="predMapeChart" height="250"></canvas>
@@ -322,7 +504,7 @@
                                 <thead>
                                     <tr>
                                         <th data-sort="text">카테고리</th>
-                                        <th data-sort="num" class="text-right">MAPE</th>
+                                        <th data-sort="num" class="text-right">오차율</th>
                                         <th data-sort="num" class="text-right">MAE</th>
                                         <th data-sort="num" class="text-right">+-2 적중</th>
                                         <th data-sort="num" class="text-right">건수</th>
@@ -336,7 +518,7 @@
 
                 <div class="report-table-card">
                     <div class="table-card-header">
-                        <h3 class="chart-title">Best / Worst 상품</h3>
+                        <h3 class="chart-title">잘 맞는 / 못 맞는 상품</h3>
                     </div>
                     <div class="table-card-body" id="predBestWorstBody">
                         <div class="hint">데이터 로딩중...</div>
@@ -345,86 +527,10 @@
             </div>
         </div>
 
-        <!-- 서브뷰 2: ML 모델 -->
-        <div id="pred-view-ml" class="pred-view">
-            <div class="pred-ml-grid" id="predMLGrid">
-                <div class="hint">ML 모델 정보 로딩중...</div>
-            </div>
-        </div>
-
-        <!-- 서브뷰 3: 예측 비중 -->
-        <div id="pred-view-blending" class="pred-view">
-            <div class="report-charts-grid">
-                <div class="report-chart-card">
-                    <div class="chart-card-header">
-                        <h3 class="chart-title">블렌딩 규칙</h3>
-                    </div>
-                    <div class="chart-card-body" id="predBlendDiagram"></div>
-                </div>
-
-                <div class="report-chart-card">
-                    <div class="chart-card-header">
-                        <h3 class="chart-title">예측 방식 분포 (7일)</h3>
-                    </div>
-                    <div class="chart-card-body">
-                        <canvas id="predDonutChart" height="250"></canvas>
-                    </div>
-                </div>
-            </div>
-
-            <div class="report-charts-grid">
-                <div class="report-table-card">
-                    <div class="table-card-header">
-                        <h3 class="chart-title">EvalConfig 파라미터</h3>
-                    </div>
-                    <div class="table-card-body">
-                        <div class="report-table-wrapper">
-                            <table class="report-table" id="predEvalConfigTable">
-                                <thead>
-                                    <tr>
-                                        <th data-sort="text">파라미터</th>
-                                        <th data-sort="num" class="text-right">현재값</th>
-                                        <th data-sort="num" class="text-right">기본값</th>
-                                        <th data-sort="text">설명</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="predEvalConfigBody"></tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="report-table-card">
-                    <div class="table-card-header">
-                        <h3 class="chart-title">보정 이력</h3>
-                    </div>
-                    <div class="table-card-body">
-                        <div class="report-table-wrapper">
-                            <table class="report-table" id="predCalibrationTable">
-                                <thead>
-                                    <tr>
-                                        <th data-sort="text">날짜</th>
-                                        <th data-sort="text">파라미터</th>
-                                        <th data-sort="num" class="text-right">이전</th>
-                                        <th data-sort="num" class="text-right">변경</th>
-                                        <th data-sort="text">사유</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="predCalibrationBody"></tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
     </main>
 
     <!-- =============================== -->
-    <!-- 발주 탭                          -->
-    <!-- =============================== -->
-    <!-- =============================== -->
-    <!-- 발주 탭                          -->
+    <!-- 발주 관리 탭                       -->
     <!-- =============================== -->
     <main id="tab-order" class="tab-content">
 
@@ -437,20 +543,20 @@
                         <rect x="3" y="10" width="18" height="4" rx="1"/>
                         <rect x="3" y="15" width="18" height="4" rx="1"/>
                     </svg>
-                    <span class="mode-label">부분발주</span>
-                    <span class="mode-desc">카테고리 선택</span>
+                    <span class="mode-label">카테고리 선택</span>
+                    <span class="mode-desc">원하는 카테고리만 발주</span>
                 </button>
                 <button class="order-mode-btn" data-mode="full" id="btnModeFull">
                     <svg class="mode-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <rect x="3" y="3" width="18" height="18" rx="2"/>
                         <polyline points="9 11 12 14 16 10"/>
                     </svg>
-                    <span class="mode-label">전체발주</span>
-                    <span class="mode-desc">전체 상품</span>
+                    <span class="mode-label">전체 상품</span>
+                    <span class="mode-desc">모든 상품 한번에 발주</span>
                 </button>
             </div>
 
-            <!-- 부분발주 섹션 -->
+            <!-- 카테고리 선택 발주 -->
             <div class="order-section" id="sectionPartial" style="display:block">
                 <div class="order-section-header">
                     <div>
@@ -500,7 +606,7 @@
                         </svg>
                         <span>엑셀 다운로드</span>
                     </button>
-                    <button class="btn-order btn-order-execute" id="btnPartialExecute">
+                    <button class="btn-order btn-order-execute" id="btnPartialExecute" data-admin-only style="display:none">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <polyline points="9 11 12 14 22 4"/>
                             <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
@@ -510,7 +616,7 @@
                 </div>
             </div>
 
-            <!-- 전체발주 섹션 -->
+            <!-- 전체 상품 발주 -->
             <div class="order-section" id="sectionFull" style="display:none">
                 <div class="order-section-header">
                     <div>
@@ -526,11 +632,11 @@
                             <path d="M12 16v-4m0-4h.01"/>
                         </svg>
                         <div class="info-content">
-                            <div class="info-title">전체 발주 정보</div>
+                            <div class="info-title">전체 발주 안내</div>
                             <ul class="info-list">
                                 <li>모든 카테고리의 상품이 대상입니다</li>
-                                <li>안전재고 기반 자동 계산이 적용됩니다</li>
-                                <li>발주 제외 상품은 자동으로 제외됩니다</li>
+                                <li>안전재고 기반으로 자동 계산됩니다</li>
+                                <li>발주 안 하는 상품은 자동으로 제외됩니다</li>
                             </ul>
                         </div>
                     </div>
@@ -538,7 +644,7 @@
 
                 <details class="exclude-panel" id="excludePanel">
                     <summary class="exclude-panel-summary">
-                        발주 제외 상품 (<span id="excludeTotalCount">0</span>건)
+                        발주 안 하는 상품 (<span id="excludeTotalCount">0</span>건)
                         <span class="exclude-store-badge">점포: <span id="excludeStoreId">-</span></span>
                     </summary>
                     <div class="exclude-panel-body">
@@ -583,7 +689,7 @@
                         </svg>
                         <span>엑셀 다운로드</span>
                     </button>
-                    <button class="btn-order btn-order-execute" id="btnFullExecute">
+                    <button class="btn-order btn-order-execute" id="btnFullExecute" data-admin-only style="display:none">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <polyline points="9 11 12 14 22 4"/>
                             <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
@@ -593,8 +699,9 @@
                 </div>
             </div>
 
-            <!-- 공통 설정 및 로그 영역 -->
-            <div class="order-log-section">
+            <!-- 상세 설정 (admin만) -->
+            <details class="order-log-section" data-admin-only style="display:none">
+                <summary style="cursor:pointer; font-size:0.9rem; color:var(--text-secondary); padding:8px 0;">상세 설정 및 실행 로그</summary>
                 <div class="order-settings">
                     <div class="order-settings-row">
                         <div class="order-setting-field">
@@ -628,316 +735,57 @@
                     </div>
                     <pre id="scriptLog" class="order-log-output"></pre>
                 </div>
-            </div>
+            </details>
         </div>
 
     </main>
 
     <!-- =============================== -->
-    <!-- 리포트 탭                         -->
+    <!-- 설정 탭 (admin 전용)               -->
     <!-- =============================== -->
-    <main id="tab-report" class="tab-content">
+    <main id="tab-settings" class="tab-content">
 
-        <div class="report-container">
-            <!-- 리포트 타입 선택 -->
-            <div class="report-type-selector">
-                <button class="report-type-btn active" data-report="daily">
-                    <svg class="report-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <rect x="3" y="4" width="18" height="18" rx="2"/>
-                        <line x1="16" y1="2" x2="16" y2="6"/>
-                        <line x1="8" y1="2" x2="8" y2="6"/>
-                        <line x1="3" y1="10" x2="21" y2="10"/>
-                    </svg>
-                    <span class="report-label">일일 리포트</span>
-                    <span class="report-desc">오늘의 발주 현황</span>
-                </button>
-                <button class="report-type-btn" data-report="weekly">
-                    <svg class="report-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
-                    </svg>
-                    <span class="report-label">주간 트렌드</span>
-                    <span class="report-desc">7일 판매 분석</span>
-                </button>
-                <button class="report-type-btn" data-report="category">
-                    <svg class="report-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <circle cx="12" cy="12" r="10"/>
-                        <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/>
-                    </svg>
-                    <span class="report-label">카테고리 분석</span>
-                    <span class="report-desc">품목별 상세</span>
-                </button>
-                <button class="report-type-btn" data-report="impact">
-                    <svg class="report-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M18 20V10M12 20V4M6 20v-6"/>
-                    </svg>
-                    <span class="report-label">영향도 분석</span>
-                    <span class="report-desc">파라미터 변경 영향</span>
-                </button>
+        <!-- 스케줄러 관리 -->
+        <div class="home-panel">
+            <div class="home-panel-header">
+                <h3 class="home-panel-title">스케줄러 관리</h3>
             </div>
-
-            <!-- 일일 발주 리포트 -->
-            <div id="report-daily" class="report-view active">
-                <div class="report-summary-cards" id="dailySummaryCards"></div>
-
-                <div class="report-charts-grid">
-                    <div class="report-chart-card">
-                        <div class="chart-card-header">
-                            <h3 class="chart-title">카테고리별 발주량</h3>
-                        </div>
-                        <div class="chart-card-body">
-                            <canvas id="dailyCategoryChart"></canvas>
-                        </div>
+            <div class="home-panel-body">
+                <div class="scheduler-control-panel">
+                    <div class="scheduler-status-info">
+                        <span class="status-badge" id="settingsSchedulerBadge">확인중</span>
+                        <span class="status-text" id="settingsSchedulerPid"></span>
                     </div>
-
-                    <div class="report-chart-card">
-                        <div class="chart-card-header">
-                            <h3 class="chart-title">안전재고 일수 분포</h3>
-                        </div>
-                        <div class="chart-card-body">
-                            <canvas id="dailySafetyHist" height="200"></canvas>
-                        </div>
+                    <div class="scheduler-buttons">
+                        <button id="btnSettingsSchedulerStart" class="btn-scheduler-start" onclick="schedulerStart()">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                                <path d="M8 5v14l11-7z" fill="currentColor"/>
+                            </svg>
+                            <span>시작</span>
+                        </button>
+                        <button id="btnSettingsSchedulerStop" class="btn-scheduler-stop" onclick="schedulerStop()" style="display:none">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                                <rect x="6" y="6" width="12" height="12" fill="currentColor"/>
+                            </svg>
+                            <span>정지</span>
+                        </button>
                     </div>
                 </div>
-
-                <div class="report-table-card" id="dailyTablePanel">
-                    <div class="table-card-header">
-                        <h3 class="chart-title">상품별 상세</h3>
-                        <input type="text" id="dailySearch" class="report-search" placeholder="상품명, 카테고리 검색...">
-                    </div>
-                    <div class="table-card-body">
-                        <div class="report-table-wrapper">
-                            <table id="dailyTable" class="report-table">
-                                <thead>
-                                    <tr>
-                                        <th data-sort="text">상품명</th>
-                                        <th data-sort="text">카테고리</th>
-                                        <th data-sort="num" class="text-right">일평균</th>
-                                        <th data-sort="num" class="text-right">안전재고</th>
-                                        <th data-sort="num" class="text-right">현재고</th>
-                                        <th data-sort="num" class="text-right">발주량</th>
-                                        <th data-sort="text" class="text-center">신뢰도</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="dailyTableBody"></tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- 주간 트렌드 리포트 -->
-            <div id="report-weekly" class="report-view">
-                <div class="report-summary-cards" id="weeklySummaryCards"></div>
-
-                <div class="report-chart-card full-width">
-                    <div class="chart-card-header">
-                        <h3 class="chart-title">카테고리별 판매 추이</h3>
-                    </div>
-                    <div class="chart-card-body">
-                        <canvas id="weeklyTrendChart" height="300"></canvas>
-                    </div>
-                </div>
-
-                <div class="report-charts-grid">
-                    <div class="report-chart-card">
-                        <div class="chart-card-header">
-                            <h3 class="chart-title">예측 정확도</h3>
-                        </div>
-                        <div class="chart-card-body">
-                            <canvas id="weeklyAccuracyChart" height="250"></canvas>
-                        </div>
-                    </div>
-
-                    <div class="report-chart-card">
-                        <div class="chart-card-header">
-                            <h3 class="chart-title">요일별 판매 패턴</h3>
-                        </div>
-                        <div class="chart-card-body">
-                            <div id="weeklyHeatmap"></div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="report-table-card">
-                    <div class="table-card-header">
-                        <h3 class="chart-title">판매 상위 TOP 10</h3>
-                    </div>
-                    <div class="table-card-body">
-                        <div id="weeklyTopItems"></div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- 카테고리 분석 리포트 -->
-            <div id="report-category" class="report-view">
-                <div class="category-selector-card">
-                    <label class="category-label">카테고리 선택</label>
-                    <div class="category-selector-controls">
-                        <select id="categorySelect" class="category-select"></select>
-                        <button id="btnLoadCategory" class="btn-analyze">분석 시작</button>
-                    </div>
-                </div>
-
-                <div id="categoryContent" style="display:none">
-                    <div class="report-summary-cards" id="catSummaryCards"></div>
-
-                    <div class="report-chart-card full-width">
-                        <div class="chart-card-header">
-                            <h3 class="chart-title">요일 계수 비교</h3>
-                        </div>
-                        <div class="chart-card-body">
-                            <canvas id="catRadarChart" height="280"></canvas>
-                        </div>
-                    </div>
-
-                    <div class="report-charts-grid">
-                        <div class="report-chart-card">
-                            <div class="chart-card-header">
-                                <h3 class="chart-title">회전율 분포</h3>
-                            </div>
-                            <div class="chart-card-body">
-                                <canvas id="catDoughnutChart"></canvas>
-                            </div>
-                        </div>
-
-                        <div class="report-chart-card">
-                            <div class="chart-card-header">
-                                <h3 class="chart-title">안전재고 설정</h3>
-                            </div>
-                            <div class="chart-card-body">
-                                <div id="catSafetyTable"></div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="report-table-card">
-                        <div class="table-card-header">
-                            <h3 class="chart-title">상품별 7일 추이</h3>
-                        </div>
-                        <div class="table-card-body">
-                            <div id="catSparklines"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- 영향도 분석 리포트 -->
-            <div id="report-impact" class="report-view">
-                <div class="report-chart-card impact-header-card">
-                    <div class="chart-card-header impact-header-flex">
-                        <h3 class="chart-title">안전재고 파라미터 영향도 분석</h3>
-                        <div class="impact-actions">
-                            <span id="baselineStatus" class="status-text impact-status"></span>
-                            <button id="btnSaveBaseline" class="btn btn-sm">Baseline 저장</button>
-                            <button id="btnLoadImpact" class="btn-analyze btn-sm">영향도 분석</button>
-                        </div>
-                    </div>
-                </div>
-
-                <div id="impactContent" style="display: none;">
-                    <div class="report-summary-cards" id="impactSummaryCards"></div>
-
-                    <div class="report-chart-card full-width">
-                        <div class="chart-card-header">
-                            <h3 class="chart-title">카테고리별 변화율</h3>
-                        </div>
-                        <div class="chart-card-body">
-                            <canvas id="impactCatChart" height="300"></canvas>
-                        </div>
-                    </div>
-
-                    <div class="report-table-card">
-                        <div class="table-card-header">
-                            <h3 class="chart-title">상품별 비교</h3>
-                            <input type="text" id="impactSearch" class="report-search" placeholder="상품명, 카테고리 검색...">
-                        </div>
-                        <div class="table-card-body">
-                            <div id="impactTable"></div>
-                        </div>
-                    </div>
-
-                    <div class="report-chart-card full-width">
-                        <div class="chart-card-header">
-                            <h3 class="chart-title">품절 추이</h3>
-                        </div>
-                        <div class="chart-card-body">
-                            <canvas id="impactStockoutChart" height="200"></canvas>
-                        </div>
-                    </div>
+                <div class="schedule-timeline" id="settingsTimeline">
+                    <div class="hint">로딩중...</div>
                 </div>
             </div>
         </div>
 
-    </main>
-
-    <!-- =============================== -->
-    <!-- 규칙 현황판 탭                     -->
-    <!-- =============================== -->
-    <main id="tab-rules" class="tab-content">
-
-        <!-- 요약 카드 -->
-        <div class="rules-summary-grid">
-            <div class="rules-summary-card rules-card-total">
-                <div class="rules-card-icon">📋</div>
-                <div class="rules-card-body">
-                    <div class="rules-card-value" id="rulesTotalCount">-</div>
-                    <div class="rules-card-label">전체 규칙</div>
-                </div>
-            </div>
-            <div class="rules-summary-card rules-card-active">
-                <div class="rules-card-icon">✅</div>
-                <div class="rules-card-body">
-                    <div class="rules-card-value" id="rulesActiveCount">-</div>
-                    <div class="rules-card-label">활성</div>
-                </div>
-            </div>
-            <div class="rules-summary-card rules-card-inactive">
-                <div class="rules-card-icon">⏸️</div>
-                <div class="rules-card-body">
-                    <div class="rules-card-value" id="rulesInactiveCount">-</div>
-                    <div class="rules-card-label">비활성</div>
-                </div>
-            </div>
-            <div class="rules-summary-card rules-card-groups">
-                <div class="rules-card-icon">📁</div>
-                <div class="rules-card-body">
-                    <div class="rules-card-value" id="rulesGroupCount">-</div>
-                    <div class="rules-card-label">그룹</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- 상품별 규칙 추적 -->
-        <div class="rules-trace-card">
-            <div class="rules-trace-header">
-                <h3 class="rules-trace-title">상품별 규칙 적용 추적</h3>
-                <div class="rules-trace-controls">
-                    <input type="text" id="rulesTraceInput" class="rules-trace-input" placeholder="상품코드 입력 (예: 8801234567890)">
-                    <button id="btnRulesTrace" class="rules-trace-btn">조회</button>
-                </div>
-            </div>
-            <div id="rulesTraceResult" class="rules-trace-result" style="display:none"></div>
-        </div>
-
-        <!-- 그룹별 규칙 목록 -->
-        <div id="rulesGroupContainer" class="rules-group-container"></div>
-
-    </main>
-
-    <!-- =============================== -->
-    <!-- 사용자 관리 탭 (admin 전용)          -->
-    <!-- =============================== -->
-    <main id="tab-users" class="tab-content">
-
-        <!-- 가입 요청 섹션 -->
-        <div class="home-panel" id="usersSignupPanel">
+        <!-- 가입 요청 -->
+        <div class="home-panel" id="settingsSignupPanel">
             <div class="home-panel-header">
                 <h3 class="home-panel-title">가입 요청 대기</h3>
-                <span class="home-panel-badge" id="usersSignupCount">0</span>
+                <span class="home-panel-badge" id="settingsSignupCount">0</span>
             </div>
             <div class="home-panel-body">
                 <div class="report-table-wrapper">
-                    <table class="report-table" id="usersSignupTable" style="display:none">
+                    <table class="report-table" id="settingsSignupTable" style="display:none">
                         <thead>
                             <tr>
                                 <th data-sort="text">매장 코드</th>
@@ -946,14 +794,14 @@
                                 <th>처리</th>
                             </tr>
                         </thead>
-                        <tbody id="usersSignupTableBody"></tbody>
+                        <tbody id="settingsSignupTableBody"></tbody>
                     </table>
                 </div>
-                <div class="hint" id="usersSignupEmpty">대기 중인 가입 요청이 없습니다.</div>
+                <div class="hint" id="settingsSignupEmpty">대기 중인 가입 요청이 없습니다.</div>
             </div>
         </div>
 
-        <!-- 사용자 목록 섹션 -->
+        <!-- 사용자 목록 -->
         <div class="home-panel">
             <div class="home-panel-header">
                 <h3 class="home-panel-title">등록된 사용자</h3>
@@ -1021,7 +869,7 @@
     <div id="schedulerModal" class="modal" onclick="closeSchedulerModal(event)">
         <div class="modal-content scheduler-modal" onclick="event.stopPropagation()">
             <div class="modal-header">
-                <h2 class="modal-title">스케줄러 관리</h2>
+                <h2 class="modal-title">시스템 상태</h2>
                 <button class="modal-close" onclick="closeSchedulerModal()">&times;</button>
             </div>
             <div class="modal-body">
@@ -1030,18 +878,18 @@
                         <span class="status-badge" id="schedulerStatusBadge">확인중</span>
                         <span class="status-text" id="schedulerPidText"></span>
                     </div>
-                    <div class="scheduler-buttons">
+                    <div class="scheduler-buttons" data-admin-only style="display:none">
                         <button id="btnSchedulerStart" class="btn-scheduler-start" onclick="schedulerStart()">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
                                 <path d="M8 5v14l11-7z" fill="currentColor"/>
                             </svg>
-                            <span>스케줄러 시작</span>
+                            <span>시작</span>
                         </button>
                         <button id="btnSchedulerStop" class="btn-scheduler-stop" onclick="schedulerStop()" style="display:none">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
                                 <rect x="6" y="6" width="12" height="12" fill="currentColor"/>
                             </svg>
-                            <span>스케줄러 중지</span>
+                            <span>정지</span>
                         </button>
                     </div>
                 </div>
@@ -1056,7 +904,7 @@
     <div id="expiryModal" class="modal" onclick="closeExpiryModal(event)">
         <div class="modal-content" onclick="event.stopPropagation()">
             <div class="modal-header">
-                <h2 class="modal-title">폐기 위험 상품</h2>
+                <h2 class="modal-title">폐기 주의 상품</h2>
                 <button class="modal-close" onclick="closeExpiryModal()">&times;</button>
             </div>
             <div class="modal-body" id="expiryModalBody">
@@ -1100,7 +948,7 @@
                         </svg>
                         엑셀 다운로드
                     </button>
-                    <button class="btn-confirm-order" id="btnConfirmOrder">발주 확정</button>
+                    <button class="btn-confirm-order" id="btnConfirmOrder" data-admin-only style="display:none">발주 확정</button>
                 </div>
             </div>
         </div>
@@ -1110,12 +958,11 @@
     <div class="toast-container" id="toastContainer"></div>
 
     <!-- 스크립트 -->
-    <script src="{{ url_for('static', filename='js/app.js') }}?v=11"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}?v=15"></script>
     <script src="{{ url_for('static', filename='js/order.js') }}?v=14"></script>
-    <script src="{{ url_for('static', filename='js/report.js') }}?v=10"></script>
-    <script src="{{ url_for('static', filename='js/prediction.js') }}?v=4"></script>
-    <script src="{{ url_for('static', filename='js/home.js') }}?v=12"></script>
-    <script src="{{ url_for('static', filename='js/rules.js') }}?v=3"></script>
-    <script src="{{ url_for('static', filename='js/users.js') }}?v=1"></script>
+    <script src="{{ url_for('static', filename='js/report.js') }}?v=15"></script>
+    <script src="{{ url_for('static', filename='js/prediction.js') }}?v=5"></script>
+    <script src="{{ url_for('static', filename='js/home.js') }}?v=15"></script>
+    <script src="{{ url_for('static', filename='js/users.js') }}?v=2"></script>
 </body>
 </html>

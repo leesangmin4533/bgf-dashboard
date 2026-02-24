@@ -55,16 +55,123 @@ async function loadHomeData() {
         renderSchedulerCard(data.scheduler);
         renderOrderCard(data.last_order, data.today_summary);
         renderExpiryCard(data.expiry_risk);
+        renderExpiryInline(data.expiry_risk);
+        renderSalesCard(data.today_summary);
         renderPipeline(data.pipeline);
-        renderEvents(data.recent_events);
         renderFailReasons(data.fail_reasons);
-        // 스파크라인: 7일 발주 트렌드 (API에서 제공 시)
+        // 7일 스파크라인 차트
         if (data.order_trend_7d) {
             renderSparkline('homeOrderSpark', data.order_trend_7d);
+            renderSparklineChart('sparkOrderChart', data.order_trend_7d, '#6366f1');
+        }
+        if (data.sales_trend_7d) {
+            renderSparklineChart('sparkSalesChart', data.sales_trend_7d, '#22c55e');
+            var last = data.sales_trend_7d[data.sales_trend_7d.length - 1];
+            var sparkVal = document.getElementById('sparkSalesValue');
+            if (sparkVal && last != null) sparkVal.textContent = fmt(last);
+        }
+        if (data.waste_trend_7d) {
+            renderSparklineChart('sparkWasteChart', data.waste_trend_7d, '#ef4444');
+            var last = data.waste_trend_7d[data.waste_trend_7d.length - 1];
+            var sparkVal = document.getElementById('sparkWasteValue');
+            if (sparkVal && last != null) sparkVal.textContent = fmt(last);
+        }
+        if (data.order_trend_7d) {
+            var last = data.order_trend_7d[data.order_trend_7d.length - 1];
+            var sparkVal = document.getElementById('sparkOrderValue');
+            if (sparkVal && last != null) sparkVal.textContent = fmt(last);
         }
     } catch (e) {
         console.error('Home data load failed:', e);
     }
+}
+
+// === 오늘 매출 카드 ===
+function renderSalesCard(summary) {
+    var val = document.getElementById('homeSalesValue');
+    var sub = document.getElementById('homeSalesSub');
+    if (!val) return;
+    if (summary && summary.total_qty > 0) {
+        val.textContent = fmt(summary.total_qty) + '개';
+        if (sub) sub.textContent = fmt(summary.order_items || 0) + '건';
+    } else {
+        val.textContent = '-';
+        if (sub) sub.textContent = '';
+    }
+}
+
+// === 폐기 인라인 리스트 (상위 5개) ===
+function renderExpiryInline(ex) {
+    var body = document.getElementById('homeExpiryListBody');
+    if (!body) return;
+    var items = (ex && ex.items) ? ex.items.slice(0, 5) : [];
+    if (items.length === 0) {
+        body.innerHTML = '<div class="hint">폐기 주의 상품이 없습니다</div>';
+        return;
+    }
+    var now = new Date();
+    var html = '<div class="expiry-inline-list">';
+    items.forEach(function(it) {
+        var timeText = '-';
+        if (it.expiry_date) {
+            var exp = new Date(it.expiry_date.replace(' ', 'T'));
+            var diffMs = exp - now;
+            if (diffMs <= 0) timeText = '만료됨';
+            else {
+                var h = Math.floor(diffMs / 3600000);
+                if (h < 24) timeText = h + '시간 남음';
+                else timeText = Math.floor(h / 24) + '일 남음';
+            }
+        }
+        var urgencyClass = '';
+        if (it.expiry_date) {
+            var exp = new Date(it.expiry_date.replace(' ', 'T'));
+            var diffH = (exp - now) / 3600000;
+            if (diffH <= 0) urgencyClass = 'expiry-inline-danger';
+            else if (diffH <= 6) urgencyClass = 'expiry-inline-critical';
+            else if (diffH <= 12) urgencyClass = 'expiry-inline-warning';
+        }
+        html += '<div class="expiry-inline-item ' + urgencyClass + '">';
+        html += '<span class="expiry-inline-name">' + (it.item_nm || '-') + '</span>';
+        html += '<span class="expiry-inline-qty">' + (it.remaining_qty || 0) + '개</span>';
+        html += '<span class="expiry-inline-time">' + timeText + '</span>';
+        html += '</div>';
+    });
+    html += '</div>';
+    body.innerHTML = html;
+}
+
+// === 7일 스파크라인 미니 차트 (Chart.js) ===
+function renderSparklineChart(canvasId, values, color) {
+    var canvas = document.getElementById(canvasId);
+    if (!canvas || !values || values.length === 0) return;
+    if (_charts[canvasId]) _charts[canvasId].destroy();
+    var ctx = canvas.getContext('2d');
+    _charts[canvasId] = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: values.map(function(_, i) { return ''; }),
+            datasets: [{
+                data: values,
+                borderColor: color,
+                backgroundColor: color + '20',
+                borderWidth: 2,
+                fill: true,
+                pointRadius: 0,
+                tension: 0.4,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false }, tooltip: { enabled: false } },
+            scales: {
+                x: { display: false },
+                y: { display: false }
+            },
+            animation: false,
+        }
+    });
 }
 
 // === 스케줄러 카드 ===

@@ -140,7 +140,12 @@ class TestRamenSafetyWithOrderInterval:
     @pytest.mark.unit
     def test_max_stock_still_applies(self):
         """max_stock_days(4.0) 상한선 유지 확인"""
-        with patch("src.prediction.categories.ramen.sqlite3") as mock_sql:
+        # 목요일(화목토 중 발주일)로 고정하여 비발주일 스킵 방지
+        mock_thursday = datetime(2026, 2, 26)  # Thursday
+        with patch("src.prediction.categories.ramen.sqlite3") as mock_sql, \
+             patch("src.prediction.categories.snack_confection.datetime") as mock_dt:
+            mock_dt.now.return_value = mock_thursday
+            mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
             mock_conn = mock_sql.connect.return_value
             mock_cursor = mock_conn.cursor.return_value
             mock_cursor.fetchall.return_value = [

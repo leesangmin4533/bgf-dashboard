@@ -460,6 +460,45 @@ class DashboardService:
             return []
         return [r[1] for r in rows]
 
+    def get_sales_trend_7d(self) -> List[int]:
+        """최근 7일 매출 수량 트렌드 (스파크라인용)"""
+        conn = self._get_conn()
+        try:
+            rows = conn.execute(f"""
+                SELECT sales_date, COALESCE(SUM(sale_qty), 0)
+                FROM daily_sales
+                WHERE sales_date >= date('now', '-7 days')
+                  {self._sf()}
+                GROUP BY sales_date
+                ORDER BY sales_date ASC
+            """, self._sp()).fetchall()
+        finally:
+            conn.close()
+
+        if not rows:
+            return []
+        return [r[1] for r in rows]
+
+    def get_waste_trend_7d(self) -> List[int]:
+        """최근 7일 폐기 수량 트렌드 (스파크라인용)"""
+        conn = self._get_conn()
+        try:
+            rows = conn.execute(f"""
+                SELECT sales_date, COALESCE(SUM(disuse_qty), 0)
+                FROM daily_sales
+                WHERE sales_date >= date('now', '-7 days')
+                  AND disuse_qty > 0
+                  {self._sf()}
+                GROUP BY sales_date
+                ORDER BY sales_date ASC
+            """, self._sp()).fetchall()
+        finally:
+            conn.close()
+
+        if not rows:
+            return []
+        return [r[1] for r in rows]
+
     def get_store_comparison(self) -> List[Dict[str, Any]]:
         """매장 간 비교 요약 (전체 매장 대상)
 

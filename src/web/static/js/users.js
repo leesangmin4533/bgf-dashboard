@@ -1,14 +1,14 @@
-/* BGF 발주 시스템 - 사용자 관리 탭 (admin 전용) */
+/* BGF 발주 시스템 - 설정 탭 (admin 전용) */
 
 var _usersLoaded = false;
 
-// === 사용자 목록 로드 ===
+// === 설정 탭 전체 로드 ===
 async function loadUsersTab() {
     try {
-        await Promise.all([loadUsersList(), loadUsersSignupRequests()]);
+        await Promise.all([loadUsersList(), loadSettingsSignupRequests(), loadSettingsScheduler()]);
         _usersLoaded = true;
     } catch (e) {
-        console.error('사용자 탭 로드 실패:', e);
+        console.error('설정 탭 로드 실패:', e);
     }
 }
 
@@ -60,16 +60,16 @@ async function loadUsersList() {
     }
 }
 
-// === 가입 요청 목록 (사용자 관리 탭 내) ===
-async function loadUsersSignupRequests() {
+// === 가입 요청 목록 (설정 탭 내) ===
+async function loadSettingsSignupRequests() {
     if (!_currentUser || _currentUser.role !== 'admin') return;
     try {
         var data = await api('/api/auth/signup-requests');
         var requests = data.requests || [];
-        var badge = document.getElementById('usersSignupCount');
-        var tbody = document.getElementById('usersSignupTableBody');
-        var table = document.getElementById('usersSignupTable');
-        var empty = document.getElementById('usersSignupEmpty');
+        var badge = document.getElementById('settingsSignupCount');
+        var tbody = document.getElementById('settingsSignupTableBody');
+        var table = document.getElementById('settingsSignupTable');
+        var empty = document.getElementById('settingsSignupEmpty');
         if (!badge || !tbody) return;
 
         badge.textContent = requests.length;
@@ -86,8 +86,8 @@ async function loadUsersSignupRequests() {
                     '<td>' + r.phone + '</td>' +
                     '<td>' + (r.created_at || '').slice(0, 10) + '</td>' +
                     '<td style="white-space:nowrap;">' +
-                        '<button class="btn-sm btn-approve" onclick="approveSignupFromUsers(' + r.id + ')">승인</button> ' +
-                        '<button class="btn-sm btn-reject" onclick="rejectSignupFromUsers(' + r.id + ')">거절</button>' +
+                        '<button class="btn-sm btn-approve" onclick="approveSignupFromSettings(' + r.id + ')">승인</button> ' +
+                        '<button class="btn-sm btn-reject" onclick="rejectSignupFromSettings(' + r.id + ')">거절</button>' +
                     '</td>' +
                 '</tr>';
             }).join('');
@@ -95,18 +95,18 @@ async function loadUsersSignupRequests() {
     } catch (e) { /* ignore */ }
 }
 
-async function approveSignupFromUsers(id) {
+async function approveSignupFromSettings(id) {
     if (!confirm('이 가입 요청을 승인하시겠습니까?')) return;
     try {
         var data = await api('/api/auth/signup-requests/' + id + '/approve', { method: 'POST' });
         if (data.error) { showToast(data.error, 'danger'); return; }
         showToast('승인 완료', 'success');
-        loadUsersTab(); // 전체 새로고침 (사용자 목록 + 가입 요청)
-        if (typeof loadSignupRequests === 'function') loadSignupRequests(); // 홈탭도 갱신
+        loadUsersTab();
+        if (typeof loadSignupRequests === 'function') loadSignupRequests();
     } catch (e) { showToast('승인 처리 중 오류', 'danger'); }
 }
 
-async function rejectSignupFromUsers(id) {
+async function rejectSignupFromSettings(id) {
     var reason = prompt('거절 사유를 입력하세요 (선택사항):');
     if (reason === null) return;
     try {
@@ -115,9 +115,77 @@ async function rejectSignupFromUsers(id) {
         var data = await api('/api/auth/signup-requests/' + id + '/reject', { method: 'POST', body: body });
         if (data.error) { showToast(data.error, 'danger'); return; }
         showToast('거절 완료', 'success');
-        loadUsersSignupRequests();
+        loadSettingsSignupRequests();
         if (typeof loadSignupRequests === 'function') loadSignupRequests();
     } catch (e) { showToast('거절 처리 중 오류', 'danger'); }
+}
+
+// === 설정 탭: 스케줄러 관리 ===
+async function loadSettingsScheduler() {
+    var badge = document.getElementById('settingsSchedulerBadge');
+    var pidText = document.getElementById('settingsSchedulerPid');
+    var btnStart = document.getElementById('btnSettingsSchedulerStart');
+    var btnStop = document.getElementById('btnSettingsSchedulerStop');
+    var timeline = document.getElementById('settingsTimeline');
+    if (!badge || !timeline) return;
+
+    try {
+        var data = await api('/api/home/scheduler/jobs');
+        if (data.running) {
+            badge.textContent = '동작중';
+            badge.className = 'status-badge running';
+            if (pidText) pidText.textContent = 'PID: ' + data.pid;
+            if (btnStart) btnStart.style.display = 'none';
+            if (btnStop) btnStop.style.display = 'flex';
+        } else {
+            badge.textContent = '정지됨';
+            badge.className = 'status-badge stopped';
+            if (pidText) pidText.textContent = '스케줄러가 정지되어 있습니다';
+            if (btnStart) btnStart.style.display = 'flex';
+            if (btnStop) btnStop.style.display = 'none';
+        }
+        if (typeof renderScheduleTimeline === 'function') {
+            // settingsTimeline에 렌더 (home.js의 함수 재사용, 타겟 ID 다름)
+            var jobs = data.jobs || [];
+            renderSettingsTimeline(jobs, timeline);
+        }
+    } catch (e) {
+        timeline.innerHTML = '<div class="hint">스케줄 로드 실패</div>';
+    }
+}
+
+function renderSettingsTimeline(jobs, container) {
+    if (!jobs || jobs.length === 0) {
+        container.innerHTML = '<div class="hint">등록된 스케줄이 없습니다</div>';
+        return;
+    }
+    var now = new Date();
+    var nowHM = now.getHours() * 60 + now.getMinutes();
+    var isMonday = now.getDay() === 1;
+    var todayJobs = jobs.filter(function(j) {
+        if (j.freq === '매일') return true;
+        if (j.freq === '매주 월' && isMonday) return true;
+        return false;
+    });
+    todayJobs.sort(function(a, b) {
+        var aP = a.time.split(':'), bP = b.time.split(':');
+        return (parseInt(aP[0]) * 60 + parseInt(aP[1])) - (parseInt(bP[0]) * 60 + parseInt(bP[1]));
+    });
+    var html = '';
+    todayJobs.forEach(function(job) {
+        var parts = job.time.split(':');
+        var jobTime = parseInt(parts[0]) * 60 + parseInt(parts[1]);
+        var isDone = jobTime < nowHM;
+        html += '<div class="schedule-item ' + (isDone ? 'done' : 'upcoming') + '">'
+            + '<div class="schedule-time">' + job.time + '</div>'
+            + '<div class="schedule-info">'
+            + '<div class="schedule-name">' + job.name + '</div>'
+            + '<div class="schedule-desc">' + job.desc + '</div>'
+            + '</div>'
+            + '<div class="schedule-freq">' + job.freq + '</div>'
+            + '</div>';
+    });
+    container.innerHTML = html;
 }
 
 // === 사용자 추가 폼 ===
