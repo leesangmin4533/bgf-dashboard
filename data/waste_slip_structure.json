@@ -1,0 +1,326 @@
+{
+  "before_frames": [
+    "WorkFrame"
+  ],
+  "top_menus": [
+    {
+      "id": "mainframe.HFrameSet00.VFrameSet00.TopFrame.form.div_topMenu.form.STBJ000_M0:icontext",
+      "text": "발주",
+      "visible": true
+    },
+    {
+      "id": "mainframe.HFrameSet00.VFrameSet00.TopFrame.form.div_topMenu.form.STJS000_M0:icontext",
+      "text": "정산",
+      "visible": true
+    },
+    {
+      "id": "mainframe.HFrameSet00.VFrameSet00.TopFrame.form.div_topMenu.form.STGJ000_M0:icontext",
+      "text": "검수전표",
+      "visible": true
+    },
+    {
+      "id": "mainframe.HFrameSet00.VFrameSet00.TopFrame.form.div_topMenu.form.STMB000_M0:icontext",
+      "text": "매출분석",
+      "visible": true
+    },
+    {
+      "id": "mainframe.HFrameSet00.VFrameSet00.TopFrame.form.div_topMenu.form.STJK000_M0:icontext",
+      "text": "재고",
+      "visible": true
+    },
+    {
+      "id": "mainframe.HFrameSet00.VFrameSet00.TopFrame.form.div_topMenu.form.STCM000_M0:icontext",
+      "text": "커뮤니케이션",
+      "visible": true
+    },
+    {
+      "id": "mainframe.HFrameSet00.VFrameSet00.TopFrame.form.div_topMenu.form.STJJ000_M0:icontext",
+      "text": "점주관리",
+      "visible": true
+    },
+    {
+      "id": "mainframe.HFrameSet00.VFrameSet00.TopFrame.form.div_topMenu.form.STMS000_M0:icontext",
+      "text": "마스터",
+      "visible": true
+    },
+    {
+      "id": "mainframe.HFrameSet00.VFrameSet00.TopFrame.form.div_topMenu.form.STAP00001:icontext",
+      "text": "신청업무",
+      "visible": true
+    },
+    {
+      "id": "mainframe.HFrameSet00.VFrameSet00.TopFrame.form.div_topMenu.form.STON001_M0:icontext",
+      "text": "온라인(APP)",
+      "visible": true
+    },
+    {
+      "id": "mainframe.HFrameSet00.VFrameSet00.TopFrame.form.div_topMenu.form.STSE001_M0:icontext",
+      "text": "나의 온라인점포",
+      "visible": true
+    }
+  ],
+  "submenus": [
+    {
+      "id": "mainframe.HFrameSet00.VFrameSet00.TopFrame.form.pdiv_topMenu_STGJ000_M0.form.STGJ001_M0_1:text",
+      "method": "pdiv_topMenu",
+      "text": "매입 업무",
+      "visible": true
+    },
+    {
+      "id": "mainframe.HFrameSet00.VFrameSet00.TopFrame.form.pdiv_topMenu_STGJ000_M0.form.STGJ010_M0:text",
+      "method": "pdiv_topMenu",
+      "text": "센터매입 조회/확정",
+      "visible": true
+    },
+    {
+      "id": "mainframe.HFrameSet00.VFrameSet00.TopFrame.form.pdiv_topMenu_STGJ000_M0.form.STGJ180_M0:text",
+      "method": "pdiv_topMenu",
+      "text": "매입/반품 차이내역 확인",
+      "visible": true
+    },
+    {
+      "id": "mainframe.HFrameSet00.VFrameSet00.TopFrame.form.pdiv_topMenu_STGJ000_M0.form.STGJ200_M0:text",
+      "method": "pdiv_topMenu",
+      "text": "전표별 검수 이력조회",
+      "visible": true
+    },
+    {
+      "id": "mainframe.HFrameSet00.VFrameSet00.TopFrame.form.pdiv_topMenu_STGJ000_M0.form.STGJ300_M0:text",
+      "method": "pdiv_topMenu",
+      "text": "입고예정 내역 조회",
+      "visible": true
+    },
+    {
+      "id": "mainframe.HFrameSet00.VFrameSet00.TopFrame.form.pdiv_topMenu_STGJ000_M0.form.STGJ080_M0:text",
+      "method": "pdiv_topMenu",
+      "text": "루트매입 조회/확정",
+      "visible": true
+    },
+    {
+      "id": "mainframe.HFrameSet00.VFrameSet00.TopFrame.form.pdiv_topMenu_STGJ000_M0.form.STGJ170_M0:text",
+      "method": "pdiv_topMenu",
+      "text": "일/주간지 매입 조회/확정",
+      "visible": true
+    },
+    {
+      "id": "mainframe.HFrameSet00.VFrameSet00.TopFrame.form.pdiv_topMenu_STGJ000_M0.form.STGJ230_M0:text",
+      "method": "pdiv_topMenu",
+      "text": "상품별 스캔 검수",
+      "visible": true
+    },
+    {
+      "id": "mainframe.HFrameSet00.VFrameSet00.TopFrame.form.pdiv_topMenu_STGJ000_M0.form.STGJ002_M0_1:text",
+      "method": "pdiv_topMenu",
+      "text": "반품 업무",
+      "visible": true
+    },
+    {
+      "id": "mainframe.HFrameSet00.VFrameSet00.TopFrame.form.pdiv_topMenu_STGJ000_M0.form.STGJ100_M0:text",
+      "method": "pdiv_topMenu",
+      "text": "반품등록(센터회수)",
+      "visible": true
+    },
+    {
+      "id": "mainframe.HFrameSet00.VFrameSet00.TopFrame.form.pdiv_topMenu_STGJ000_M0.form.STGJ130_M0:text",
+      "method": "pdiv_topMenu",
+      "text": "신규점 반품 조회/확정",
+      "visible": true
+    },
+    {
+      "id": "mainframe.HFrameSet00.VFrameSet00.TopFrame.form.pdiv_topMenu_STGJ000_M0.form.STGJ090_M0:text",
+      "method": "pdiv_topMenu",
+      "text": "루트 반품 등록",
+      "visible": true
+    },
+    {
+      "id": "mainframe.HFrameSet00.VFrameSet00.TopFrame.form.pdiv_topMenu_STGJ000_M0.form.STGJ150_M0:text",
+      "method": "pdiv_topMenu",
+      "text": "세트반품 등록",
+      "visible": true
+    },
+    {
+      "id": "mainframe.HFrameSet00.VFrameSet00.TopFrame.form.pdiv_topMenu_STGJ000_M0.form.STGJ120_M0:text",
+      "method": "pdiv_topMenu",
+      "text": "공병반품 등록",
+      "visible": true
+    },
+    {
+      "id": "mainframe.HFrameSet00.VFrameSet00.TopFrame.form.pdiv_topMenu_STGJ000_M0.form.STGJ000_M0001_1:text",
+      "method": "pdiv_topMenu",
+      "text": "전표 업무",
+      "visible": true
+    },
+    {
+      "id": "mainframe.HFrameSet00.VFrameSet00.TopFrame.form.pdiv_topMenu_STGJ000_M0.form.STGJ020_M0:text",
+      "method": "pdiv_topMenu",
+      "text": "통합 전표 조회",
+      "visible": true
+    },
+    {
+      "id": "mainframe.HFrameSet00.VFrameSet00.TopFrame.form.pdiv_topMenu_STGJ000_M0.form.STGJ030_M0:text",
+      "method": "pdiv_topMenu",
+      "text": "폐기 전표 작성",
+      "visible": true
+    },
+    {
+      "id": "mainframe.HFrameSet00.VFrameSet00.TopFrame.form.pdiv_topMenu_STGJ000_M0.form.STGJ040_M0:text",
+      "method": "pdiv_topMenu",
+      "text": "매가변경 전표 작성",
+      "visible": true
+    },
+    {
+      "id": "mainframe.HFrameSet00.VFrameSet00.TopFrame.form.pdiv_topMenu_STGJ000_M0.form.STGJ070_M0:text",
+      "method": "pdiv_topMenu",
+      "text": "점포 직매입 전표 작성",
+      "visible": true
+    },
+    {
+      "id": "mainframe.HFrameSet00.VFrameSet00.TopFrame.form.pdiv_topMenu_STGJ000_M0.form.STGJ050_M0:text",
+      "method": "pdiv_topMenu",
+      "text": "점매가 전표 작성",
+      "visible": true
+    },
+    {
+      "id": "mainframe.HFrameSet00.VFrameSet00.TopFrame.form.pdiv_topMenu_STGJ000_M0.form.STGJ270_M0:text",
+      "method": "pdiv_topMenu",
+      "text": "저회전 상품 철수 등록",
+      "visible": true
+    },
+    {
+      "id": "mainframe.HFrameSet00.VFrameSet00.TopFrame.form.pdiv_topMenu_STGJ000_M0.form.STGJ160_M0_1:text",
+      "method": "pdiv_topMenu",
+      "text": "점간이동 업무",
+      "visible": true
+    },
+    {
+      "id": "mainframe.HFrameSet00.VFrameSet00.TopFrame.form.pdiv_topMenu_STGJ000_M0.form.STGJ161_M0:text",
+      "method": "pdiv_topMenu",
+      "text": "점간이동 반품",
+      "visible": true
+    },
+    {
+      "id": "mainframe.HFrameSet00.VFrameSet00.TopFrame.form.pdiv_topMenu_STGJ000_M0.form.STGJ163_M0:text",
+      "method": "pdiv_topMenu",
+      "text": "점간이동 발주",
+      "visible": true
+    },
+    {
+      "id": "mainframe.HFrameSet00.VFrameSet00.TopFrame.form.pdiv_topMenu_STGJ000_M0.form.STGJ162_M0:text",
+      "method": "pdiv_topMenu",
+      "text": "점간이동 매입",
+      "visible": true
+    },
+    {
+      "id": "mainframe.HFrameSet00.VFrameSet00.TopFrame.form.pdiv_topMenu_STGJ000_M0.form.STGJ164_M0:text",
+      "method": "pdiv_topMenu",
+      "text": "점간이동 반품리스트 조회",
+      "visible": true
+    },
+    {
+      "id": "mainframe.HFrameSet00.VFrameSet00.TopFrame.form.pdiv_topMenu_STGJ000_M0.form.STGJ280_M0:text",
+      "method": "pdiv_topMenu",
+      "text": "저회전상품 철수금액 점간이동",
+      "visible": true
+    }
+  ],
+  "after_frames": [
+    "WorkFrame",
+    "STGJ020_M0"
+  ],
+  "new_frames": [
+    "STGJ020_M0"
+  ],
+  "open_tabs": [
+    {
+      "id": "mainframe.HFrameSet00.VFrameSet00.MdiFrame.form.tab_openList.tabbutton_1.tabbuttonitemtext",
+      "text": "통합 전표 조회"
+    },
+    {
+      "id": "mainframe.HFrameSet00.VFrameSet00.MdiFrame.form.tab_openList.tabbutton_1.tabbuttonitemtext:text",
+      "text": "통합 전표 조회"
+    },
+    {
+      "id": "mainframe.HFrameSet00.VFrameSet00.MdiFrame.form.tab_openList00.tabbutton_0.tabbuttonitemtext",
+      "text": ""
+    },
+    {
+      "id": "mainframe.HFrameSet00.VFrameSet00.MdiFrame.form.tab_openList00.tabbutton_0.tabbuttonitemtext:text",
+      "text": ""
+    }
+  ],
+  "frame_structure": {
+    "form_found": true,
+    "frame_id": "STGJ020_M0",
+    "objects": []
+  },
+  "handlers": [
+    {
+      "name": "fn_afterFormOnload",
+      "type": "handler/function"
+    },
+    {
+      "name": "fn_setCommonCode",
+      "type": "handler/function"
+    },
+    {
+      "name": "fn_commonAfterOnload",
+      "type": "handler/function"
+    },
+    {
+      "name": "fn_cmmBtnOnKeyUp",
+      "type": "handler/function"
+    },
+    {
+      "name": "fn_commBtn_10",
+      "type": "handler/function"
+    },
+    {
+      "name": "fn_commBtn_12",
+      "type": "handler/function"
+    },
+    {
+      "name": "fn_search",
+      "type": "handler/function"
+    },
+    {
+      "name": "fn_callback",
+      "type": "handler/function"
+    },
+    {
+      "name": "fn_popupCallback",
+      "type": "handler/function"
+    },
+    {
+      "name": "fn_beforeClose",
+      "type": "handler/function"
+    },
+    {
+      "name": "fn_validationCheck",
+      "type": "handler/function"
+    },
+    {
+      "name": "fn_moveDetailPage",
+      "type": "handler/function"
+    },
+    {
+      "name": "fn_setComponentValue",
+      "type": "handler/function"
+    },
+    {
+      "name": "cbChitDiv_oncloseup",
+      "type": "handler/function"
+    },
+    {
+      "name": "div1_cbScStore_onitemchanged",
+      "type": "handler/function"
+    },
+    {
+      "name": "fn_findDsPath",
+      "type": "handler/function"
+    },
+    {
+      "name": "fn_findDs",
+      "type": "handler/function"
+    }
+  ]
+}

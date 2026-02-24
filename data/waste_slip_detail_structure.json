@@ -1,0 +1,624 @@
+{
+  "structure": {
+    "form_found": true,
+    "form_objects": [
+      {
+        "name": "parent",
+        "type": "Div"
+      },
+      {
+        "name": "_refform",
+        "type": "unknown"
+      },
+      {
+        "name": "sta_bg",
+        "type": "unknown"
+      },
+      {
+        "name": "div_workForm",
+        "type": "Div"
+      },
+      {
+        "name": "div_cmmbtn",
+        "type": "Div"
+      },
+      {
+        "name": "btn_leftmenu",
+        "type": "Button"
+      },
+      {
+        "name": "_default_layout",
+        "type": "unknown"
+      },
+      {
+        "name": "onload",
+        "type": "unknown"
+      },
+      {
+        "name": "onbeforeclose",
+        "type": "unknown"
+      },
+      {
+        "name": "onactivate",
+        "type": "unknown"
+      },
+      {
+        "name": "onkeyup",
+        "type": "unknown"
+      },
+      {
+        "name": "_control_element",
+        "type": "unknown"
+      },
+      {
+        "name": "hscrollbar",
+        "type": "unknown"
+      },
+      {
+        "name": "vscrollbar",
+        "type": "unknown"
+      },
+      {
+        "name": "_last_focused",
+        "type": "Div"
+      }
+    ],
+    "workform_found": true,
+    "workform_objects": [
+      {
+        "columns": [
+          "CODE",
+          "NAME",
+          "APPL_SYMD",
+          "APPL_EYMD",
+          "REMARKS1",
+          "REMARKS2",
+          "REMARKS3",
+          "REMARKS4",
+          "REMARKS5",
+          "REMARKS6"
+        ],
+        "name": "dsChitDiv",
+        "path": "div_workForm.form.dsChitDiv",
+        "rowCount": 31,
+        "sample": {
+          "APPL_EYMD": "",
+          "APPL_SYMD": "",
+          "CODE": "",
+          "NAME": "- 전체 -",
+          "REMARKS1": "",
+          "REMARKS2": "",
+          "REMARKS3": "",
+          "REMARKS4": "",
+          "REMARKS5": "",
+          "REMARKS6": ""
+        },
+        "type": "Dataset"
+      },
+      {
+        "columns": [
+          "strDate",
+          "strStoreCd",
+          "strChitDiv",
+          "strChitNo",
+          "strChitYmd",
+          "strToDt",
+          "strFromDt"
+        ],
+        "name": "dsSearch",
+        "path": "div_workForm.form.dsSearch",
+        "rowCount": 1,
+        "sample": {
+          "strChitDiv": "",
+          "strChitNo": null,
+          "strChitYmd": null,
+          "strDate": null,
+          "strFromDt": "20260201",
+          "strStoreCd": null,
+          "strToDt": "20260219"
+        },
+        "type": "Dataset"
+      },
+      {
+        "columns": [
+          "CHIT_FLAG",
+          "CHIT_ID",
+          "CHIT_ID_VIEW",
+          "CHIT_ID_NM",
+          "NAP_PLAN_YMD",
+          "CHIT_YMD",
+          "CHIT_NO",
+          "CHIT_ID_NO",
+          "ITEM_CNT",
+          "LARGE_CD",
+          "CENTER_CD",
+          "CENTER_NM",
+          "LSTORE_NM",
+          "RSTORE_NM",
+          "MAEIP_CHIT_NO",
+          "RET_CHIT_NO",
+          "CRE_YMDHMS",
+          "CONF_ID",
+          "WONGA_AMT",
+          "MAEGA_AMT"
+        ],
+        "name": "dsList",
+        "path": "div_workForm.form.dsList",
+        "rowCount": 0,
+        "type": "Dataset"
+      },
+      {
+        "columns": [
+          "gvVar01",
+          "gvVar02",
+          "gvVar03",
+          "gvVar04",
+          "gvVar05",
+          "gvVar06",
+          "gvVar07",
+          "gvVar08",
+          "gvVar09",
+          "gvVar10",
+          "gvVar11",
+          "gvVar12",
+          "gvVar13",
+          "gvVar14",
+          "gvVar15",
+          "gvVar16",
+          "gvVar17",
+          "gvVar18",
+          "gvVar19",
+          "gvVar20"
+        ],
+        "name": "dsGs",
+        "path": "div_workForm.form.dsGs",
+        "rowCount": 1,
+        "sample": {
+          "gvVar01": null,
+          "gvVar02": null,
+          "gvVar03": null,
+          "gvVar04": null,
+          "gvVar05": null,
+          "gvVar06": null,
+          "gvVar07": null,
+          "gvVar08": null,
+          "gvVar09": null,
+          "gvVar10": null,
+          "gvVar11": null,
+          "gvVar12": null,
+          "gvVar13": null,
+          "gvVar14": null,
+          "gvVar15": null,
+          "gvVar16": null,
+          "gvVar17": null,
+          "gvVar18": null,
+          "gvVar19": null,
+          "gvVar20": null
+        },
+        "type": "Dataset"
+      },
+      {
+        "columns": [
+          "STORE_CD",
+          "STORE_NM",
+          "PRE_STORE_CD",
+          "STORE_POS_QTY"
+        ],
+        "name": "dsScStoreList",
+        "path": "div_workForm.form.dsScStoreList",
+        "rowCount": 0,
+        "type": "Dataset"
+      },
+      {
+        "name": "div1",
+        "path": "div_workForm.form.div1",
+        "type": "Div"
+      },
+      {
+        "name": "cbScStore",
+        "path": "div_workForm.form.div1.form.cbScStore",
+        "text": "",
+        "type": "Combo",
+        "value": null
+      },
+      {
+        "name": "_event_list",
+        "path": "div_workForm.form.div1.form._event_list",
+        "text": null,
+        "type": "Button"
+      },
+      {
+        "name": "div2",
+        "path": "div_workForm.form.div2",
+        "type": "Div"
+      },
+      {
+        "name": "divSearch",
+        "path": "div_workForm.form.div2.form.divSearch",
+        "type": "Div"
+      },
+      {
+        "name": "cbChitDiv",
+        "path": "div_workForm.form.div2.form.divSearch.form.cbChitDiv",
+        "text": "- 전체 -",
+        "type": "Combo",
+        "value": ""
+      },
+      {
+        "name": "calFromDate",
+        "path": "div_workForm.form.div2.form.divSearch.form.calFromDate",
+        "type": "Calendar",
+        "value": "20260201"
+      },
+      {
+        "name": "calToDate",
+        "path": "div_workForm.form.div2.form.divSearch.form.calToDate",
+        "type": "Calendar",
+        "value": "20260219"
+      },
+      {
+        "name": "_event_list",
+        "path": "div_workForm.form.div2.form.divSearch.form._event_list",
+        "text": null,
+        "type": "Button"
+      },
+      {
+        "binddataset": "dsList",
+        "name": "gdList",
+        "path": "div_workForm.form.div2.form.gdList",
+        "type": "Grid"
+      },
+      {
+        "name": "btPrtChit",
+        "path": "div_workForm.form.div2.form.btPrtChit",
+        "text": "인쇄용 통합 전표",
+        "type": "Button"
+      },
+      {
+        "name": "_event_list",
+        "path": "div_workForm.form.div2.form._event_list",
+        "text": null,
+        "type": "Button"
+      },
+      {
+        "name": "_event_list",
+        "path": "div_workForm.form._event_list",
+        "text": null,
+        "type": "Button"
+      }
+    ]
+  },
+  "combo_chitdiv": {
+    "error": "Maximum call stack size exceeded"
+  },
+  "date_controls": [
+    {
+      "name": "calFromDate",
+      "path": "form.div_workForm.form.div2.form.divSearch.form.calFromDate",
+      "text": "2026-02-01",
+      "type": "Calendar",
+      "value": "20260201"
+    },
+    {
+      "name": "calToDate",
+      "path": "form.div_workForm.form.div2.form.divSearch.form.calToDate",
+      "text": "2026-02-19",
+      "type": "Calendar",
+      "value": "20260219"
+    }
+  ],
+  "search": {
+    "method": "F_10_click",
+    "success": true
+  },
+  "post_search_datasets": [
+    {
+      "columns": [
+        "CODE",
+        "NAME",
+        "APPL_SYMD",
+        "APPL_EYMD",
+        "REMARKS1",
+        "REMARKS2",
+        "REMARKS3",
+        "REMARKS4",
+        "REMARKS5",
+        "REMARKS6"
+      ],
+      "name": "dsChitDiv",
+      "path": "form.div_workForm.form.dsChitDiv",
+      "rowCount": 31,
+      "samples": [
+        {
+          "APPL_EYMD": "",
+          "APPL_SYMD": "",
+          "CODE": "",
+          "NAME": "- 전체 -",
+          "REMARKS1": "",
+          "REMARKS2": "",
+          "REMARKS3": "",
+          "REMARKS4": "",
+          "REMARKS5": "",
+          "REMARKS6": ""
+        },
+        {
+          "APPL_EYMD": "",
+          "APPL_SYMD": "",
+          "CODE": "01",
+          "NAME": "일반매입",
+          "REMARKS1": "",
+          "REMARKS2": "",
+          "REMARKS3": "",
+          "REMARKS4": "",
+          "REMARKS5": "",
+          "REMARKS6": ""
+        },
+        {
+          "APPL_EYMD": "",
+          "APPL_SYMD": "",
+          "CODE": "02",
+          "NAME": "루트매입",
+          "REMARKS1": "",
+          "REMARKS2": "",
+          "REMARKS3": "",
+          "REMARKS4": "",
+          "REMARKS5": "",
+          "REMARKS6": ""
+        }
+      ]
+    },
+    {
+      "columns": [
+        "strDate",
+        "strStoreCd",
+        "strChitDiv",
+        "strChitNo",
+        "strChitYmd",
+        "strToDt",
+        "strFromDt"
+      ],
+      "name": "dsSearch",
+      "path": "form.div_workForm.form.dsSearch",
+      "rowCount": 1,
+      "samples": [
+        {
+          "strChitDiv": "",
+          "strChitNo": null,
+          "strChitYmd": null,
+          "strDate": null,
+          "strFromDt": "20260201",
+          "strStoreCd": "46513",
+          "strToDt": "20260219"
+        }
+      ]
+    },
+    {
+      "columns": [
+        "CHK",
+        "CHIT_FLAG",
+        "CHIT_ID",
+        "CHIT_ID_VIEW",
+        "CHIT_ID_NM",
+        "NAP_PLAN_YMD",
+        "CHIT_YMD",
+        "CHIT_NO",
+        "CHIT_ID_NO",
+        "ITEM_CNT",
+        "LARGE_CD",
+        "CENTER_CD",
+        "CENTER_NM",
+        "MAEIP_CHIT_NO",
+        "RET_CHIT_NO",
+        "LSTORE_NM",
+        "RSTORE_NM",
+        "WONGA_AMT",
+        "MAEGA_AMT",
+        "CRE_YMDHMS",
+        "CONF_ID"
+      ],
+      "name": "dsList",
+      "path": "form.div_workForm.form.dsList",
+      "rowCount": 469,
+      "samples": [
+        {
+          "CENTER_CD": "9512305",
+          "CENTER_NM": "씨제이오산냉장2",
+          "CHIT_FLAG": "PC",
+          "CHIT_ID": "00",
+          "CHIT_ID_NM": "센터매입",
+          "CHIT_ID_NO": "67663380501",
+          "CHIT_ID_VIEW": "00",
+          "CHIT_NO": "67663380501",
+          "CHIT_YMD": "20260219",
+          "CHK": "0",
+          "CRE_YMDHMS": "20260219065045",
+          "ITEM_CNT": 5,
+          "LARGE_CD": "",
+          "LSTORE_NM": "",
+          "MAEGA_AMT": 18900,
+          "MAEIP_CHIT_NO": "",
+          "NAP_PLAN_YMD": "20260219",
+          "RET_CHIT_NO": "",
+          "RSTORE_NM": "",
+          "WONGA_AMT": 10968
+        },
+        {
+          "CENTER_CD": "9512306",
+          "CENTER_NM": "씨제이오산냉동",
+          "CHIT_FLAG": "PC",
+          "CHIT_ID": "00",
+          "CHIT_ID_NM": "센터매입",
+          "CHIT_ID_NO": "67663390601",
+          "CHIT_ID_VIEW": "00",
+          "CHIT_NO": "67663390601",
+          "CHIT_YMD": "20260219",
+          "CHK": "0",
+          "CRE_YMDHMS": "20260219065045",
+          "ITEM_CNT": 4,
+          "LARGE_CD": "",
+          "LSTORE_NM": "",
+          "MAEGA_AMT": 24700,
+          "MAEIP_CHIT_NO": "",
+          "NAP_PLAN_YMD": "20260219",
+          "RET_CHIT_NO": "",
+          "RSTORE_NM": "",
+          "WONGA_AMT": 11557
+        },
+        {
+          "CENTER_CD": "9512204",
+          "CENTER_NM": "씨제이오산냉장1",
+          "CHIT_FLAG": "PC",
+          "CHIT_ID": "04",
+          "CHIT_ID_NM": "폐기",
+          "CHIT_ID_NO": "10044420011",
+          "CHIT_ID_VIEW": "04",
+          "CHIT_NO": "10044420011",
+          "CHIT_YMD": "20260219",
+          "CHK": "0",
+          "CRE_YMDHMS": "20260219021002",
+          "ITEM_CNT": 1,
+          "LARGE_CD": "",
+          "LSTORE_NM": "",
+          "MAEGA_AMT": 5900,
+          "MAEIP_CHIT_NO": "",
+          "NAP_PLAN_YMD": "20260219",
+          "RET_CHIT_NO": "",
+          "RSTORE_NM": "",
+          "WONGA_AMT": 3835
+        }
+      ]
+    },
+    {
+      "columns": [
+        "gvVar01",
+        "gvVar02",
+        "gvVar03",
+        "gvVar04",
+        "gvVar05",
+        "gvVar06",
+        "gvVar07",
+        "gvVar08",
+        "gvVar09",
+        "gvVar10",
+        "gvVar11",
+        "gvVar12",
+        "gvVar13",
+        "gvVar14",
+        "gvVar15",
+        "gvVar16",
+        "gvVar17",
+        "gvVar18",
+        "gvVar19",
+        "gvVar20"
+      ],
+      "name": "dsGs",
+      "path": "form.div_workForm.form.dsGs",
+      "rowCount": 1,
+      "samples": [
+        {
+          "gvVar01": null,
+          "gvVar02": null,
+          "gvVar03": null,
+          "gvVar04": null,
+          "gvVar05": null,
+          "gvVar06": null,
+          "gvVar07": null,
+          "gvVar08": null,
+          "gvVar09": null,
+          "gvVar10": null,
+          "gvVar11": null,
+          "gvVar12": null,
+          "gvVar13": null,
+          "gvVar14": null,
+          "gvVar15": null,
+          "gvVar16": null,
+          "gvVar17": null,
+          "gvVar18": null,
+          "gvVar19": null,
+          "gvVar20": null
+        }
+      ]
+    },
+    {
+      "columns": [
+        "STORE_CD",
+        "STORE_NM",
+        "PRE_STORE_CD",
+        "STORE_POS_QTY"
+      ],
+      "name": "dsScStoreList",
+      "path": "form.div_workForm.form.dsScStoreList",
+      "rowCount": 0
+    },
+    {
+      "columns": [
+        "FUNC1",
+        "FUNC2",
+        "FUNC3",
+        "FUNC4",
+        "FUNC5",
+        "FUNC6",
+        "FUNC7",
+        "FUNC8",
+        "FUNC9",
+        "FUNC10",
+        "FUNC11",
+        "FUNC12",
+        "FUN1_TXT",
+        "FUN2_TXT",
+        "FUN3_TXT",
+        "FUN4_TXT",
+        "FUN5_TXT",
+        "FUN6_TXT",
+        "FUN7_TXT",
+        "FUN8_TXT",
+        "FUN9_TXT",
+        "FUN10_TXT",
+        "FUN11_TXT",
+        "FUN12_TXT"
+      ],
+      "name": "ds_btnList",
+      "path": "form.div_cmmbtn.form.ds_btnList",
+      "rowCount": 1,
+      "samples": [
+        {
+          "FUN1_TXT": "",
+          "FUN2_TXT": "",
+          "FUN3_TXT": "",
+          "FUN4_TXT": "",
+          "FUN5_TXT": "",
+          "FUN6_TXT": "",
+          "FUN7_TXT": "",
+          "FUN8_TXT": "",
+          "FUNC1": "0",
+          "FUNC10": "1",
+          "FUNC11": "0",
+          "FUNC12": "1",
+          "FUNC2": "0",
+          "FUNC3": "0",
+          "FUNC4": "0",
+          "FUNC5": "0",
+          "FUNC6": "0",
+          "FUNC7": "0",
+          "FUNC8": "0",
+          "FUNC9": "0"
+        }
+      ]
+    },
+    {
+      "columns": [
+        "USER_GRP_ID",
+        "MENU_ID"
+      ],
+      "name": "ds_menulog",
+      "path": "form.div_cmmbtn.form.ds_menulog",
+      "rowCount": 1,
+      "samples": [
+        {
+          "MENU_ID": "STGJ020_M0",
+          "USER_GRP_ID": "0001"
+        }
+      ]
+    }
+  ]
+}

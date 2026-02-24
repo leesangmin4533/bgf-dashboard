@@ -1,0 +1,13 @@
+selenium==4.33.0
+webdriver-manager==4.0.2
+python-dotenv==1.0.1
+requests==2.32.3
+schedule==1.2.2
+flask==3.1.1
+waitress==3.0.2
+
+# 예측 모듈용
+pandas==2.2.2
+numpy==2.0.1
+scikit-learn==1.7.1
+holidays==0.77

@@ -1,0 +1,47 @@
+# Environment & Secrets
+.env
+.env.*
+!.env.example
+
+# Kakao token
+config/kakao_token.json
+
+# Database files
+data/*.db
+data/*.db.bak
+data/stores/*.db
+data/archive/
+data/models/
+data/reports/
+data/screenshots/
+data/logs/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+*.egg
+.pytest_cache/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Logs
+logs/
+*.log
+
+# Tunnel
+PUBLIC_URL.txt
+
+# Windows reserved
+nul

@@ -1,0 +1,26 @@
+{
+  "grids": [
+    {
+      "binddataset": "dsList",
+      "has_getBodyCellElem": false,
+      "has_oncelldblclick": true,
+      "name": "gdList",
+      "path": "form.div_workForm.form.div2.form.gdList",
+      "type": "",
+      "visible": true
+    },
+    {
+      "binddataset": "dsList",
+      "has_getBodyCellElem": false,
+      "has_oncelldblclick": true,
+      "name": "_last_focused",
+      "path": "form.div_workForm.form.div2.form._last_focused",
+      "type": "",
+      "visible": true
+    }
+  ],
+  "cell_rect": {
+    "error": "grid not found even with path: form.div_workForm.form.div2.form.gdList"
+  },
+  "dom_grid_rows": []
+}

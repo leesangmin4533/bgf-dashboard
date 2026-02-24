@@ -1,0 +1,17 @@
+{
+  "enabled": true,
+  "n_trials": 30,
+  "damping_factor": 0.5,
+  "rollback_monitor_days": 3,
+  "rollback_threshold": 0.10,
+  "eval_lookback_days": 7,
+  "min_eval_days": 7,
+  "objective_weights": {
+    "accuracy_error": 0.35,
+    "waste_rate_error": 0.30,
+    "stockout_rate": 0.25,
+    "over_order_ratio": 0.10
+  },
+  "locked_params": [],
+  "preferred_algorithm": "skopt"
+}

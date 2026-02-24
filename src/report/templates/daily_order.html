@@ -1,0 +1,198 @@
+{% extends "base.html" %}
+
+{% block title %}일일 발주 대시보드 - {{ target_date }}{% endblock %}
+{% block header %}일일 발주 대시보드{% endblock %}
+{% block subtitle %}{{ target_date }} | {{ generated_at }} 생성{% endblock %}
+
+{% block content %}
+<!-- 요약 카드 -->
+<div class="card-grid">
+    <div class="card">
+        <div class="value">{{ summary.total_items }}</div>
+        <div class="label">전체 상품</div>
+    </div>
+    <div class="card good">
+        <div class="value">{{ summary.ordered_count }}</div>
+        <div class="label">발주 상품</div>
+    </div>
+    <div class="card warn">
+        <div class="value">{{ summary.skipped_count }}</div>
+        <div class="label">스킵 상품</div>
+    </div>
+    <div class="card accent">
+        <div class="value">{{ summary.total_order_qty | number_format }}</div>
+        <div class="label">총 발주수량</div>
+    </div>
+    <div class="card">
+        <div class="value">{{ summary.category_count }}</div>
+        <div class="label">카테고리</div>
+    </div>
+    <div class="card">
+        <div class="value">{{ summary.avg_safety_stock }}</div>
+        <div class="label">평균 안전재고</div>
+    </div>
+</div>
+
+<!-- 카테고리별 발주량 차트 -->
+<div class="section">
+    <h2 class="section-title">카테고리별 발주량</h2>
+    <div class="chart-box">
+        <canvas id="categoryChart"></canvas>
+    </div>
+</div>
+
+<!-- 상품별 발주 상세 -->
+<div class="section">
+    <h2 class="section-title">상품별 발주 상세 ({{ items | length }}건)</h2>
+    <input type="text" id="itemSearch" class="search-box" placeholder="상품명, 카테고리, 상품코드 검색...">
+    <div class="table-wrapper">
+        <div class="table-scroll">
+            <table id="itemTable">
+                <thead>
+                    <tr>
+                        <th data-sort="text">상품명</th>
+                        <th data-sort="text">카테고리</th>
+                        <th data-sort="num" class="text-right">일평균</th>
+                        <th data-sort="num" class="text-right">요일계수</th>
+                        <th data-sort="num" class="text-right">조정예측</th>
+                        <th data-sort="num" class="text-right">안전재고</th>
+                        <th data-sort="num" class="text-right">현재고</th>
+                        <th data-sort="num" class="text-right">미입고</th>
+                        <th data-sort="num" class="text-right">발주량</th>
+                        <th data-sort="text" class="text-center">신뢰도</th>
+                        <th data-sort="num" class="text-right">데이터</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for item in items %}
+                    <tr>
+                        <td title="{{ item.item_cd }}">{{ item.item_nm }}</td>
+                        <td>{{ item.category }}</td>
+                        <td class="text-right">{{ item.daily_avg }}</td>
+                        <td class="text-right">{{ item.weekday_coef }}</td>
+                        <td class="text-right">{{ item.adjusted_qty }}</td>
+                        <td class="text-right">{{ item.safety_stock }}</td>
+                        <td class="text-right">{{ item.current_stock }}</td>
+                        <td class="text-right">{{ item.pending_qty }}</td>
+                        <td class="text-right" style="font-weight:700;color:{% if item.order_qty > 0 %}var(--success){% else %}var(--text-muted){% endif %}">{{ item.order_qty }}</td>
+                        <td class="text-center">
+                            {% if item.confidence == 'high' %}
+                                <span class="badge badge-high">HIGH</span>
+                            {% elif item.confidence == 'medium' %}
+                                <span class="badge badge-medium">MED</span>
+                            {% else %}
+                                <span class="badge badge-low">LOW</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-right">{{ item.data_days }}일</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- 발주 스킵 목록 -->
+{% if skipped %}
+<div class="section">
+    <h2 class="section-title">발주 스킵 목록 ({{ skipped | length }}건)</h2>
+    <div class="table-wrapper">
+        <div class="table-scroll">
+            <table id="skipTable">
+                <thead>
+                    <tr>
+                        <th data-sort="text">상품명</th>
+                        <th data-sort="text">카테고리</th>
+                        <th data-sort="num" class="text-right">현재고</th>
+                        <th data-sort="num" class="text-right">미입고</th>
+                        <th data-sort="num" class="text-right">안전재고</th>
+                        <th data-sort="text">스킵 사유</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for s in skipped %}
+                    <tr>
+                        <td title="{{ s.item_cd }}">{{ s.item_nm }}</td>
+                        <td>{{ s.category }}</td>
+                        <td class="text-right">{{ s.current_stock }}</td>
+                        <td class="text-right">{{ s.pending_qty }}</td>
+                        <td class="text-right">{{ s.safety_stock }}</td>
+                        <td style="color:var(--warning);">{{ s.reason }}</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- 안전재고 일수 분포 -->
+<div class="section">
+    <h2 class="section-title">안전재고 일수 분포</h2>
+    <div class="chart-box">
+        <canvas id="safetyHistogram"></canvas>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+var _g = getComputedStyle(document.documentElement);
+var _gridC = _g.getPropertyValue('--chart-grid').trim();
+
+// 카테고리별 발주량 차트
+new Chart(document.getElementById('categoryChart'), {
+    type: 'bar',
+    data: {
+        labels: {{ category_data.labels | to_json }},
+        datasets: [{
+            label: '발주수량',
+            data: {{ category_data.order_qty | to_json }},
+            backgroundColor: 'rgba(150,150,150,0.6)',
+            borderRadius: 4,
+        }]
+    },
+    options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+            x: { grid: { color: _gridC } },
+            y: { grid: { display: false } }
+        }
+    }
+});
+document.getElementById('categoryChart').parentElement.style.height =
+    Math.max(300, {{ category_data.labels | length }} * 32) + 'px';
+
+// 안전재고 분포 히스토그램
+new Chart(document.getElementById('safetyHistogram'), {
+    type: 'bar',
+    data: {
+        labels: {{ safety_dist.labels | to_json }},
+        datasets: [{
+            label: '상품수',
+            data: {{ safety_dist.counts | to_json }},
+            backgroundColor: 'rgba(120,120,120,0.5)',
+            borderRadius: 4,
+        }]
+    },
+    options: {
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: {
+            x: { title: { display: true, text: '안전재고 일수' }, grid: { color: _gridC } },
+            y: { title: { display: true, text: '상품수' }, grid: { color: _gridC }, beginAtZero: true }
+        }
+    }
+});
+
+// 테이블 검색 & 정렬
+initTableSearch('itemSearch', 'itemTable');
+initTableSort('itemTable');
+initTableSort('skipTable');
+</script>
+{% endblock %}

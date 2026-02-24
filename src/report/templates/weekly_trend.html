@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+
+{% block title %}주간 트렌드 리포트 - {{ end_date }}{% endblock %}
+{% block header %}주간 트렌드 리포트{% endblock %}
+{% block subtitle %}기준일: {{ end_date }} (최근 7일) | {{ generated_at }} 생성{% endblock %}
+
+{% block content %}
+<!-- 주간 요약 카드 -->
+<div class="card-grid">
+    <div class="card">
+        <div class="value">{{ weekly_summary.total_sales | number_format }}</div>
+        <div class="label">총 판매량</div>
+    </div>
+    <div class="card {% if weekly_summary.growth_pct >= 0 %}good{% else %}warn{% endif %}">
+        <div class="value">{{ weekly_summary.growth_pct }}%</div>
+        <div class="label">전주 대비</div>
+    </div>
+    <div class="card">
+        <div class="value">{{ weekly_summary.total_orders | number_format }}</div>
+        <div class="label">총 발주량</div>
+    </div>
+    <div class="card accent">
+        <div class="value">{{ weekly_summary.total_items }}</div>
+        <div class="label">판매 상품수</div>
+    </div>
+    <div class="card {% if weekly_summary.total_disuse > 0 %}warn{% endif %}">
+        <div class="value">{{ weekly_summary.total_disuse | number_format }}</div>
+        <div class="label">폐기 수량</div>
+    </div>
+</div>
+
+<!-- 카테고리별 7일 판매 추이 -->
+<div class="section">
+    <h2 class="section-title">카테고리별 판매 추이 (7일)</h2>
+    <div class="chart-box">
+        <canvas id="dailyTrendChart" height="320"></canvas>
+    </div>
+</div>
+
+<!-- 예측 정확도 추이 -->
+{% if accuracy.dates %}
+<div class="section">
+    <h2 class="section-title">예측 정확도 추이</h2>
+    <div class="chart-box">
+        <canvas id="accuracyChart" height="250"></canvas>
+    </div>
+</div>
+{% endif %}
+
+<!-- 요일별 히트맵 -->
+{% if heatmap.categories %}
+<div class="section">
+    <h2 class="section-title">요일별 판매 패턴 (카테고리 x 요일)</h2>
+    <div class="table-wrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th>카테고리</th>
+                    {% for wd in heatmap.weekdays %}
+                    <th class="text-center">{{ wd }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+            {% for i in range(heatmap.categories | length) %}
+                <tr>
+                    <td>{{ heatmap.categories[i] }}</td>
+                    {% for val in heatmap.data[i] %}
+                    <td class="text-center" style="background: rgba(150, 150, 150, {{ [val / 20, 0.8] | min }});
+                        color: {% if val > 10 %}#fff{% else %}var(--text-secondary){% endif %}; font-weight: 600;">
+                        {{ val }}
+                    </td>
+                    {% endfor %}
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+<!-- 판매 상위 상품 -->
+{% if top_items.top_sellers %}
+<div class="section">
+    <h2 class="section-title">판매 상위 TOP 10</h2>
+    <div class="table-wrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>상품명</th>
+                    <th>카테고리</th>
+                    <th class="text-right">주간 판매량</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for item in top_items.top_sellers %}
+                <tr>
+                    <td class="text-center" style="color:var(--warning); font-weight:700;">{{ loop.index }}</td>
+                    <td title="{{ item.item_cd }}">{{ item.item_nm }}</td>
+                    <td>{{ item.category }}</td>
+                    <td class="text-right" style="font-weight:600;">{{ item.total_sales | number_format }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+var _g = getComputedStyle(document.documentElement);
+var _gridC = _g.getPropertyValue('--chart-grid').trim();
+
+// 카테고리별 7일 판매 추이 Multi-line
+new Chart(document.getElementById('dailyTrendChart'), {
+    type: 'line',
+    data: {
+        labels: {{ daily_trend.labels | to_json }},
+        datasets: {{ daily_trend.datasets | to_json }}
+    },
+    options: {
+        responsive: true,
+        interaction: { mode: 'index', intersect: false },
+        plugins: { legend: { position: 'bottom' } },
+        scales: {
+            x: { grid: { color: _gridC } },
+            y: { grid: { color: _gridC }, beginAtZero: true }
+        }
+    }
+});
+
+// 예측 정확도
+{% if accuracy.dates %}
+new Chart(document.getElementById('accuracyChart'), {
+    type: 'line',
+    data: {
+        labels: {{ accuracy.dates | to_json }},
+        datasets: [
+            {
+                label: 'MAPE (%)',
+                data: {{ accuracy.mape_values | to_json }},
+                borderColor: '#ef4444',
+                backgroundColor: 'rgba(239,68,68,0.1)',
+                fill: true,
+                tension: 0.3,
+                yAxisID: 'y',
+            },
+            {
+                label: '정확도 (%)',
+                data: {{ accuracy.accuracy_values | to_json }},
+                borderColor: '#22c55e',
+                backgroundColor: 'transparent',
+                tension: 0.3,
+                yAxisID: 'y1',
+            }
+        ]
+    },
+    options: {
+        responsive: true,
+        interaction: { mode: 'index', intersect: false },
+        plugins: { legend: { position: 'bottom' } },
+        scales: {
+            x: { grid: { color: _gridC } },
+            y: { type: 'linear', position: 'left', grid: { color: _gridC },
+                 title: { display: true, text: 'MAPE (%)' }, beginAtZero: true },
+            y1: { type: 'linear', position: 'right', grid: { drawOnChartArea: false },
+                  title: { display: true, text: '정확도 (%)' }, min: 0, max: 100 }
+        }
+    }
+});
+{% endif %}
+</script>
+{% endblock %}

@@ -1,0 +1,36 @@
+{
+  "item_code": {
+    "length": 13,
+    "pattern": "^\\d{13}$",
+    "exclude_patterns": [
+      "^88\\d{2}\\d{5}1$"
+    ]
+  },
+  "quantity": {
+    "sale_qty": {
+      "min": 0,
+      "max": 500
+    },
+    "ord_qty": {
+      "min": 0,
+      "max": 1000
+    },
+    "stock_qty": {
+      "min": 0,
+      "max": 2000
+    }
+  },
+  "anomaly": {
+    "method": "3sigma",
+    "window_days": 30,
+    "min_samples": 7
+  },
+  "inventory_consistency": {
+    "enabled": true,
+    "tolerance": 0
+  },
+  "duplicate_detection": {
+    "enabled": true,
+    "check_window_days": 1
+  }
+}

@@ -1,0 +1,119 @@
+{
+  "daily_avg_days": {
+    "value": 14.0,
+    "default": 14.0,
+    "min": 7.0,
+    "max": 30.0,
+    "max_delta": 7.0,
+    "description": "일평균 판매량 계산 기간 (일)",
+    "locked": false
+  },
+  "weight_daily_avg": {
+    "value": 0.5876,
+    "default": 0.4,
+    "min": 0.2,
+    "max": 0.55,
+    "max_delta": 0.05,
+    "description": "인기도 가중치: 가용일평균 판매량",
+    "locked": false
+  },
+  "weight_sell_day_ratio": {
+    "value": 0.2686,
+    "default": 0.35,
+    "min": 0.15,
+    "max": 0.55,
+    "max_delta": 0.05,
+    "description": "인기도 가중치: 판매일 비율",
+    "locked": false
+  },
+  "weight_trend": {
+    "value": 0.1438,
+    "default": 0.25,
+    "min": 0.1,
+    "max": 0.45,
+    "max_delta": 0.05,
+    "description": "인기도 가중치: 트렌드 (7일/30일)",
+    "locked": false
+  },
+  "popularity_high_percentile": {
+    "value": 70.0,
+    "default": 70.0,
+    "min": 50.0,
+    "max": 90.0,
+    "max_delta": 5.0,
+    "description": "고인기 백분위 기준 (상위 N%)",
+    "locked": false
+  },
+  "popularity_low_percentile": {
+    "value": 35.0,
+    "default": 35.0,
+    "min": 15.0,
+    "max": 50.0,
+    "max_delta": 5.0,
+    "description": "저인기 백분위 기준 (하위 N%)",
+    "locked": false
+  },
+  "exposure_urgent": {
+    "value": 1.0,
+    "default": 1.0,
+    "min": 0.3,
+    "max": 2.0,
+    "max_delta": 0.3,
+    "description": "긴급 발주 노출 임계값 (일)",
+    "locked": false
+  },
+  "exposure_normal": {
+    "value": 2.0,
+    "default": 2.0,
+    "min": 1.0,
+    "max": 3.5,
+    "max_delta": 0.3,
+    "description": "일반 발주 노출 임계값 (일)",
+    "locked": false
+  },
+  "exposure_sufficient": {
+    "value": 2.5,
+    "default": 3.0,
+    "min": 2.5,
+    "max": 5.0,
+    "max_delta": 0.5,
+    "description": "재고 충분 노출 임계값 (일)",
+    "locked": false
+  },
+  "stockout_freq_threshold": {
+    "value": 0.25,
+    "default": 0.15,
+    "min": 0.05,
+    "max": 0.25,
+    "max_delta": 0.03,
+    "description": "품절 빈도 업그레이드 임계값 (30일 중 비율)",
+    "locked": false
+  },
+  "target_accuracy": {
+    "value": 0.6,
+    "default": 0.6,
+    "min": 0.4,
+    "max": 0.85,
+    "max_delta": 0.05,
+    "description": "보정 기준 목표 적중률",
+    "locked": false
+  },
+  "calibration_decay": {
+    "value": 0.7,
+    "default": 0.7,
+    "min": 0.3,
+    "max": 1.0,
+    "max_delta": 0.1,
+    "description": "보정 강도 감쇄율 (1.0=감쇄 없음)",
+    "locked": false
+  },
+  "calibration_reversion_rate": {
+    "value": 0.1,
+    "default": 0.1,
+    "min": 0.0,
+    "max": 0.3,
+    "max_delta": 0.05,
+    "description": "기본값 복원 속도 (0=복원 없음)",
+    "locked": false
+  }
+}

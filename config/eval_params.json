@@ -1,0 +1,250 @@
+{
+  "daily_avg_days": {
+    "value": 14.0,
+    "default": 14.0,
+    "min": 7.0,
+    "max": 30.0,
+    "max_delta": 7.0,
+    "description": "일평균 판매량 계산 기간 (일)"
+  },
+  "weight_daily_avg": {
+    "value": 0.5876,
+    "default": 0.4,
+    "min": 0.2,
+    "max": 0.55,
+    "max_delta": 0.05,
+    "description": "인기도 가중치: 가용일평균 판매량"
+  },
+  "weight_sell_day_ratio": {
+    "value": 0.2686,
+    "default": 0.35,
+    "min": 0.15,
+    "max": 0.55,
+    "max_delta": 0.05,
+    "description": "인기도 가중치: 판매일 비율"
+  },
+  "weight_trend": {
+    "value": 0.1438,
+    "default": 0.25,
+    "min": 0.1,
+    "max": 0.45,
+    "max_delta": 0.05,
+    "description": "인기도 가중치: 트렌드 (7일/30일)"
+  },
+  "popularity_high_percentile": {
+    "value": 70.0,
+    "default": 70.0,
+    "min": 50.0,
+    "max": 90.0,
+    "max_delta": 5.0,
+    "description": "고인기 백분위 기준 (상위 N%)"
+  },
+  "popularity_low_percentile": {
+    "value": 35.0,
+    "default": 35.0,
+    "min": 15.0,
+    "max": 50.0,
+    "max_delta": 5.0,
+    "description": "저인기 백분위 기준 (하위 N%)"
+  },
+  "exposure_urgent": {
+    "value": 1.0,
+    "default": 1.0,
+    "min": 0.3,
+    "max": 2.0,
+    "max_delta": 0.3,
+    "description": "긴급 발주 노출 임계값 (일)"
+  },
+  "exposure_normal": {
+    "value": 2.0,
+    "default": 2.0,
+    "min": 1.0,
+    "max": 3.5,
+    "max_delta": 0.3,
+    "description": "일반 발주 노출 임계값 (일)"
+  },
+  "exposure_sufficient": {
+    "value": 2.5,
+    "default": 3.0,
+    "min": 2.5,
+    "max": 5.0,
+    "max_delta": 0.5,
+    "description": "재고 충분 노출 임계값 (일)"
+  },
+  "stockout_freq_threshold": {
+    "value": 0.25,
+    "default": 0.15,
+    "min": 0.05,
+    "max": 0.25,
+    "max_delta": 0.03,
+    "description": "품절 빈도 업그레이드 임계값 (30일 중 비율)"
+  },
+  "target_accuracy": {
+    "value": 0.6,
+    "default": 0.6,
+    "min": 0.4,
+    "max": 0.85,
+    "max_delta": 0.05,
+    "description": "보정 기준 목표 적중률"
+  },
+  "calibration_decay": {
+    "value": 0.7,
+    "default": 0.7,
+    "min": 0.3,
+    "max": 1.0,
+    "max_delta": 0.1,
+    "description": "보정 강도 감쇄율 (1.0=감쇄 없음)"
+  },
+  "calibration_reversion_rate": {
+    "value": 0.1,
+    "default": 0.1,
+    "min": 0.0,
+    "max": 0.3,
+    "max_delta": 0.05,
+    "description": "기본값 복원 속도 (0=복원 없음)"
+  },
+  "force_max_days": {
+    "value": 2.0,
+    "default": 2.0,
+    "min": 1.0,
+    "max": 5.0,
+    "max_delta": 1.0,
+    "description": "FORCE_ORDER 발주량 상한 (일평균 예측 × N일)"
+  },
+  "cost_optimization": {
+    "enabled": true,
+    "cost_ratio_high": 0.5,
+    "cost_ratio_mid": 0.3,
+    "cost_ratio_low": 0.15,
+    "safety_multiplier_high": 1.3,
+    "safety_multiplier_mid": 1.1,
+    "safety_multiplier_low": 0.85,
+    "disuse_modifier_high": 1.15,
+    "disuse_modifier_low": 0.85,
+    "skip_threshold_high_offset": 0.5,
+    "skip_threshold_low_offset": -0.5,
+    "turnover_high_threshold": 5.0,
+    "turnover_mid_threshold": 2.0,
+    "category_share_bonus_threshold": 0.1,
+    "category_share_bonus_value": 0.05,
+    "margin_multiplier_matrix": {
+      "high": {
+        "high": 1.35,
+        "mid": 1.3,
+        "low": 1.15
+      },
+      "mid": {
+        "high": 1.2,
+        "mid": 1.1,
+        "low": 1.0
+      },
+      "base": {
+        "high": 1.1,
+        "mid": 1.0,
+        "low": 0.9
+      },
+      "low": {
+        "high": 0.95,
+        "mid": 0.85,
+        "low": 0.8
+      }
+    },
+    "disuse_modifier_matrix": {
+      "high": {
+        "high": 1.2,
+        "mid": 1.15,
+        "low": 1.05
+      },
+      "mid": {
+        "high": 1.1,
+        "mid": 1.0,
+        "low": 0.95
+      },
+      "base": {
+        "high": 1.0,
+        "mid": 1.0,
+        "low": 0.9
+      },
+      "low": {
+        "high": 0.9,
+        "mid": 0.85,
+        "low": 0.8
+      }
+    },
+    "skip_offset_matrix": {
+      "high": {
+        "high": 0.7,
+        "mid": 0.5,
+        "low": 0.3
+      },
+      "mid": {
+        "high": 0.3,
+        "mid": 0.0,
+        "low": -0.2
+      },
+      "base": {
+        "high": 0.0,
+        "mid": 0.0,
+        "low": -0.3
+      },
+      "low": {
+        "high": -0.3,
+        "mid": -0.5,
+        "low": -0.7
+      }
+    }
+  },
+  "holiday": {
+    "enabled": true,
+    "base_coefficient": 1.3,
+    "period_coefficients": {
+      "single": 1.2,
+      "short": 1.3,
+      "long": 1.4
+    },
+    "period_thresholds": {
+      "short": 3,
+      "long": 5
+    },
+    "position_modifiers": {
+      "pre_holiday": 1.15,
+      "first_day": 1.35,
+      "middle": 1.25,
+      "last_day": 1.1,
+      "post_holiday": 0.9
+    },
+    "category_multipliers": {
+      "food": 1.1,
+      "alcohol": 1.2,
+      "tobacco": 1.0,
+      "perishable": 0.9,
+      "general": 1.0
+    },
+    "wma_correction": {
+      "enabled": true,
+      "holiday_weight_factor": 0.3
+    }
+  },
+  "waste_cause": {
+    "enabled": true,
+    "lookback_days": 14,
+    "over_order_ratio_threshold": 1.5,
+    "waste_ratio_high": 0.5,
+    "demand_drop_trend_threshold": 0.6,
+    "demand_drop_sold_threshold": 0.5,
+    "sell_day_ratio_low": 0.5,
+    "temp_change_threshold": 10.0,
+    "promo_ended_days": 3,
+    "feedback_multipliers": {
+      "OVER_ORDER": 0.75,
+      "EXPIRY_MISMANAGEMENT": 0.85,
+      "DEMAND_DROP_START": 0.80,
+      "DEMAND_DROP_DECAY_DAYS": 7
+    },
+    "feedback_expiry_days": {
+      "OVER_ORDER": 14,
+      "EXPIRY_MISMANAGEMENT": 21,
+      "DEMAND_DROP": 7
+    }
+  }
+}

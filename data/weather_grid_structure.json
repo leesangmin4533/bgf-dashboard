@@ -1,0 +1,29 @@
+{
+  "grd_weather_cells": {
+    "binddataset": "ds_weatherTomorrow",
+    "found": true
+  },
+  "pdiv_weather": {
+    "className": "unknown",
+    "found": true,
+    "has_form": true
+  },
+  "topform_datasets": [],
+  "topform_objects": [],
+  "topframe_found": true,
+  "weather_datasets": [],
+  "weather_form_objects": [],
+  "weather_grids": [],
+  "weather_statics": {
+    "sta_dateTop": {
+      "text": "2026-02-18(수) 14:11:49",
+      "value": "",
+      "visible": true
+    },
+    "sta_degree": {
+      "text": "5º",
+      "value": "",
+      "visible": true
+    }
+  }
+}

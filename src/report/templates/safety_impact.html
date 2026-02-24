@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+
+{% block title %}안전재고 변경 영향도 - {{ change_date }}{% endblock %}
+{% block header %}안전재고 변경 영향도 분석{% endblock %}
+{% block subtitle %}변경일: {{ change_date }} | {{ generated_at }} 생성{% endblock %}
+
+{% block content %}
+<!-- 요약 카드 -->
+<div class="card-grid">
+    <div class="card">
+        <div class="value">{{ summary.total_items }}</div>
+        <div class="label">분석 상품수</div>
+    </div>
+    <div class="card {% if summary.total_change_pct < 0 %}good{% else %}warn{% endif %}">
+        <div class="value">{{ summary.total_change_pct }}%</div>
+        <div class="label">전체 안전재고 변화</div>
+    </div>
+    <div class="card good">
+        <div class="value">{{ summary.decreased_count }}</div>
+        <div class="label">감소 상품</div>
+    </div>
+    <div class="card warn">
+        <div class="value">{{ summary.increased_count }}</div>
+        <div class="label">증가 상품</div>
+    </div>
+    <div class="card">
+        <div class="value">{{ summary.unchanged_count }}</div>
+        <div class="label">변동 없음</div>
+    </div>
+</div>
+
+<!-- 카테고리별 변화율 차트 -->
+<div class="section">
+    <h2 class="section-title">카테고리별 안전재고 변화율</h2>
+    <div class="chart-box">
+        <canvas id="catChangeChart"></canvas>
+    </div>
+</div>
+
+<!-- 상품별 비교 테이블 -->
+<div class="section">
+    <h2 class="section-title">상품별 안전재고 비교 ({{ comparisons | length }}건)</h2>
+    <input type="text" id="compSearch" class="search-box" placeholder="상품명, 카테고리 검색...">
+    <div class="table-wrapper">
+        <div class="table-scroll">
+            <table id="compTable">
+                <thead>
+                    <tr>
+                        <th data-sort="text">상품명</th>
+                        <th data-sort="text">카테고리</th>
+                        <th data-sort="num" class="text-right">변경 전</th>
+                        <th data-sort="num" class="text-right">변경 후</th>
+                        <th data-sort="num" class="text-right">변화량</th>
+                        <th data-sort="num" class="text-right">변화율</th>
+                        <th data-sort="num" class="text-right">발주(전)</th>
+                        <th data-sort="num" class="text-right">발주(후)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for c in comparisons %}
+                    <tr>
+                        <td title="{{ c.item_cd }}">{{ c.item_nm }}</td>
+                        <td>{{ c.category }}</td>
+                        <td class="text-right">{{ c.old_safety }}</td>
+                        <td class="text-right">{{ c.new_safety }}</td>
+                        <td class="text-right {% if c.delta < 0 %}positive{% elif c.delta > 0 %}negative{% endif %}">
+                            {{ c.delta }}
+                        </td>
+                        <td class="text-right {% if c.pct_change < 0 %}positive{% elif c.pct_change > 0 %}negative{% endif %}" style="font-weight:600;">
+                            {{ c.pct_change }}%
+                        </td>
+                        <td class="text-right">{{ c.old_order }}</td>
+                        <td class="text-right">{{ c.new_order }}</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- 품절 추이 -->
+{% if stockout_trend.labels %}
+<div class="section">
+    <h2 class="section-title">품절 발생 추이 (변경일 전후)</h2>
+    <div class="chart-box">
+        <canvas id="stockoutChart"></canvas>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+var _g = getComputedStyle(document.documentElement);
+var _gridC = _g.getPropertyValue('--chart-grid').trim();
+
+// 카테고리별 변화율 차트
+const catLabels = {{ cat_summary.labels | to_json }};
+const catChanges = {{ cat_summary.pct_changes | to_json }};
+const catColors = catChanges.map(v => v < 0 ? 'rgba(34,197,94,0.7)' : 'rgba(239,68,68,0.7)');
+
+new Chart(document.getElementById('catChangeChart'), {
+    type: 'bar',
+    data: {
+        labels: catLabels,
+        datasets: [{
+            label: '변화율 (%)',
+            data: catChanges,
+            backgroundColor: catColors,
+            borderRadius: 4,
+        }]
+    },
+    options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+            x: {
+                grid: { color: _gridC },
+                title: { display: true, text: '변화율 (%)' }
+            },
+            y: { grid: { display: false } }
+        }
+    }
+});
+document.getElementById('catChangeChart').parentElement.style.height =
+    Math.max(300, catLabels.length * 32) + 'px';
+
+// 품절 추이 차트
+{% if stockout_trend.labels %}
+const stockoutLabels = {{ stockout_trend.labels | to_json }};
+const stockoutCounts = {{ stockout_trend.counts | to_json }};
+const changeDate = '{{ stockout_trend.change_date }}';
+
+new Chart(document.getElementById('stockoutChart'), {
+    type: 'line',
+    data: {
+        labels: stockoutLabels,
+        datasets: [{
+            label: '품절 건수',
+            data: stockoutCounts,
+            borderColor: '#ef4444',
+            backgroundColor: 'rgba(239,68,68,0.1)',
+            fill: true,
+            tension: 0.3,
+            pointBackgroundColor: stockoutLabels.map(d => d === changeDate ? '#eab308' : '#ef4444'),
+            pointBorderColor: stockoutLabels.map(d => d === changeDate ? '#eab308' : '#ef4444'),
+            pointRadius: stockoutLabels.map(d => d === changeDate ? 8 : 3),
+        }]
+    },
+    options: {
+        responsive: true,
+        plugins: {
+            legend: { display: false },
+        },
+        scales: {
+            x: { grid: { color: _gridC } },
+            y: { grid: { color: _gridC }, beginAtZero: true, title: { display: true, text: '품절 건수' } }
+        }
+    }
+});
+{% endif %}
+
+initTableSearch('compSearch', 'compTable');
+initTableSort('compTable');
+</script>
+{% endblock %}

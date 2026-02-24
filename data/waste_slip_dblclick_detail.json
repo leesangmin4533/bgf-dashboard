@@ -1,0 +1,1443 @@
+{
+  "dom_cells": {
+    "[id*=\"STGJ020\"] [id*=\"gdList\"]": [
+      {
+        "children": 3,
+        "class": "Grid",
+        "id": "mainframe.HFrameSet00.VFrameSet00.FrameSet.STGJ020_M0.form.div_workForm.form.div2.form.gdList",
+        "rect": {
+          "h": 520,
+          "w": 992,
+          "x": 16,
+          "y": 204
+        },
+        "tag": "DIV"
+      },
+      {
+        "children": 2,
+        "class": "nexacontainer",
+        "id": "mainframe.HFrameSet00.VFrameSet00.FrameSet.STGJ020_M0.form.div_workForm.form.div2.form.gdList:container",
+        "rect": {
+          "h": 518,
+          "w": 973,
+          "x": 17,
+          "y": 205
+        },
+        "tag": "DIV"
+      },
+      {
+        "children": 1,
+        "class": "GridBandControl head",
+        "id": "mainframe.HFrameSet00.VFrameSet00.FrameSet.STGJ020_M0.form.div_workForm.form.div2.form.gdList.head",
+        "rect": {
+          "h": 26,
+          "w": 973,
+          "x": 17,
+          "y": 205
+        },
+        "tag": "DIV"
+      },
+      {
+        "children": 1,
+        "class": "nexacontainer",
+        "id": "mainframe.HFrameSet00.VFrameSet00.FrameSet.STGJ020_M0.form.div_workForm.form.div2.form.gdList.head:container",
+        "rect": {
+          "h": 26,
+          "w": 973,
+          "x": 17,
+          "y": 205
+        },
+        "tag": "DIV"
+      },
+      {
+        "children": 1,
+        "class": "GridRowControl row nexatransform",
+        "id": "mainframe.HFrameSet00.VFrameSet00.FrameSet.STGJ020_M0.form.div_workForm.form.div2.form.gdList.head.gridrow_-1",
+        "rect": {
+          "h": 26,
+          "w": 973,
+          "x": 17,
+          "y": 205
+        },
+        "tag": "DIV"
+      },
+      {
+        "children": 1,
+        "class": "nexacontainer",
+        "id": "mainframe.HFrameSet00.VFrameSet00.FrameSet.STGJ020_M0.form.div_workForm.form.div2.form.gdList.head.gridrow_-1:containerbody",
+        "rect": {
+          "h": 26,
+          "w": 973,
+          "x": 17,
+          "y": 205
+        },
+        "tag": "DIV"
+      },
+      {
+        "children": 1,
+        "class": "GridCellControl cell",
+        "id": "mainframe.HFrameSet00.VFrameSet00.FrameSet.STGJ020_M0.form.div_workForm.form.div2.form.gdList.head.gridrow_-1.cell_-1_0",
+        "rect": {
+          "h": 26,
+          "w": 39,
+          "x": 17,
+          "y": 205
+        },
+        "tag": "DIV"
+      },
+      {
+        "children": 0,
+        "class": "nexacontentsbox nexaleftalign",
+        "id": "mainframe.HFrameSet00.VFrameSet00.FrameSet.STGJ020_M0.form.div_workForm.form.div2.form.gdList.head.gridrow_-1.cell_-1_0:text",
+        "rect": {
+          "h": 25,
+          "w": 36,
+          "x": 18,
+          "y": 205
+        },
+        "tag": "DIV"
+      },
+      {
+        "children": 1,
+        "class": "GridCellControl cell",
+        "id": "mainframe.HFrameSet00.VFrameSet00.FrameSet.STGJ020_M0.form.div_workForm.form.div2.form.gdList.head.gridrow_-1.cell_-1_1",
+        "rect": {
+          "h": 26,
+          "w": 84,
+          "x": 56,
+          "y": 205
+        },
+        "tag": "DIV"
+      },
+      {
+        "children": 0,
+        "class": "nexacontentsbox nexaleftalign",
+        "id": "mainframe.HFrameSet00.VFrameSet00.FrameSet.STGJ020_M0.form.div_workForm.form.div2.form.gdList.head.gridrow_-1.cell_-1_1:text",
+        "rect": {
+          "h": 25,
+          "w": 81,
+          "x": 57,
+          "y": 205
+        },
+        "tag": "DIV"
+      }
+    ],
+    "[id*=\"STGJ020\"][id*=\"gd\"] div[id*=\"cell_0\"]": [
+      {
+        "children": 1,
+        "class": "GridCellControl cell",
+        "id": "mainframe.HFrameSet00.VFrameSet00.FrameSet.STGJ020_M0.form.div_workForm.form.div2.form.gdList.body.gridrow_0.cell_0_0",
+        "rect": {
+          "h": 31,
+          "w": 39,
+          "x": 17,
+          "y": 231
+        },
+        "tag": "DIV"
+      },
+      {
+        "children": 0,
+        "class": "nexacontentsbox nexaleftalign",
+        "id": "mainframe.HFrameSet00.VFrameSet00.FrameSet.STGJ020_M0.form.div_workForm.form.div2.form.gdList.body.gridrow_0.cell_0_0:text",
+        "rect": {
+          "h": 26,
+          "w": 22,
+          "x": 25,
+          "y": 233
+        },
+        "tag": "DIV"
+      },
+      {
+        "children": 1,
+        "class": "GridCellControl cell",
+        "id": "mainframe.HFrameSet00.VFrameSet00.FrameSet.STGJ020_M0.form.div_workForm.form.div2.form.gdList.body.gridrow_0.cell_0_1",
+        "rect": {
+          "h": 31,
+          "w": 84,
+          "x": 56,
+          "y": 231
+        },
+        "tag": "DIV"
+      },
+      {
+        "children": 0,
+        "class": "nexacontentsbox nexacenteralign",
+        "id": "mainframe.HFrameSet00.VFrameSet00.FrameSet.STGJ020_M0.form.div_workForm.form.div2.form.gdList.body.gridrow_0.cell_0_1:text",
+        "rect": {
+          "h": 27,
+          "w": 68,
+          "x": 64,
+          "y": 233
+        },
+        "tag": "DIV"
+      },
+      {
+        "children": 1,
+        "class": "GridCellControl cell",
+        "id": "mainframe.HFrameSet00.VFrameSet00.FrameSet.STGJ020_M0.form.div_workForm.form.div2.form.gdList.body.gridrow_0.cell_0_2",
+        "rect": {
+          "h": 31,
+          "w": 113,
+          "x": 140,
+          "y": 231
+        },
+        "tag": "DIV"
+      },
+      {
+        "children": 0,
+        "class": "nexacontentsbox nexaleftalign",
+        "id": "mainframe.HFrameSet00.VFrameSet00.FrameSet.STGJ020_M0.form.div_workForm.form.div2.form.gdList.body.gridrow_0.cell_0_2:text",
+        "rect": {
+          "h": 31,
+          "w": 112,
+          "x": 140,
+          "y": 231
+        },
+        "tag": "DIV"
+      },
+      {
+        "children": 1,
+        "class": "GridCellControl cell",
+        "id": "mainframe.HFrameSet00.VFrameSet00.FrameSet.STGJ020_M0.form.div_workForm.form.div2.form.gdList.body.gridrow_0.cell_0_3",
+        "rect": {
+          "h": 31,
+          "w": 108,
+          "x": 253,
+          "y": 231
+        },
+        "tag": "DIV"
+      },
+      {
+        "children": 0,
+        "class": "nexacontentsbox nexaleftalign",
+        "id": "mainframe.HFrameSet00.VFrameSet00.FrameSet.STGJ020_M0.form.div_workForm.form.div2.form.gdList.body.gridrow_0.cell_0_3:text",
+        "rect": {
+          "h": 26,
+          "w": 91,
+          "x": 261,
+          "y": 233
+        },
+        "tag": "DIV"
+      },
+      {
+        "children": 1,
+        "class": "GridCellControl cell",
+        "id": "mainframe.HFrameSet00.VFrameSet00.FrameSet.STGJ020_M0.form.div_workForm.form.div2.form.gdList.body.gridrow_0.cell_0_4",
+        "rect": {
+          "h": 31,
+          "w": 49,
+          "x": 361,
+          "y": 231
+        },
+        "tag": "DIV"
+      },
+      {
+        "children": 0,
+        "class": "nexacontentsbox nexarightalign",
+        "id": "mainframe.HFrameSet00.VFrameSet00.FrameSet.STGJ020_M0.form.div_workForm.form.div2.form.gdList.body.gridrow_0.cell_0_4:text",
+        "rect": {
+          "h": 26,
+          "w": 32,
+          "x": 369,
+          "y": 233
+        },
+        "tag": "DIV"
+      }
+    ],
+    "[id*=\"STGJ020\"][id*=\"gdList\"] [id*=\"body\"] [id*=\"cell_0\"]": [
+      {
+        "children": 1,
+        "class": "GridCellControl cell",
+        "id": "mainframe.HFrameSet00.VFrameSet00.FrameSet.STGJ020_M0.form.div_workForm.form.div2.form.gdList.body.gridrow_0.cell_0_0",
+        "rect": {
+          "h": 31,
+          "w": 39,
+          "x": 17,
+          "y": 231
+        },
+        "tag": "DIV"
+      },
+      {
+        "children": 0,
+        "class": "nexacontentsbox nexaleftalign",
+        "id": "mainframe.HFrameSet00.VFrameSet00.FrameSet.STGJ020_M0.form.div_workForm.form.div2.form.gdList.body.gridrow_0.cell_0_0:text",
+        "rect": {
+          "h": 26,
+          "w": 22,
+          "x": 25,
+          "y": 233
+        },
+        "tag": "DIV"
+      },
+      {
+        "children": 1,
+        "class": "GridCellControl cell",
+        "id": "mainframe.HFrameSet00.VFrameSet00.FrameSet.STGJ020_M0.form.div_workForm.form.div2.form.gdList.body.gridrow_0.cell_0_1",
+        "rect": {
+          "h": 31,
+          "w": 84,
+          "x": 56,
+          "y": 231
+        },
+        "tag": "DIV"
+      },
+      {
+        "children": 0,
+        "class": "nexacontentsbox nexacenteralign",
+        "id": "mainframe.HFrameSet00.VFrameSet00.FrameSet.STGJ020_M0.form.div_workForm.form.div2.form.gdList.body.gridrow_0.cell_0_1:text",
+        "rect": {
+          "h": 27,
+          "w": 68,
+          "x": 64,
+          "y": 233
+        },
+        "tag": "DIV"
+      },
+      {
+        "children": 1,
+        "class": "GridCellControl cell",
+        "id": "mainframe.HFrameSet00.VFrameSet00.FrameSet.STGJ020_M0.form.div_workForm.form.div2.form.gdList.body.gridrow_0.cell_0_2",
+        "rect": {
+          "h": 31,
+          "w": 113,
+          "x": 140,
+          "y": 231
+        },
+        "tag": "DIV"
+      },
+      {
+        "children": 0,
+        "class": "nexacontentsbox nexaleftalign",
+        "id": "mainframe.HFrameSet00.VFrameSet00.FrameSet.STGJ020_M0.form.div_workForm.form.div2.form.gdList.body.gridrow_0.cell_0_2:text",
+        "rect": {
+          "h": 31,
+          "w": 112,
+          "x": 140,
+          "y": 231
+        },
+        "tag": "DIV"
+      },
+      {
+        "children": 1,
+        "class": "GridCellControl cell",
+        "id": "mainframe.HFrameSet00.VFrameSet00.FrameSet.STGJ020_M0.form.div_workForm.form.div2.form.gdList.body.gridrow_0.cell_0_3",
+        "rect": {
+          "h": 31,
+          "w": 108,
+          "x": 253,
+          "y": 231
+        },
+        "tag": "DIV"
+      },
+      {
+        "children": 0,
+        "class": "nexacontentsbox nexaleftalign",
+        "id": "mainframe.HFrameSet00.VFrameSet00.FrameSet.STGJ020_M0.form.div_workForm.form.div2.form.gdList.body.gridrow_0.cell_0_3:text",
+        "rect": {
+          "h": 26,
+          "w": 91,
+          "x": 261,
+          "y": 233
+        },
+        "tag": "DIV"
+      },
+      {
+        "children": 1,
+        "class": "GridCellControl cell",
+        "id": "mainframe.HFrameSet00.VFrameSet00.FrameSet.STGJ020_M0.form.div_workForm.form.div2.form.gdList.body.gridrow_0.cell_0_4",
+        "rect": {
+          "h": 31,
+          "w": 49,
+          "x": 361,
+          "y": 231
+        },
+        "tag": "DIV"
+      },
+      {
+        "children": 0,
+        "class": "nexacontentsbox nexarightalign",
+        "id": "mainframe.HFrameSet00.VFrameSet00.FrameSet.STGJ020_M0.form.div_workForm.form.div2.form.gdList.body.gridrow_0.cell_0_4:text",
+        "rect": {
+          "h": 26,
+          "w": 32,
+          "x": 369,
+          "y": 233
+        },
+        "tag": "DIV"
+      }
+    ],
+    "[id*=\"STGJ020\"][id*=\"gdList\"] div[class*=\"Grid\"] [id*=\"cell\"]": [
+      {
+        "children": 1,
+        "class": "GridCellControl cell",
+        "id": "mainframe.HFrameSet00.VFrameSet00.FrameSet.STGJ020_M0.form.div_workForm.form.div2.form.gdList.head.gridrow_-1.cell_-1_0",
+        "rect": {
+          "h": 26,
+          "w": 39,
+          "x": 17,
+          "y": 205
+        },
+        "tag": "DIV"
+      },
+      {
+        "children": 0,
+        "class": "nexacontentsbox nexaleftalign",
+        "id": "mainframe.HFrameSet00.VFrameSet00.FrameSet.STGJ020_M0.form.div_workForm.form.div2.form.gdList.head.gridrow_-1.cell_-1_0:text",
+        "rect": {
+          "h": 25,
+          "w": 36,
+          "x": 18,
+          "y": 205
+        },
+        "tag": "DIV"
+      },
+      {
+        "children": 1,
+        "class": "GridCellControl cell",
+        "id": "mainframe.HFrameSet00.VFrameSet00.FrameSet.STGJ020_M0.form.div_workForm.form.div2.form.gdList.head.gridrow_-1.cell_-1_1",
+        "rect": {
+          "h": 26,
+          "w": 84,
+          "x": 56,
+          "y": 205
+        },
+        "tag": "DIV"
+      },
+      {
+        "children": 0,
+        "class": "nexacontentsbox nexaleftalign",
+        "id": "mainframe.HFrameSet00.VFrameSet00.FrameSet.STGJ020_M0.form.div_workForm.form.div2.form.gdList.head.gridrow_-1.cell_-1_1:text",
+        "rect": {
+          "h": 25,
+          "w": 81,
+          "x": 57,
+          "y": 205
+        },
+        "tag": "DIV"
+      },
+      {
+        "children": 1,
+        "class": "GridCellControl cell",
+        "id": "mainframe.HFrameSet00.VFrameSet00.FrameSet.STGJ020_M0.form.div_workForm.form.div2.form.gdList.head.gridrow_-1.cell_-1_2",
+        "rect": {
+          "h": 26,
+          "w": 113,
+          "x": 140,
+          "y": 205
+        },
+        "tag": "DIV"
+      },
+      {
+        "children": 0,
+        "class": "nexacontentsbox nexaleftalign",
+        "id": "mainframe.HFrameSet00.VFrameSet00.FrameSet.STGJ020_M0.form.div_workForm.form.div2.form.gdList.head.gridrow_-1.cell_-1_2:text",
+        "rect": {
+          "h": 25,
+          "w": 110,
+          "x": 141,
+          "y": 205
+        },
+        "tag": "DIV"
+      },
+      {
+        "children": 1,
+        "class": "GridCellControl cell",
+        "id": "mainframe.HFrameSet00.VFrameSet00.FrameSet.STGJ020_M0.form.div_workForm.form.div2.form.gdList.head.gridrow_-1.cell_-1_3",
+        "rect": {
+          "h": 26,
+          "w": 108,
+          "x": 253,
+          "y": 205
+        },
+        "tag": "DIV"
+      },
+      {
+        "children": 0,
+        "class": "nexacontentsbox nexaleftalign",
+        "id": "mainframe.HFrameSet00.VFrameSet00.FrameSet.STGJ020_M0.form.div_workForm.form.div2.form.gdList.head.gridrow_-1.cell_-1_3:text",
+        "rect": {
+          "h": 25,
+          "w": 105,
+          "x": 254,
+          "y": 205
+        },
+        "tag": "DIV"
+      },
+      {
+        "children": 1,
+        "class": "GridCellControl cell",
+        "id": "mainframe.HFrameSet00.VFrameSet00.FrameSet.STGJ020_M0.form.div_workForm.form.div2.form.gdList.head.gridrow_-1.cell_-1_4",
+        "rect": {
+          "h": 26,
+          "w": 49,
+          "x": 361,
+          "y": 205
+        },
+        "tag": "DIV"
+      },
+      {
+        "children": 0,
+        "class": "nexacontentsbox nexaleftalign",
+        "id": "mainframe.HFrameSet00.VFrameSet00.FrameSet.STGJ020_M0.form.div_workForm.form.div2.form.gdList.head.gridrow_-1.cell_-1_4:text",
+        "rect": {
+          "h": 25,
+          "w": 46,
+          "x": 362,
+          "y": 205
+        },
+        "tag": "DIV"
+      }
+    ],
+    "[id*=\"STGJ020\"][id*=\"gdList\"] div[id*=\"cell_0\"]": [
+      {
+        "children": 1,
+        "class": "GridCellControl cell",
+        "id": "mainframe.HFrameSet00.VFrameSet00.FrameSet.STGJ020_M0.form.div_workForm.form.div2.form.gdList.body.gridrow_0.cell_0_0",
+        "rect": {
+          "h": 31,
+          "w": 39,
+          "x": 17,
+          "y": 231
+        },
+        "tag": "DIV"
+      },
+      {
+        "children": 0,
+        "class": "nexacontentsbox nexaleftalign",
+        "id": "mainframe.HFrameSet00.VFrameSet00.FrameSet.STGJ020_M0.form.div_workForm.form.div2.form.gdList.body.gridrow_0.cell_0_0:text",
+        "rect": {
+          "h": 26,
+          "w": 22,
+          "x": 25,
+          "y": 233
+        },
+        "tag": "DIV"
+      },
+      {
+        "children": 1,
+        "class": "GridCellControl cell",
+        "id": "mainframe.HFrameSet00.VFrameSet00.FrameSet.STGJ020_M0.form.div_workForm.form.div2.form.gdList.body.gridrow_0.cell_0_1",
+        "rect": {
+          "h": 31,
+          "w": 84,
+          "x": 56,
+          "y": 231
+        },
+        "tag": "DIV"
+      },
+      {
+        "children": 0,
+        "class": "nexacontentsbox nexacenteralign",
+        "id": "mainframe.HFrameSet00.VFrameSet00.FrameSet.STGJ020_M0.form.div_workForm.form.div2.form.gdList.body.gridrow_0.cell_0_1:text",
+        "rect": {
+          "h": 27,
+          "w": 68,
+          "x": 64,
+          "y": 233
+        },
+        "tag": "DIV"
+      },
+      {
+        "children": 1,
+        "class": "GridCellControl cell",
+        "id": "mainframe.HFrameSet00.VFrameSet00.FrameSet.STGJ020_M0.form.div_workForm.form.div2.form.gdList.body.gridrow_0.cell_0_2",
+        "rect": {
+          "h": 31,
+          "w": 113,
+          "x": 140,
+          "y": 231
+        },
+        "tag": "DIV"
+      },
+      {
+        "children": 0,
+        "class": "nexacontentsbox nexaleftalign",
+        "id": "mainframe.HFrameSet00.VFrameSet00.FrameSet.STGJ020_M0.form.div_workForm.form.div2.form.gdList.body.gridrow_0.cell_0_2:text",
+        "rect": {
+          "h": 31,
+          "w": 112,
+          "x": 140,
+          "y": 231
+        },
+        "tag": "DIV"
+      },
+      {
+        "children": 1,
+        "class": "GridCellControl cell",
+        "id": "mainframe.HFrameSet00.VFrameSet00.FrameSet.STGJ020_M0.form.div_workForm.form.div2.form.gdList.body.gridrow_0.cell_0_3",
+        "rect": {
+          "h": 31,
+          "w": 108,
+          "x": 253,
+          "y": 231
+        },
+        "tag": "DIV"
+      },
+      {
+        "children": 0,
+        "class": "nexacontentsbox nexaleftalign",
+        "id": "mainframe.HFrameSet00.VFrameSet00.FrameSet.STGJ020_M0.form.div_workForm.form.div2.form.gdList.body.gridrow_0.cell_0_3:text",
+        "rect": {
+          "h": 26,
+          "w": 91,
+          "x": 261,
+          "y": 233
+        },
+        "tag": "DIV"
+      },
+      {
+        "children": 1,
+        "class": "GridCellControl cell",
+        "id": "mainframe.HFrameSet00.VFrameSet00.FrameSet.STGJ020_M0.form.div_workForm.form.div2.form.gdList.body.gridrow_0.cell_0_4",
+        "rect": {
+          "h": 31,
+          "w": 49,
+          "x": 361,
+          "y": 231
+        },
+        "tag": "DIV"
+      },
+      {
+        "children": 0,
+        "class": "nexacontentsbox nexarightalign",
+        "id": "mainframe.HFrameSet00.VFrameSet00.FrameSet.STGJ020_M0.form.div_workForm.form.div2.form.gdList.body.gridrow_0.cell_0_4:text",
+        "rect": {
+          "h": 26,
+          "w": 32,
+          "x": 369,
+          "y": 233
+        },
+        "tag": "DIV"
+      }
+    ],
+    "[id*=\"STGJ020\"][id*=\"gdList\"][id*=\"body\"] [id*=\"cell_0\"]": [
+      {
+        "children": 1,
+        "class": "GridCellControl cell",
+        "id": "mainframe.HFrameSet00.VFrameSet00.FrameSet.STGJ020_M0.form.div_workForm.form.div2.form.gdList.body.gridrow_0.cell_0_0",
+        "rect": {
+          "h": 31,
+          "w": 39,
+          "x": 17,
+          "y": 231
+        },
+        "tag": "DIV"
+      },
+      {
+        "children": 0,
+        "class": "nexacontentsbox nexaleftalign",
+        "id": "mainframe.HFrameSet00.VFrameSet00.FrameSet.STGJ020_M0.form.div_workForm.form.div2.form.gdList.body.gridrow_0.cell_0_0:text",
+        "rect": {
+          "h": 26,
+          "w": 22,
+          "x": 25,
+          "y": 233
+        },
+        "tag": "DIV"
+      },
+      {
+        "children": 1,
+        "class": "GridCellControl cell",
+        "id": "mainframe.HFrameSet00.VFrameSet00.FrameSet.STGJ020_M0.form.div_workForm.form.div2.form.gdList.body.gridrow_0.cell_0_1",
+        "rect": {
+          "h": 31,
+          "w": 84,
+          "x": 56,
+          "y": 231
+        },
+        "tag": "DIV"
+      },
+      {
+        "children": 0,
+        "class": "nexacontentsbox nexacenteralign",
+        "id": "mainframe.HFrameSet00.VFrameSet00.FrameSet.STGJ020_M0.form.div_workForm.form.div2.form.gdList.body.gridrow_0.cell_0_1:text",
+        "rect": {
+          "h": 27,
+          "w": 68,
+          "x": 64,
+          "y": 233
+        },
+        "tag": "DIV"
+      },
+      {
+        "children": 1,
+        "class": "GridCellControl cell",
+        "id": "mainframe.HFrameSet00.VFrameSet00.FrameSet.STGJ020_M0.form.div_workForm.form.div2.form.gdList.body.gridrow_0.cell_0_2",
+        "rect": {
+          "h": 31,
+          "w": 113,
+          "x": 140,
+          "y": 231
+        },
+        "tag": "DIV"
+      },
+      {
+        "children": 0,
+        "class": "nexacontentsbox nexaleftalign",
+        "id": "mainframe.HFrameSet00.VFrameSet00.FrameSet.STGJ020_M0.form.div_workForm.form.div2.form.gdList.body.gridrow_0.cell_0_2:text",
+        "rect": {
+          "h": 31,
+          "w": 112,
+          "x": 140,
+          "y": 231
+        },
+        "tag": "DIV"
+      },
+      {
+        "children": 1,
+        "class": "GridCellControl cell",
+        "id": "mainframe.HFrameSet00.VFrameSet00.FrameSet.STGJ020_M0.form.div_workForm.form.div2.form.gdList.body.gridrow_0.cell_0_3",
+        "rect": {
+          "h": 31,
+          "w": 108,
+          "x": 253,
+          "y": 231
+        },
+        "tag": "DIV"
+      },
+      {
+        "children": 0,
+        "class": "nexacontentsbox nexaleftalign",
+        "id": "mainframe.HFrameSet00.VFrameSet00.FrameSet.STGJ020_M0.form.div_workForm.form.div2.form.gdList.body.gridrow_0.cell_0_3:text",
+        "rect": {
+          "h": 26,
+          "w": 91,
+          "x": 261,
+          "y": 233
+        },
+        "tag": "DIV"
+      },
+      {
+        "children": 1,
+        "class": "GridCellControl cell",
+        "id": "mainframe.HFrameSet00.VFrameSet00.FrameSet.STGJ020_M0.form.div_workForm.form.div2.form.gdList.body.gridrow_0.cell_0_4",
+        "rect": {
+          "h": 31,
+          "w": 49,
+          "x": 361,
+          "y": 231
+        },
+        "tag": "DIV"
+      },
+      {
+        "children": 0,
+        "class": "nexacontentsbox nexarightalign",
+        "id": "mainframe.HFrameSet00.VFrameSet00.FrameSet.STGJ020_M0.form.div_workForm.form.div2.form.gdList.body.gridrow_0.cell_0_4:text",
+        "rect": {
+          "h": 26,
+          "w": 32,
+          "x": 369,
+          "y": 233
+        },
+        "tag": "DIV"
+      }
+    ],
+    "[id*=\"STGJ020_M0\"] [id*=\"gdList\"]": [
+      {
+        "children": 3,
+        "class": "Grid",
+        "id": "mainframe.HFrameSet00.VFrameSet00.FrameSet.STGJ020_M0.form.div_workForm.form.div2.form.gdList",
+        "rect": {
+          "h": 520,
+          "w": 992,
+          "x": 16,
+          "y": 204
+        },
+        "tag": "DIV"
+      },
+      {
+        "children": 2,
+        "class": "nexacontainer",
+        "id": "mainframe.HFrameSet00.VFrameSet00.FrameSet.STGJ020_M0.form.div_workForm.form.div2.form.gdList:container",
+        "rect": {
+          "h": 518,
+          "w": 973,
+          "x": 17,
+          "y": 205
+        },
+        "tag": "DIV"
+      },
+      {
+        "children": 1,
+        "class": "GridBandControl head",
+        "id": "mainframe.HFrameSet00.VFrameSet00.FrameSet.STGJ020_M0.form.div_workForm.form.div2.form.gdList.head",
+        "rect": {
+          "h": 26,
+          "w": 973,
+          "x": 17,
+          "y": 205
+        },
+        "tag": "DIV"
+      },
+      {
+        "children": 1,
+        "class": "nexacontainer",
+        "id": "mainframe.HFrameSet00.VFrameSet00.FrameSet.STGJ020_M0.form.div_workForm.form.div2.form.gdList.head:container",
+        "rect": {
+          "h": 26,
+          "w": 973,
+          "x": 17,
+          "y": 205
+        },
+        "tag": "DIV"
+      },
+      {
+        "children": 1,
+        "class": "GridRowControl row nexatransform",
+        "id": "mainframe.HFrameSet00.VFrameSet00.FrameSet.STGJ020_M0.form.div_workForm.form.div2.form.gdList.head.gridrow_-1",
+        "rect": {
+          "h": 26,
+          "w": 973,
+          "x": 17,
+          "y": 205
+        },
+        "tag": "DIV"
+      },
+      {
+        "children": 1,
+        "class": "nexacontainer",
+        "id": "mainframe.HFrameSet00.VFrameSet00.FrameSet.STGJ020_M0.form.div_workForm.form.div2.form.gdList.head.gridrow_-1:containerbody",
+        "rect": {
+          "h": 26,
+          "w": 973,
+          "x": 17,
+          "y": 205
+        },
+        "tag": "DIV"
+      },
+      {
+        "children": 1,
+        "class": "GridCellControl cell",
+        "id": "mainframe.HFrameSet00.VFrameSet00.FrameSet.STGJ020_M0.form.div_workForm.form.div2.form.gdList.head.gridrow_-1.cell_-1_0",
+        "rect": {
+          "h": 26,
+          "w": 39,
+          "x": 17,
+          "y": 205
+        },
+        "tag": "DIV"
+      },
+      {
+        "children": 0,
+        "class": "nexacontentsbox nexaleftalign",
+        "id": "mainframe.HFrameSet00.VFrameSet00.FrameSet.STGJ020_M0.form.div_workForm.form.div2.form.gdList.head.gridrow_-1.cell_-1_0:text",
+        "rect": {
+          "h": 25,
+          "w": 36,
+          "x": 18,
+          "y": 205
+        },
+        "tag": "DIV"
+      },
+      {
+        "children": 1,
+        "class": "GridCellControl cell",
+        "id": "mainframe.HFrameSet00.VFrameSet00.FrameSet.STGJ020_M0.form.div_workForm.form.div2.form.gdList.head.gridrow_-1.cell_-1_1",
+        "rect": {
+          "h": 26,
+          "w": 84,
+          "x": 56,
+          "y": 205
+        },
+        "tag": "DIV"
+      },
+      {
+        "children": 0,
+        "class": "nexacontentsbox nexaleftalign",
+        "id": "mainframe.HFrameSet00.VFrameSet00.FrameSet.STGJ020_M0.form.div_workForm.form.div2.form.gdList.head.gridrow_-1.cell_-1_1:text",
+        "rect": {
+          "h": 25,
+          "w": 81,
+          "x": 57,
+          "y": 205
+        },
+        "tag": "DIV"
+      }
+    ]
+  },
+  "grid_dom": {
+    "binddataset": "dsList",
+    "has_control_element": true,
+    "has_element": false,
+    "has_element_node": false,
+    "methods": [
+      "on_change_containerRect",
+      "on_create_control_element",
+      "set_autofitbandtype",
+      "set_autosizebandtype",
+      "on_apply_autosizebandtype",
+      "set_selectbandtype",
+      "on_apply_selectbandtype",
+      "_getSelectRect",
+      "set_cellsizebandtype",
+      "on_apply_cellsizebandtype",
+      "set_wheelscrollrow",
+      "on_apply_prop_rtldirection",
+      "getCellPos",
+      "setCellPos",
+      "getCellCount",
+      "getCellRect",
+      "getSubCellRect",
+      "_getSubCellRect",
+      "getCellText",
+      "getCellValue",
+      "getSubCellCount",
+      "getSubCellProperty",
+      "getSubCellText",
+      "getSubCellValue",
+      "setSubCellProperty",
+      "setFormatRowProperty",
+      "getFormatRowProperty",
+      "getFormatRowCount",
+      "getFormatRowSize",
+      "setRealRowSize",
+      "getRealRowSize",
+      "getRealRowFullSize",
+      "appendContentsRow",
+      "insertContentsRow",
+      "deleteContentsRow",
+      "mergeContentsCell",
+      "splitContentsCell",
+      "setBandProperty",
+      "getBandProperty",
+      "setCellProperty",
+      "getCellProperty",
+      "getCellPropertyValue",
+      "getSubCellPropertyValue",
+      "autoFitRow",
+      "autoSizeRow",
+      "moveToNextCell",
+      "moveToPrevCell",
+      "getTreeChildRow",
+      "getTreeParentRow",
+      "getTreeSiblingRow",
+      "getTreeRow",
+      "getDatasetRow",
+      "isTreeLeafRow",
+      "isTreeRootRow",
+      "isTreeExpandedRow",
+      "isTreeCollapsedRow",
+      "getBindCellIndex",
+      "_createHighlightRow",
+      "_updateHighlightrowPos",
+      "_destroyHighlightRow",
+      "_setBlindBody",
+      "_getRowIdxInClient",
+      "_floatingScrollRows_callback",
+      "_adjustGridScrollRows_callback_end",
+      "_adjustGridScrollRows_callback",
+      "_adjustGridScrollRows_callback_onscroll_after",
+      "_adjustGridScrollRows_callback_onscroll",
+      "setFixedRow",
+      "_setFixedRow",
+      "_getFixRowCnt",
+      "_getFakeMergeCellInfos",
+      "_getFakeMergeCellObjs",
+      "_getExtraTrackSelectRect",
+      "on_dsnotify_onrowposchanged",
+      "on_dsnotify_onrowsetchanged",
+      "_afterRowsetChanged",
+      "_getDisplayRowCount",
+      "_updateBodyClient",
+      "_isSelectedCell",
+      "isSelectedCell",
+      "getSelectedRows",
+      "getSelectedDatasetRows",
+      "selectRow",
+      "selectCell",
+      "_selectRow",
+      "on_fire_onrowresized",
+      "_getRowSize",
+      "_createBandsAndAreas",
+      "_resizeBand",
+      "_setHscrollElement",
+      "_destroyBands",
+      "_getBodyCellInfo",
+      "_getBodyCellItem",
+      "_refreshBodyCell",
+      "_refreshBody",
+      "__getBodyCellRowIdxFromIdx",
+      "_suppressUpdateRow",
+      "_refreshBodyRow",
+      "_findCellObj",
+      "_findBandObj",
+      "_isFakeCell",
+      "_moveToPosCell",
+      "_getGridBand",
+      "_resetSelectStartEndRow",
+      "_delMultirowSelectInfo",
+      "_adjustRowArea",
+      "_dsRowToDispRow",
+      "_jumpCurrentRow",
+      "_getBodyBegRowPos",
+      "_clearRows",
+      "redrawExprCell",
+      "_getFirstEditableCell",
+      "_getLastEditableCell",
+      "_getBodyClientSize",
+      "_getRowSizeInfo",
+      "_resetRowSizeList",
+      "_updateRowSizeExtendEx",
+      "_updateRowSizeExtend",
+      "_isChangeBodyColSizeList",
+      "_isChangeBodyRowSizeList",
+      "_updateBodyRowSizeList",
+      "_getGridRowCount",
+      "_getCellStyleInfo",
+      "_getCellRowTextSize",
+      "_getMaxSubRowSize",
+      "_getSubRowSizeList",
+      "_applyRowSizing",
+      "_updateRowSize",
+      "_isSelectRowType",
+      "_getLastRowBand",
+      "_getDispRowCnt",
+      "_getScreenBottomRowPos",
+      "_getScreenTopRowPos",
+      "_getDataRow",
+      "_getGridRow",
+      "_refreshCell",
+      "_getMaxColDataSizeBand",
+      "_isPassPrevCell",
+      "_getAreaMoveCell",
+      "_moveToCell",
+      "_moveCellAfterFocus",
+      "_setTreeCellinfo",
+      "_removeTreeCellinfo",
+      "_getTreeRowPosition",
+      "_getBindTextCellInfo",
+      "_getCurrentBodyCell",
+      "_getCurrentHeadCell",
+      "_getCurrentSummCell",
+      "_getAvailableRect",
+      "_getPosRect",
+      "_destroyOverlayElements",
+      "_setOverlayElements",
+      "_setOverlayElementProperty",
+      "_adjustOverlayElements",
+      "_moveToAccessibilityCell",
+      "_setAccessibilityBandFocus",
+      "_getAccessibilityCurrentCell",
+      "_getAccessibilityLastCellIndex",
+      "_moveToAccessibilityBand",
+      "_moveToPosAccessibilityCell",
+      "_getAccessibilityCellIndex",
+      "_on_useInnerDsCells",
+      "blinkCell",
+      "blinkCellByInterval",
+      "on_create_normal_control_element",
+      "on_create_scrollable_control_element",
+      "on_create_frame_control_element",
+      "on_create_tablecell_control_element",
+      "on_create_popup_control_element",
+      "on_create_popupscrollable_control_element",
+      "on_create_band_control_element",
+      "on_create_area_scroll_control_element",
+      "_applyElementVisible",
+      "set_rtldirection",
+      "_apply_status_toelement",
+      "getElement",
+      "_getElementClassCSSSelector",
+      "_getRtlDirection"
+    ],
+    "name": "gdList",
+    "type": "",
+    "visible": true
+  },
+  "dblclick": {
+    "id": "nexacontainer",
+    "method": "dom_cell_dblclick",
+    "rect": {
+      "x": 503,
+      "y": 218
+    },
+    "success": true
+  },
+  "ds_STGJ020_M0": [
+    {
+      "columns": [
+        "CODE",
+        "NAME",
+        "APPL_SYMD",
+        "APPL_EYMD",
+        "REMARKS1",
+        "REMARKS2",
+        "REMARKS3",
+        "REMARKS4",
+        "REMARKS5",
+        "REMARKS6"
+      ],
+      "name": "dsChitDiv",
+      "path": "form.div_workForm.form.dsChitDiv",
+      "rowCount": 31,
+      "samples": [
+        {
+          "APPL_EYMD": "",
+          "APPL_SYMD": "",
+          "CODE": "",
+          "NAME": "- 전체 -",
+          "REMARKS1": "",
+          "REMARKS2": "",
+          "REMARKS3": "",
+          "REMARKS4": "",
+          "REMARKS5": "",
+          "REMARKS6": ""
+        },
+        {
+          "APPL_EYMD": "",
+          "APPL_SYMD": "",
+          "CODE": "01",
+          "NAME": "일반매입",
+          "REMARKS1": "",
+          "REMARKS2": "",
+          "REMARKS3": "",
+          "REMARKS4": "",
+          "REMARKS5": "",
+          "REMARKS6": ""
+        },
+        {
+          "APPL_EYMD": "",
+          "APPL_SYMD": "",
+          "CODE": "02",
+          "NAME": "루트매입",
+          "REMARKS1": "",
+          "REMARKS2": "",
+          "REMARKS3": "",
+          "REMARKS4": "",
+          "REMARKS5": "",
+          "REMARKS6": ""
+        },
+        {
+          "APPL_EYMD": "",
+          "APPL_SYMD": "",
+          "CODE": "03",
+          "NAME": "점포직매입",
+          "REMARKS1": "",
+          "REMARKS2": "",
+          "REMARKS3": "",
+          "REMARKS4": "",
+          "REMARKS5": "",
+          "REMARKS6": ""
+        },
+        {
+          "APPL_EYMD": "",
+          "APPL_SYMD": "",
+          "CODE": "04",
+          "NAME": "무료택배",
+          "REMARKS1": "",
+          "REMARKS2": "",
+          "REMARKS3": "",
+          "REMARKS4": "",
+          "REMARKS5": "",
+          "REMARKS6": ""
+        }
+      ]
+    },
+    {
+      "columns": [
+        "strDate",
+        "strStoreCd",
+        "strChitDiv",
+        "strChitNo",
+        "strChitYmd",
+        "strToDt",
+        "strFromDt"
+      ],
+      "name": "dsSearch",
+      "path": "form.div_workForm.form.dsSearch",
+      "rowCount": 1,
+      "samples": [
+        {
+          "strChitDiv": "10",
+          "strChitNo": null,
+          "strChitYmd": null,
+          "strDate": null,
+          "strFromDt": "20260201",
+          "strStoreCd": "46513",
+          "strToDt": "20260219"
+        }
+      ]
+    },
+    {
+      "columns": [
+        "CHK",
+        "CHIT_FLAG",
+        "CHIT_ID",
+        "CHIT_ID_VIEW",
+        "CHIT_ID_NM",
+        "NAP_PLAN_YMD",
+        "CHIT_YMD",
+        "CHIT_NO",
+        "CHIT_ID_NO",
+        "ITEM_CNT",
+        "LARGE_CD",
+        "CENTER_CD",
+        "CENTER_NM",
+        "MAEIP_CHIT_NO",
+        "RET_CHIT_NO",
+        "LSTORE_NM",
+        "RSTORE_NM",
+        "WONGA_AMT",
+        "MAEGA_AMT",
+        "CRE_YMDHMS",
+        "CONF_ID"
+      ],
+      "name": "dsList",
+      "path": "form.div_workForm.form.dsList",
+      "rowCount": 100,
+      "samples": [
+        {
+          "CENTER_CD": "9512204",
+          "CENTER_NM": "씨제이오산냉장1",
+          "CHIT_FLAG": "PC",
+          "CHIT_ID": "04",
+          "CHIT_ID_NM": "폐기",
+          "CHIT_ID_NO": "10044420011",
+          "CHIT_ID_VIEW": "04",
+          "CHIT_NO": "10044420011",
+          "CHIT_YMD": "20260219",
+          "CHK": "0",
+          "CONF_ID": "확정(점포)",
+          "CRE_YMDHMS": "20260219021002",
+          "ITEM_CNT": 1,
+          "LARGE_CD": "",
+          "LSTORE_NM": "",
+          "MAEGA_AMT": 5900,
+          "MAEIP_CHIT_NO": "",
+          "NAP_PLAN_YMD": "20260219",
+          "RET_CHIT_NO": "",
+          "RSTORE_NM": "",
+          "WONGA_AMT": 3835
+        },
+        {
+          "CENTER_CD": "9512204",
+          "CENTER_NM": "씨제이오산냉장1",
+          "CHIT_FLAG": "PC",
+          "CHIT_ID": "04",
+          "CHIT_ID_NM": "폐기",
+          "CHIT_ID_NO": "10044430011",
+          "CHIT_ID_VIEW": "04",
+          "CHIT_NO": "10044430011",
+          "CHIT_YMD": "20260219",
+          "CHK": "0",
+          "CONF_ID": "확정(점포)",
+          "CRE_YMDHMS": "20260219025328",
+          "ITEM_CNT": 1,
+          "LARGE_CD": "",
+          "LSTORE_NM": "",
+          "MAEGA_AMT": 3400,
+          "MAEIP_CHIT_NO": "",
+          "NAP_PLAN_YMD": "20260219",
+          "RET_CHIT_NO": "",
+          "RSTORE_NM": "",
+          "WONGA_AMT": 2100
+        },
+        {
+          "CENTER_CD": "9512204",
+          "CENTER_NM": "씨제이오산냉장1",
+          "CHIT_FLAG": "PC",
+          "CHIT_ID": "04",
+          "CHIT_ID_NM": "폐기",
+          "CHIT_ID_NO": "10044380011",
+          "CHIT_ID_VIEW": "04",
+          "CHIT_NO": "10044380011",
+          "CHIT_YMD": "20260218",
+          "CHK": "0",
+          "CONF_ID": "확정(점포)",
+          "CRE_YMDHMS": "20260218090442",
+          "ITEM_CNT": 1,
+          "LARGE_CD": "",
+          "LSTORE_NM": "",
+          "MAEGA_AMT": 1500,
+          "MAEIP_CHIT_NO": "",
+          "NAP_PLAN_YMD": "20260218",
+          "RET_CHIT_NO": "",
+          "RSTORE_NM": "",
+          "WONGA_AMT": 848
+        },
+        {
+          "CENTER_CD": "9512204",
+          "CENTER_NM": "씨제이오산냉장1",
+          "CHIT_FLAG": "PC",
+          "CHIT_ID": "04",
+          "CHIT_ID_NM": "폐기",
+          "CHIT_ID_NO": "10044390011",
+          "CHIT_ID_VIEW": "04",
+          "CHIT_NO": "10044390011",
+          "CHIT_YMD": "20260218",
+          "CHK": "0",
+          "CONF_ID": "확정(점포)",
+          "CRE_YMDHMS": "20260218161155",
+          "ITEM_CNT": 1,
+          "LARGE_CD": "",
+          "LSTORE_NM": "",
+          "MAEGA_AMT": 2800,
+          "MAEIP_CHIT_NO": "",
+          "NAP_PLAN_YMD": "20260218",
+          "RET_CHIT_NO": "",
+          "RSTORE_NM": "",
+          "WONGA_AMT": 1694
+        },
+        {
+          "CENTER_CD": "9512204",
+          "CENTER_NM": "씨제이오산냉장1",
+          "CHIT_FLAG": "PC",
+          "CHIT_ID": "04",
+          "CHIT_ID_NM": "폐기",
+          "CHIT_ID_NO": "10044400011",
+          "CHIT_ID_VIEW": "04",
+          "CHIT_NO": "10044400011",
+          "CHIT_YMD": "20260218",
+          "CHK": "0",
+          "CONF_ID": "확정(점포)",
+          "CRE_YMDHMS": "20260218221835",
+          "ITEM_CNT": 3,
+          "LARGE_CD": "",
+          "LSTORE_NM": "",
+          "MAEGA_AMT": 8900,
+          "MAEIP_CHIT_NO": "",
+          "NAP_PLAN_YMD": "20260218",
+          "RET_CHIT_NO": "",
+          "RSTORE_NM": "",
+          "WONGA_AMT": 4112
+        }
+      ]
+    },
+    {
+      "columns": [
+        "gvVar01",
+        "gvVar02",
+        "gvVar03",
+        "gvVar04",
+        "gvVar05",
+        "gvVar06",
+        "gvVar07",
+        "gvVar08",
+        "gvVar09",
+        "gvVar10",
+        "gvVar11",
+        "gvVar12",
+        "gvVar13",
+        "gvVar14",
+        "gvVar15",
+        "gvVar16",
+        "gvVar17",
+        "gvVar18",
+        "gvVar19",
+        "gvVar20"
+      ],
+      "name": "dsGs",
+      "path": "form.div_workForm.form.dsGs",
+      "rowCount": 1,
+      "samples": [
+        {
+          "gvVar01": null,
+          "gvVar02": null,
+          "gvVar03": null,
+          "gvVar04": null,
+          "gvVar05": null,
+          "gvVar06": null,
+          "gvVar07": null,
+          "gvVar08": null,
+          "gvVar09": null,
+          "gvVar10": null,
+          "gvVar11": null,
+          "gvVar12": null,
+          "gvVar13": null,
+          "gvVar14": null,
+          "gvVar15": null,
+          "gvVar16": null,
+          "gvVar17": null,
+          "gvVar18": null,
+          "gvVar19": null,
+          "gvVar20": null
+        }
+      ]
+    },
+    {
+      "columns": [
+        "STORE_CD",
+        "STORE_NM",
+        "PRE_STORE_CD",
+        "STORE_POS_QTY"
+      ],
+      "name": "dsScStoreList",
+      "path": "form.div_workForm.form.dsScStoreList",
+      "rowCount": 0
+    },
+    {
+      "columns": [
+        "FUNC1",
+        "FUNC2",
+        "FUNC3",
+        "FUNC4",
+        "FUNC5",
+        "FUNC6",
+        "FUNC7",
+        "FUNC8",
+        "FUNC9",
+        "FUNC10",
+        "FUNC11",
+        "FUNC12",
+        "FUN1_TXT",
+        "FUN2_TXT",
+        "FUN3_TXT",
+        "FUN4_TXT",
+        "FUN5_TXT",
+        "FUN6_TXT",
+        "FUN7_TXT",
+        "FUN8_TXT",
+        "FUN9_TXT",
+        "FUN10_TXT",
+        "FUN11_TXT",
+        "FUN12_TXT"
+      ],
+      "name": "ds_btnList",
+      "path": "form.div_cmmbtn.form.ds_btnList",
+      "rowCount": 1,
+      "samples": [
+        {
+          "FUN10_TXT": "조 회",
+          "FUN11_TXT": "저 장",
+          "FUN12_TXT": "종 료",
+          "FUN1_TXT": "",
+          "FUN2_TXT": "",
+          "FUN3_TXT": "",
+          "FUN4_TXT": "",
+          "FUN5_TXT": "",
+          "FUN6_TXT": "",
+          "FUN7_TXT": "",
+          "FUN8_TXT": "",
+          "FUN9_TXT": "",
+          "FUNC1": "0",
+          "FUNC10": "1",
+          "FUNC11": "0",
+          "FUNC12": "1",
+          "FUNC2": "0",
+          "FUNC3": "0",
+          "FUNC4": "0",
+          "FUNC5": "0",
+          "FUNC6": "0",
+          "FUNC7": "0",
+          "FUNC8": "0",
+          "FUNC9": "0"
+        }
+      ]
+    },
+    {
+      "columns": [
+        "USER_GRP_ID",
+        "MENU_ID"
+      ],
+      "name": "ds_menulog",
+      "path": "form.div_cmmbtn.form.ds_menulog",
+      "rowCount": 1,
+      "samples": [
+        {
+          "MENU_ID": "STGJ020_M0",
+          "USER_GRP_ID": "0001"
+        }
+      ]
+    }
+  ]
+}

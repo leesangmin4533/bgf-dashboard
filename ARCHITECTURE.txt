@@ -1,0 +1,424 @@
+================================================================================
+  BGF 리테일 자동 발주 시스템 - 아키텍처 문서
+  작성일: 2026-02-14
+================================================================================
+
+[1] 프로젝트 개요
+================================================================================
+
+  CU 편의점 자동 발주 시스템
+  - Python 3.12 / Selenium / SQLite / Flask / sklearn
+  - 매일 07:00 자동 실행 (데이터 수집 -> 예측 -> 발주)
+  - 멀티 매장 병렬 처리 (ThreadPoolExecutor)
+  - 테스트: 1078개 통과
+
+
+[2] 디렉토리 구조
+================================================================================
+
+  bgf_auto/
+  |
+  |-- run_scheduler.py              # 스케줄러 진입점 (07:00 자동 실행)
+  |-- CLAUDE.md                     # 프로젝트 문서
+  |-- ARCHITECTURE.txt              # [현재 파일]
+  |
+  |-- config/                       # 설정 파일
+  |   |-- eval_params.json          #   예측 평가 파라미터 (자동 보정됨)
+  |   |-- stores.json               #   매장 목록
+  |   |-- kakao_token.json          #   카카오 알림 토큰
+  |   +-- validation_rules.json     #   데이터 검증 규칙
+  |
+  |-- data/                         # 데이터베이스
+  |   |-- common.db                 #   공통 DB (상품마스터, 외부요인)
+  |   |-- stores/                   #   매장별 DB
+  |   |   |-- 46513.db              #     CU 동양대점
+  |   |   +-- 46704.db              #     CU 호반점
+  |   |-- models/                   #   ML 모델 파일 (.pkl)
+  |   |-- reports/                  #   생성된 리포트 (HTML)
+  |   +-- logs/                     #   평가 로그
+  |
+  |-- scripts/                      # 실행 스크립트
+  |   |-- run_full_flow.py          #   전체 플로우 (수집+발주)
+  |   |-- run_auto_order.py         #   발주만 실행
+  |   |-- run_expiry_alert.py       #   폐기 알림
+  |   |-- dry_order.py              #   드라이런 테스트
+  |   |-- run_dashboard.pyw         #   웹 대시보드 실행
+  |   +-- ...                       #   기타 스크립트
+  |
+  |-- tests/                        # 테스트 (1078개)
+  |   |-- conftest.py               #   pytest 설정
+  |   |-- test_*_category.py        #   카테고리별 테스트 (15개)
+  |   |-- test_improved_predictor.py
+  |   |-- test_pre_order_evaluator.py
+  |   |-- test_store_isolation.py
+  |   +-- test_web_api.py
+  |
+  +-- src/                          # 메인 소스 코드
+      |
+      |-- settings/                 # [계층1] 설정
+      |-- domain/                   # [계층2] 순수 비즈니스 로직
+      |-- infrastructure/           # [계층3] DB, 외부 I/O
+      |-- application/              # [계층4] 오케스트레이션
+      |-- presentation/             # [계층5] CLI, 웹 UI
+      |
+      |-- prediction/               # 예측 엔진
+      |-- order/                    # 발주 실행
+      |-- db/                       # DB Repository
+      |-- web/                      # Flask 대시보드
+      |-- collectors/               # 데이터 수집기
+      |-- alert/                    # 폐기/행사 알림
+      |-- report/                   # 리포트 생성
+      |-- analysis/                 # 데이터 분석
+      |-- scheduler/                # 스케줄러
+      |-- notification/             # 카카오 알림
+      |-- validation/               # 데이터 검증
+      +-- utils/                    # 공유 유틸리티
+
+
+[3] 5계층 아키텍처
+================================================================================
+
+  +---------------------------------------------------------+
+  |  Presentation (표현 계층)                                |
+  |  - CLI: argparse 기반 명령어                             |
+  |  - Web: Flask 대시보드 (5개 탭)                          |
+  |    홈 / 예측분석 / 발주 / 리포트 / 규칙 현황판           |
+  +---------------------------------------------------------+
+                          |
+  +---------------------------------------------------------+
+  |  Application (애플리케이션 계층)                          |
+  |  - Use Cases: DailyOrderFlow, ExpiryAlertFlow 등        |
+  |  - Services: PredictionService, OrderService 등         |
+  |  - Scheduler: MultiStoreRunner (병렬 실행)              |
+  +---------------------------------------------------------+
+                          |
+  +---------------------------------------------------------+
+  |  Domain (도메인 계층) - 순수 비즈니스 로직               |
+  |  - Models: PredictionResult, OrderItem, EvalDecision    |
+  |  - CategoryStrategy: 15개 카테고리별 전략               |
+  |  - OrderAdjuster/Filter: 발주량 조정/필터 (순수함수)    |
+  +---------------------------------------------------------+
+                          |
+  +---------------------------------------------------------+
+  |  Infrastructure (인프라 계층) - 모든 I/O                  |
+  |  - Database: DBRouter, 20개 Repository                  |
+  |  - BGF Site: Selenium 넥사크로 자동화                    |
+  |  - Collectors: 판매/재고/입고 데이터 수집                |
+  |  - External: 카카오 알림, 날씨 API                      |
+  +---------------------------------------------------------+
+                          |
+  +---------------------------------------------------------+
+  |  Settings (설정 계층)                                    |
+  |  - constants.py: 비즈니스 상수                           |
+  |  - timing.py: 타이밍 상수                                |
+  |  - ui_config.py: 넥사크로 UI ID                          |
+  |  - store_context.py: 매장 컨텍스트 (frozen dataclass)   |
+  +---------------------------------------------------------+
+
+
+[4] 핵심 플로우 - 일일 자동 발주
+================================================================================
+
+  매일 07:00 자동 실행 (매장별 병렬)
+
+  run_scheduler.py
+    |
+    +-- MultiStoreRunner (ThreadPoolExecutor)
+        |
+        |-- [매장 46513] --------+
+        |-- [매장 46704] -----+  |  (병렬 실행)
+        |                     |  |
+        +-- DailyOrderFlow.run()
+            |
+            |-- Stage 1: 데이터 수집
+            |   - BGF 사이트 접속 (Selenium)
+            |   - 판매현황 조회 -> daily_sales 저장
+            |
+            |-- Stage 2: 예측
+            |   - WMA 31일 가중이동평균
+            |   - Feature 블렌딩 (EWM + 동요일)
+            |   - 카테고리별 Strategy 적용
+            |   - 계수 적용: 휴일/기온/요일/계절
+            |   - 안전재고 계산
+            |   - 재고 차감 (현재고 + 미입고)
+            |   - ML 앙상블 (RF+GB, 모델 있을 때)
+            |
+            |-- Stage 3: 사전 평가 + 필터링
+            |   - PreOrderEvaluator:
+            |     FORCE(품절) / URGENT(긴급) / NORMAL / SKIP / PASS
+            |   - CostOptimizer: 마진x회전율 2D 매트릭스
+            |   - 미취급/CUT 필터
+            |   - 자동발주/스마트발주 제외
+            |   - PASS 억제 (max 3개)
+            |   - 푸드 총량 상한 (food_daily_cap)
+            |
+            |-- Stage 4: 발주 실행
+            |   - Selenium ActionChains
+            |   - 넥사크로 화면 입력 (Phase 2 최적화)
+            |
+            +-- Stage 5: 추적 + 알림
+                - 발주 결과 DB 저장
+                - 실패 사유 수집
+                - 카카오 알림 발송
+
+
+[5] 예측 엔진 상세 (ImprovedPredictor)
+================================================================================
+
+  입력: item_cd, 31일 판매 데이터
+
+  [1단계] 기본 예측 - WMA (가중이동평균)
+      |  어제 25% / 2일전 20% / 3일전 15% / 4~7일전 40%
+      v
+  [2단계] Feature 블렌딩
+      |  EWM(지수가중) + 동요일 비교 + WMA 결합
+      v
+  [3단계] 계수 적용
+      |  휴일 1.3x
+      |  기온: 음료 +15%(30도↑), 도시락 -10%(30도↑)
+      |  요일: 카테고리별 (맥주 금요일 2.54x)
+      |  계절: 7그룹 월별 계수 (아이스크림 7월 1.50x)
+      |  트렌드: 7일 vs 30일 비교 (+/-8~15%)
+      v
+  [4단계] 안전재고 계산
+      |  CategoryStrategy.calculate_safety_stock()
+      |  카테고리별: 담배(보루+소진), 맥주(요일), 푸드(유통기한)
+      v
+  [5단계] 재고 차감
+      |  order_qty = predicted + safety - current_stock - pending
+      v
+  [6단계] Food Daily Cap (푸드만)
+      |  요일 평균 + 버퍼(3개) 이내로 제한
+      v
+  [7단계] ML 앙상블 (모델 있을 때)
+      |  RandomForest + GradientBoosting
+      |  25개 Feature, 카테고리 그룹별 모델
+      v
+  출력: order_qty (정수)
+
+
+[6] 카테고리별 Strategy (15개)
+================================================================================
+
+  mid_cd    전략                  특성
+  ------    ----                  ----
+  049       BeerStrategy          요일 패턴 (금토 급증), 주말 3일 안전재고
+  050       SojuStrategy          요일 패턴, 겨울 상승
+  072       TobaccoStrategy       보루(10갑) + 전량소진 패턴, max=30
+  001~005   FoodStrategy          유통기한 1~3일, 동적 폐기계수
+  012       (Food에 포함)         빵: 유통기한 3일
+  013,046   PerishableStrategy    요일 가중, 신선도
+  040~048   BeverageStrategy      온도/계절 영향 (여름 +30%)
+  006,032   RamenStrategy         회전율 3단계 (high/mid/low)
+  034,035   FrozenIceStrategy     계절성 (여름 1.50x, 겨울 0.60x)
+  027~035   InstantMealStrategy   비상 수요
+  014~020   SnackConfectionStrategy  프로모션 민감
+  052,053   AlcoholGeneralStrategy   저회전 안정 재고
+  036~057   DailyNecessityStrategy   안정 수요
+  054~071   GeneralMerchandiseStrategy  잡화
+  900+      DefaultStrategy       기본 폴백
+
+
+[7] 사전 평가 (PreOrderEvaluator)
+================================================================================
+
+  입력: 상품별 재고 노출일(exposure_days), 인기도 점수
+
+  인기도 = 일평균*0.59 + 판매일비율*0.27 + 트렌드*0.14
+
+  판정 흐름:
+    현재고+미입고 = 0?
+      YES -> FORCE_ORDER (강제 발주)
+             단, 일평균 < 0.1이면 NORMAL 다운그레이드
+
+    노출일 < 1.0일?
+      YES + 중인기 이상 -> URGENT (긴급 발주)
+
+    노출일 < 2.0일?
+      YES -> NORMAL (일반 발주)
+
+    노출일 > 2.5일 + 저인기?
+      YES -> SKIP (발주 생략)
+
+    그 외 -> PASS (안전재고 기반 예측기 위임, max 3개)
+
+
+[8] 비용 최적화 (CostOptimizer)
+================================================================================
+
+  마진율 x 회전율 2D 매트릭스:
+
+                  회전율 high(>=5)  mid(2~5)  low(<2)
+  마진 high(>=30%)    1.35          1.30      1.15
+  마진 mid(15~30%)    1.20          1.10      1.00
+  마진 base(5~15%)    1.10          1.00      0.90
+  마진 low(<5%)       0.95          0.85      0.80
+
+  + 판매비중 보너스: 중분류 비중 >= 10% -> +0.05
+  + 폐기 계수: 2D 매트릭스 (마진x회전율별 차등)
+  + SKIP 오프셋: 2D 매트릭스 (고마진+고회전 -> SKIP 어려움)
+
+
+[9] DB 구조
+================================================================================
+
+  [공통 DB: data/common.db] (8개 테이블)
+  -------------------------------------------
+  products            상품 마스터 (item_cd, item_nm, mid_cd)
+  mid_categories      중분류 마스터 (mid_cd, mid_nm)
+  product_details     상품 상세 (유통기한, 발주단위, 마진율, 행사)
+  external_factors    외부 요인 (날씨, 공휴일)
+  app_settings        앱 전역 설정
+  stores              매장 목록 (store_id, store_name)
+  store_eval_params   매장별 평가 파라미터
+  schema_version      DB 버전 (v27)
+
+  [매장별 DB: data/stores/{store_id}.db] (15개 테이블)
+  -------------------------------------------
+  daily_sales          일별 판매 기록
+  order_tracking       발주 추적 (배송/상태)
+  order_history        발주 이력
+  inventory_batches    FIFO 재고 배치 추적
+  realtime_inventory   실시간 재고
+  prediction_logs      예측 로그
+  eval_outcomes        평가 결과 (FORCE/URGENT/NORMAL/SKIP/PASS)
+  promotions           행사 정보
+  receiving_history    입고 이력
+  auto_order_items     자동발주 항목
+  smart_order_items    스마트발주 항목
+  order_fail_reasons   발주 실패 사유
+  calibration_history  보정 이력
+  collection_logs      수집 로그
+  validation_log       검증 로그
+
+
+[10] 핵심 설계 패턴
+================================================================================
+
+  [CategoryStrategy 패턴]
+  - 15개 카테고리별 전략 클래스
+  - StrategyRegistry: mid_cd -> Strategy 자동 매핑
+  - if/elif 체인 제거, 새 카테고리 추가 시 클래스만 작성
+
+  [StoreContext 패턴]
+  - frozen dataclass: store_id + store_name
+  - 멀티스레드 안전 (불변 객체)
+  - 모든 서비스에 전달
+
+  [DBRouter 패턴]
+  - 테이블 종류에 따라 common.db / stores/{id}.db 자동 라우팅
+  - 매장별 DB는 물리적 분리 (WHERE store_id 불필요)
+
+  [Repository 패턴]
+  - 20개 Repository 클래스
+  - BaseRepository 상속, DB 라우팅 내장
+  - 모든 DB 접근을 Repository 통해 수행
+
+  [MultiStoreRunner 패턴]
+  - ThreadPoolExecutor 기반 병렬 실행
+  - max_workers=4, 매장별 독립 실행
+
+
+[11] 발주 실행 규칙 (10개)
+================================================================================
+
+  번호  규칙                       상태   설정값
+  ----  ----                       ----   ------
+   1    미취급 상품 필터            ON     is_available=0 제외
+   2    발주중지(CUT) 필터         ON     is_cut=1 제외
+   3    자동발주(본부관리) 제외    ON     EXCLUDE_AUTO_ORDER=True
+   4    스마트발주(본부관리) 제외  ON     EXCLUDE_SMART_ORDER=True
+   5    PASS 발주량 억제           ON     max=3개
+   6    최소 발주량 필터           ON     min_order_qty=1
+   7    발주 단위 올림 (ceil)      ON     order_unit_qty 단위
+   8    max_stock 초과시 내림      ON     담배 max=30
+   9    카테고리별 최대 발주량     ON     900:20, 060:15, 053:10
+  10    푸드 요일별 총량 상한      ON     waste_buffer=3, 탐색25%
+
+
+[12] ML 모델
+================================================================================
+
+  구조: RandomForest + GradientBoosting 앙상블
+  학습: 카테고리 그룹별 (food/alcohol/tobacco/perishable/general)
+  손실: Quantile Loss (비대칭)
+    - food_group: alpha=0.6 (품절비용 > 폐기비용)
+    - general_group: alpha=0.45 (보수적)
+
+  25개 Feature:
+    daily_avg, trend_7d, trend_30d, seasonal_coef, weekday_coef,
+    holiday_coef, temperature, expiration_days,
+    lag_1, lag_7, lag_14, lag_28,
+    ma_7, ma_14, ma_30,
+    ewm_span_7, ewm_span_14, ewm_span_30,
+    disuse_rate, margin_rate, turnover_level,
+    category_share, wow_same_weekday
+
+
+[13] 웹 대시보드 (Flask)
+================================================================================
+
+  URL: http://127.0.0.1:8050
+
+  탭 구성 (5개):
+    1. 홈         - 스케줄러 상태, 오늘 발주, 폐기 위험
+    2. 예측분석   - 적중률, ML 상태, 블렌딩 비중
+    3. 발주       - 카테고리 선택, 미리보기, 실행
+    4. 리포트     - 일일/주간/카테고리/영향도
+    5. 규칙 현황판 - 전체 규칙 ON/OFF, 상품별 추적
+
+  API 엔드포인트:
+    /api/home/*        홈 데이터 (5초 캐시)
+    /api/order/*       발주 조회/실행
+    /api/prediction/*  예측 조회 (60초 캐시)
+    /api/report/*      리포트 조회
+    /api/rules/*       규칙 현황판 (60초 캐시)
+
+
+[14] 스케줄 작업 (6개)
+================================================================================
+
+  시간         작업                내용
+  -----        ----                ----
+  07:00        daily_order         수집 + 예측 + 발주 (매장별 병렬)
+  11:00        bulk_collect        상품 상세 정보 대량 수집
+  09:00/13:00  expiry_alert        폐기 임박 알림
+  21:00/01:00  expiry_alert        폐기 알림 (야간)
+  07:30/20:30  delivery_sync       배송 도착 배치 동기화
+  23:00        waste_report        폐기 보고서
+  월 08:00     weekly_report       주간 종합 리포트
+
+
+[15] 외부 연동
+================================================================================
+
+  [BGF 리테일 사이트]
+  - 넥사크로 기반 -> 일반 Selenium 선택자 불가
+  - JavaScript 직접 실행으로 넥사크로 객체 접근
+  - Phase 2 최적화: Selenium ActionChains (실제 키보드 이벤트)
+
+  [카카오 알림]
+  - KakaoNotifier: 발주 요약, 폐기 알림, 행사 변경 알림
+  - kakao_token.json으로 토큰 관리, 자동 갱신
+
+  [날씨 API]
+  - 기온 데이터 수집 -> external_factors 테이블
+  - WEATHER_COEFFICIENTS로 카테고리별 예측 조정
+
+
+[16] 기술 스택
+================================================================================
+
+  런타임:     Python 3.12
+  브라우저:   Selenium + Chrome WebDriver
+  DB:         SQLite (매장별 분리)
+  웹:         Flask + Jinja2 + Chart.js
+  ML:         scikit-learn (RandomForest + GradientBoosting)
+  스케줄링:   schedule 라이브러리
+  알림:       카카오 REST API
+  테스트:     pytest (1078개)
+
+
+================================================================================
+  끝
+================================================================================

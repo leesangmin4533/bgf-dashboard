@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BGF 발주 시스템 - 로그인</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #0f0f23;
+            color: #e2e8f0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .login-container {
+            width: 100%;
+            max-width: 400px;
+            padding: 20px;
+        }
+        .login-card {
+            background: #1a1a2e;
+            border: 1px solid #2d2d44;
+            border-radius: 16px;
+            padding: 40px 32px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+        }
+        .login-header {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+        .login-logo {
+            width: 56px;
+            height: 56px;
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 16px;
+        }
+        .login-logo svg { width: 28px; height: 28px; color: #fff; }
+        .login-header h1 {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #f1f5f9;
+            margin-bottom: 4px;
+        }
+        .login-header p {
+            font-size: 0.85rem;
+            color: #94a3b8;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-group label {
+            display: block;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: #94a3b8;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .form-group input {
+            width: 100%;
+            padding: 12px 16px;
+            background: #16162a;
+            border: 1px solid #2d2d44;
+            border-radius: 10px;
+            color: #e2e8f0;
+            font-size: 0.95rem;
+            font-family: inherit;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .form-group input:focus {
+            border-color: #6366f1;
+            box-shadow: 0 0 0 3px rgba(99,102,241,0.15);
+        }
+        .form-group input::placeholder { color: #475569; }
+        .btn-login {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            color: #fff;
+            font-size: 0.95rem;
+            font-weight: 600;
+            font-family: inherit;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: opacity 0.2s, transform 0.1s;
+        }
+        .btn-login:hover { opacity: 0.9; }
+        .btn-login:active { transform: scale(0.98); }
+        .btn-login:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .error-msg, .success-msg {
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            margin-bottom: 20px;
+            display: none;
+        }
+        .error-msg {
+            background: rgba(239,68,68,0.1);
+            border: 1px solid rgba(239,68,68,0.3);
+            color: #fca5a5;
+        }
+        .success-msg {
+            background: rgba(34,197,94,0.1);
+            border: 1px solid rgba(34,197,94,0.3);
+            color: #86efac;
+        }
+        .error-msg.visible, .success-msg.visible { display: block; }
+        .toggle-link {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 0.85rem;
+            color: #94a3b8;
+        }
+        .toggle-link a {
+            color: #818cf8;
+            text-decoration: none;
+            cursor: pointer;
+            font-weight: 500;
+        }
+        .toggle-link a:hover { text-decoration: underline; }
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-card">
+            <div class="login-header">
+                <div class="login-logo">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+                        <polyline points="9 22 9 12 15 12 15 22"/>
+                    </svg>
+                </div>
+                <h1>BGF 발주 시스템</h1>
+                <p>매장 대시보드에 로그인하세요</p>
+            </div>
+
+            <div class="error-msg" id="errorMsg"></div>
+            <div class="success-msg" id="successMsg"></div>
+
+            <!-- 로그인 폼 -->
+            <form id="loginForm" autocomplete="off">
+                <div class="form-group">
+                    <label for="username">아이디</label>
+                    <input type="text" id="username" name="username" placeholder="아이디를 입력하세요" required autofocus>
+                </div>
+                <div class="form-group">
+                    <label for="password">비밀번호</label>
+                    <input type="password" id="password" name="password" placeholder="비밀번호를 입력하세요" required>
+                </div>
+                <button type="submit" class="btn-login" id="btnLogin">로그인</button>
+                <div class="toggle-link">
+                    계정이 없으신가요? <a id="showSignup">회원가입</a>
+                </div>
+            </form>
+
+            <!-- 회원가입 폼 -->
+            <form id="signupForm" class="hidden" autocomplete="off">
+                <div class="form-group">
+                    <label for="signupStore">매장 코드</label>
+                    <input type="text" id="signupStore" name="store_id" placeholder="5자리 매장 코드" maxlength="5" required>
+                </div>
+                <div class="form-group">
+                    <label for="signupPw">비밀번호</label>
+                    <input type="password" id="signupPw" name="password" placeholder="비밀번호 (4자 이상)" required>
+                </div>
+                <div class="form-group">
+                    <label for="signupPwConfirm">비밀번호 확인</label>
+                    <input type="password" id="signupPwConfirm" placeholder="비밀번호를 다시 입력하세요" required>
+                </div>
+                <div class="form-group">
+                    <label for="signupPhone">핸드폰 번호</label>
+                    <input type="text" id="signupPhone" name="phone" placeholder="010-1234-5678" maxlength="13" required>
+                </div>
+                <button type="submit" class="btn-login" id="btnSignup">가입 요청</button>
+                <div class="toggle-link">
+                    이미 계정이 있으신가요? <a id="showLogin">로그인</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+    (function() {
+        var loginForm = document.getElementById('loginForm');
+        var signupForm = document.getElementById('signupForm');
+        var btnLogin = document.getElementById('btnLogin');
+        var btnSignup = document.getElementById('btnSignup');
+        var errorEl = document.getElementById('errorMsg');
+        var successEl = document.getElementById('successMsg');
+        var headerP = document.querySelector('.login-header p');
+
+        function showError(msg) {
+            successEl.classList.remove('visible');
+            errorEl.textContent = msg;
+            errorEl.classList.add('visible');
+        }
+        function showSuccess(msg) {
+            errorEl.classList.remove('visible');
+            successEl.textContent = msg;
+            successEl.classList.add('visible');
+        }
+        function hideMessages() {
+            errorEl.classList.remove('visible');
+            successEl.classList.remove('visible');
+        }
+
+        /* 폼 전환 */
+        document.getElementById('showSignup').addEventListener('click', function() {
+            hideMessages();
+            loginForm.classList.add('hidden');
+            signupForm.classList.remove('hidden');
+            headerP.textContent = '회원가입을 요청하세요';
+            document.getElementById('signupStore').focus();
+        });
+        document.getElementById('showLogin').addEventListener('click', function() {
+            hideMessages();
+            signupForm.classList.add('hidden');
+            loginForm.classList.remove('hidden');
+            headerP.textContent = '매장 대시보드에 로그인하세요';
+            document.getElementById('username').focus();
+        });
+
+        /* 로그인 */
+        loginForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            hideMessages();
+
+            var username = document.getElementById('username').value.trim();
+            var password = document.getElementById('password').value;
+
+            if (!username || !password) {
+                showError('아이디와 비밀번호를 입력하세요.');
+                return;
+            }
+
+            btnLogin.disabled = true;
+            btnLogin.textContent = '로그인 중...';
+
+            fetch('/api/auth/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: username, password: password })
+            })
+            .then(function(resp) {
+                return resp.json().then(function(data) {
+                    return { ok: resp.ok, data: data };
+                });
+            })
+            .then(function(result) {
+                if (result.ok) {
+                    window.location.href = '/';
+                } else {
+                    showError(result.data.error || '로그인에 실패했습니다.');
+                    btnLogin.disabled = false;
+                    btnLogin.textContent = '로그인';
+                }
+            })
+            .catch(function() {
+                showError('서버에 연결할 수 없습니다.');
+                btnLogin.disabled = false;
+                btnLogin.textContent = '로그인';
+            });
+        });
+
+        /* 회원가입 */
+        signupForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            hideMessages();
+
+            var storeId = document.getElementById('signupStore').value.trim();
+            var pw = document.getElementById('signupPw').value;
+            var pwConfirm = document.getElementById('signupPwConfirm').value;
+            var phone = document.getElementById('signupPhone').value.trim();
+
+            if (!storeId || !pw || !pwConfirm || !phone) {
+                showError('모든 항목을 입력하세요.');
+                return;
+            }
+            if (!/^\d{5}$/.test(storeId)) {
+                showError('매장 코드는 5자리 숫자입니다.');
+                return;
+            }
+            if (pw.length < 4) {
+                showError('비밀번호는 4자 이상이어야 합니다.');
+                return;
+            }
+            if (pw !== pwConfirm) {
+                showError('비밀번호가 일치하지 않습니다.');
+                return;
+            }
+            if (!/^[\d\-]{10,13}$/.test(phone)) {
+                showError('핸드폰 번호를 올바르게 입력하세요. (예: 010-1234-5678)');
+                return;
+            }
+
+            btnSignup.disabled = true;
+            btnSignup.textContent = '요청 중...';
+
+            fetch('/api/auth/signup', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ store_id: storeId, password: pw, phone: phone })
+            })
+            .then(function(resp) {
+                return resp.json().then(function(data) {
+                    return { ok: resp.ok, data: data };
+                });
+            })
+            .then(function(result) {
+                btnSignup.disabled = false;
+                btnSignup.textContent = '가입 요청';
+                if (result.ok) {
+                    showSuccess('가입 요청이 완료되었습니다. 관리자 승인 후 로그인 가능합니다.');
+                    signupForm.reset();
+                    setTimeout(function() {
+                        document.getElementById('showLogin').click();
+                    }, 2500);
+                } else {
+                    showError(result.data.error || '가입 요청에 실패했습니다.');
+                }
+            })
+            .catch(function() {
+                showError('서버에 연결할 수 없습니다.');
+                btnSignup.disabled = false;
+                btnSignup.textContent = '가입 요청';
+            });
+        });
+    })();
+    </script>
+</body>
+</html>

@@ -1,0 +1,2691 @@
+{
+  "fn_analysis": {
+    "dblclick_handler": "[object EventListener]",
+    "fn__on_bubble_dragmove": "function(elem,src_comp,src_refer_comp,dragdata,userdata,button,alt_key,ctrl_key,shift_key,canvasX,canvasY,screenX,screenY,event_bubbles,fire_comp,refer_comp,bubble_scope){if(!this._is_alive){return;}if(event_bubbles===undefined){var is_subcontrol_bubble;if(!refer_comp){refer_comp=this;}if(this._is_subcontrol){is_subcontrol_bubble=true;}else{is_subcontrol_bubble=false;if(this.visible&&this._isEnable()){var clientXY=this._getClientXY(canvasX,canvasY);if(bubble_scope){event_bubbles=this.on_fire_use",
+    "fn__on_bubble_mousemove": "function(elem,button,alt_key,ctrl_key,shift_key,canvasX,canvasY,screenX,screenY,event_bubbles,fire_comp,refer_comp,bubble_scope){if(!this._is_alive){return;}if(event_bubbles===undefined){if(!refer_comp){refer_comp=this;}if(this.visible&&this._isEnable()){if(bubble_scope){this.on_mousemove_basic_action(elem,button,alt_key,ctrl_key,shift_key,canvasX,canvasY,screenX,screenY,refer_comp);}var clientXY=this._getClientXY(canvasX,canvasY);if(bubble_scope){event_bubbles=this.on_fire_user_onmousemove(butt",
+    "fn__on_bubble_touchmove": "function(touch_manager,touchinfos,changedtouchinfos,event_bubbles,fire_comp,refer_comp,is_userbubble){if(!this._is_alive){return;}var listener;if(event_bubbles===undefined){if(!refer_comp){refer_comp=this;}if(is_userbubble){this.on_touchmove_basic_action(touch_manager,touchinfos,changedtouchinfos,refer_comp);}else{this.on_touchmove_default_action(touch_manager,touchinfos,changedtouchinfos,refer_comp);}if(this.visible&&this._isEnable()&&((is_userbubble&&this.enableevent)||!is_userbubble)){var fir",
+    "fn__on_dblclick": "function(elem,button,alt_key,ctrl_key,shift_key,canvasX,canvasY,screenX,screenY){if(!this._is_alive){return;}var pThis=this._getFromComponent(this);if(pThis&&(!pThis.onlbuttonup||(pThis.onlbuttonup&&!pThis.onlbuttonup.defaultprevented))){if(this.visible&&this._isEnable()&&this.enableevent){var clientXY=this._getClientXY(canvasX,canvasY);this.on_fire_ondblclick(button,alt_key,ctrl_key,shift_key,screenX,screenY,canvasX,canvasY,clientXY[0],clientXY[1],this,this);}}}",
+    "fn__on_dragmove": "function(elem,src_comp,src_refer_comp,dragdata,userdata,button,alt_key,ctrl_key,shift_key,canvasX,canvasY,screenX,screenY,event_bubbles,fire_comp,refer_comp){var ret=this._on_bubble_dragmove(elem,src_comp,src_refer_comp,dragdata,userdata,button,alt_key,ctrl_key,shift_key,canvasX,canvasY,screenX,screenY,event_bubbles,fire_comp,refer_comp,true);var pThis=this._getFromComponent(this);if(pThis&&(!pThis.ondragmove||(pThis.ondragmove&&!pThis.ondragmove.defaultprevented))){this.on_dragmove_default_acti",
+    "fn__on_mousemove": "function(elem,button,alt_key,ctrl_key,shift_key,canvasX,canvasY,screenX,screenY,event_bubbles,fire_comp,refer_comp){if(nexacro._current_popups.length>0){var win=this._getWindow();var elem_comp=win.findComponent(elem,0,0);if(elem_comp&&elem_comp[0]){var cur_popup=nexacro._current_popups[0];if(cur_popup._track_capture&&!cur_popup._contains(elem_comp[0])){return;}}}if(nexacro._mousewheel_obj&&nexacro._mousewheel_obj!=this){if(nexacro._mousewheel_obj._is_alive){nexacro._mousewheel_obj._changeStatus(",
+    "fn__on_movetrack": "function(x,y,dragdata,windowX,windowY){if(!this._is_alive){return;}var ownerframe=this.getOwnerFrame();if(ownerframe){ownerframe._on_titlebar_movetrack(x,y,dragdata,windowX,windowY);}}",
+    "fn__on_touchmove": "function(touch_manager,touchinfos,changedtouchinfos,event_bubbles,fire_comp,refer_comp){this._on_bubble_touchmove(touch_manager,touchinfos,changedtouchinfos,event_bubbles,fire_comp,refer_comp,true);var root_comp=this._getFromComponent(this);var listener=root_comp.ontouchmove;if(!listener||(listener&&!listener.defaultprevented)){this._on_bubble_touchmove(touch_manager,touchinfos,changedtouchinfos,event_bubbles,fire_comp,refer_comp,false);}}",
+    "fn__removeEventHandler": "function(evt_id,func,target){var listener=this[evt_id];var nRemovedEvt=0;if(listener){if(target){nRemovedEvt=listener._removeHandler(target,func);}else{nRemovedEvt=listener._removeHandler(null,func);}}return nRemovedEvt;}",
+    "fn__setDragMove": "function(v,is_windowframe){this._is_track=v;if(v&&is_windowframe){this._hittest_type=\"caption\";}else{this._hittest_type=\"none\";}this.on_apply_hittesttype();}",
+    "fn_gf_CallItemDetailPopup": "function(ItemCd,searchYN,ordYN,ordYmd){var strSearchYN=this.gfn_nvl(searchYN,\"Y\");var strOrdYN=this.gfn_nvl(ordYN,\"Y\");var strOrdYmd=this.gfn_nvl(ordYmd,\"\");var oArg={\"strItemCd\":ItemCd,\"strSearchYN\":strSearchYN,\"strOrdYN\":strOrdYN,\"strOrdYmd\":strOrdYmd};var sPopupCallBack=\"fn_popupCallback\";var oOption={};this.gfn_openPopup(\"CallItemDetailPopup\",\"BJ::STBJZ40_P0.xfdl\",oArg,sPopupCallBack,oOption);}",
+    "fn_gf_CallItemEvtDetailPopup": "function(pItemCd,pItemNm,pSelYmd){var oArg={\"strItemCd\":pItemCd,\"strItemNm\":pItemNm,\"strSelYmd\":pSelYmd};var sPopupCallBack=\"fn_popupCallback\";var oOption={};this.gfn_openPopup(\"CallItemEvtDetailPopup\",\"BJ::STBJZ31_P0.xfdl\",oArg,sPopupCallBack,oOption);}",
+    "fn_gf_MoveTabOrder": "function(obj,sKeyCode,sFnName,sFnParam){var oCurrent=\"\";if(obj.parent.parent==\"[object Div]\"||obj.parent.parent==\"[object Tab]\"){obj=obj.parent;}else{obj=this;}var oCurrent=obj.getFocus();if(sKeyCode==13){if(obj.getFocus()==obj.getLastComponent()){if(this.gfn_isNull(sFnName)){obj.getFirstComponent().setFocus();}else{this.lookupFunc(sFnName).call(sFnParam);}}else{obj.getNextComponent(oCurrent,true).setFocus();}}}",
+    "fn_gf_RemoveSeparator": "function(strIn,strSeparator){return nexacro.replaceAll(strIn,strSeparator,\"\");}",
+    "fn_gfn_removeComma": "function(strValue){return strValue.replace(/\\,/g,\"\");}",
+    "fn_gfn_removeHtmlTag": "function(sHtml,sTag){if(this.gfn_isEmpty(sTag)){sHtml=nexacro.replaceAll(sHtml,\"<br>\",\"\\n\");sHtml=nexacro.replaceAll(sHtml,\"<BR>\",\"\\n\");var regExp=new RegExp(\"<(/)?([0-9a-zA-Z]*)(\\\\s[0-9a-zA-Z]*=[^>]*)?(\\\\s)*(/)?>\",\"g\");sHtml=sHtml.replace(regExp,\"\");}else if(sTag.toUpperCase()==\"<BR>\"){sHtml=nexacro.replaceAll(sHtml,\"<br>\",\"\\n\");sHtml=nexacro.replaceAll(sHtml,\"<BR>\",\"\\n\");}else{sHtml=nexacro.replaceAll(sHtml,sTag.toUpperCase(),\"\");sHtml=nexacro.replaceAll(sHtml,sTag.toLowerCase(),\"\");}return sH",
+    "fn_gfn_removeSpecialChar": "function(strValue){var strSpecial=\"~!@#$%^&*-+./=_`{|}()\\\\?<>\";for(i=0;i<strValue.length;i++ ){for(j=0;j<strSpecial.length;j++ ){if(strValue.charAt(i)==strSpecial.charAt(j)){strValue=strValue.replace(strValue.charAt(i),\"\");}}}return strValue;}",
+    "fn_move": "function(left,top,width,height,right,bottom){nexacro.Component.prototype.move.call(this,left,top,width,height,right,bottom);if(this._layout_list&&this._layout_list.length>0){this._checkValidLayout();}}",
+    "fn_moveToNext": "function(objOrId){if(this.parent){var parent=this.parent;var target=(nexacro._isString(objOrId))?parent[objOrId]:objOrId;if(target==null){return;}var child_list=parent._child_list;var cur_idx=nexacro._indexOf(child_list,this);var target_idx=nexacro._indexOf(child_list,target);if(cur_idx<0||target_idx<0){return;}if(cur_idx> -1&&target_idx> -1&&cur_idx!=target_idx-1){child_list.splice(cur_idx,1);var idx=nexacro._indexOf(child_list,target);child_list.splice(idx,0,this);var parent_elem=parent.getEle",
+    "fn_moveToPrev": "function(objOrId){if(this.parent){var parent=this.parent;var target=(nexacro._isString(objOrId))?parent[objOrId]:objOrId;if(target==null){return;}var child_list=parent._child_list;var cur_idx=nexacro._indexOf(child_list,this);var target_idx=nexacro._indexOf(child_list,target);if(cur_idx<0||target_idx<0){return;}if(cur_idx> -1&&target_idx> -1&&cur_idx!=target_idx+1){child_list.splice(cur_idx,1);var index=nexacro._indexOf(child_list,target);child_list.splice(index+1,0,this);var parent_elem=parent.",
+    "fn_on_dragmove_default_action": "function(){}",
+    "fn_on_fire_ondblclick": "function(button,alt_key,ctrl_key,shift_key,screenX,screenY,canvasX,canvasY,clientX,clientY,from_comp,from_refer_comp){nexacro._fireBeforeDblclick(this,button,alt_key,ctrl_key,shift_key,screenX,screenY,canvasX,canvasY,clientX,clientY,from_comp,from_refer_comp);if(this.ondblclick&&this.ondblclick._has_handlers){var evt=new nexacro.ClickEventInfo(this,\"ondblclick\",button,alt_key,ctrl_key,shift_key,screenX,screenY,canvasX,canvasY,clientX,clientY,from_comp,from_refer_comp);return this.ondblclick._fir",
+    "fn_on_fire_ondragmove": "function(src_comp,src_refer_comp,dragdata,userdata,button,alt_key,ctrl_key,shift_key,screenX,screenY,canvasX,canvasY,clientX,clientY,from_comp,from_refer_comp){if(this.ondragmove&&this.ondragmove._has_handlers){var evt=new nexacro.DragEventInfo(this,\"ondragmove\",dragdata,userdata,src_comp,src_refer_comp,from_comp,from_refer_comp,button,alt_key,ctrl_key,shift_key,screenX,screenY,canvasX,canvasY,clientX,clientY);return this.ondragmove._fireEvent(this,evt);}return false;}",
+    "fn_on_fire_onmousemove": "function(button,alt_key,ctrl_key,shift_key,screenX,screenY,canvasX,canvasY,clientX,clientY,from_comp,from_refer_comp){if(this.onmousemove&&this.onmousemove._has_handlers){var evt=new nexacro.MouseEventInfo(this,\"onmousemove\",button,alt_key,ctrl_key,shift_key,screenX,screenY,canvasX,canvasY,clientX,clientY,from_comp,from_refer_comp);return this.onmousemove._fireEvent(this,evt);}return false;}",
+    "fn_on_fire_onmove": "function(left,top){if(this.onmove&&this.onmove._has_handlers){var evt=new nexacro.MoveEventInfo(this,\"onmove\",left,top);return this.onmove._fireEvent(this,evt);}return false;}",
+    "fn_on_fire_ontouchmove": "function(touchinfos,changedtouchinfos,from_comp,from_refer_comp){if(this.ontouchmove&&this.ontouchmove._has_handlers){var evt=new nexacro.TouchEventInfo(this,\"ontouchmove\",touchinfos,changedtouchinfos,from_comp,from_refer_comp);return this.ontouchmove._fireEvent(this,evt);}return false;}",
+    "fn_on_fire_sys_ondragmove": "function(src_comp,src_refer_comp,dragdata,userdata,button,alt_key,ctrl_key,shift_key,screenX,screenY,canvasX,canvasY,clientX,clientY,from_comp,from_refer_comp){if(this.ondragmove&&this.ondragmove._has_handlers){var evt=new nexacro.DragEventInfo(this,\"ondragmove\",dragdata,userdata,src_comp,src_refer_comp,from_comp,from_refer_comp,button,alt_key,ctrl_key,shift_key,screenX,screenY,canvasX,canvasY,clientX,clientY);return this.ondragmove._fireSysEvent(this,evt);}return false;}",
+    "fn_on_fire_sys_onmousemove": "function(button,alt_key,ctrl_key,shift_key,screenX,screenY,canvasX,canvasY,clientX,clientY,from_comp,from_refer_comp){if(this.onmousemove&&this.onmousemove._has_handlers){var evt=new nexacro.MouseEventInfo(this,\"onmousemove\",button,alt_key,ctrl_key,shift_key,screenX,screenY,canvasX,canvasY,clientX,clientY,from_comp,from_refer_comp);return this.onmousemove._fireSysEvent(this,evt);}return false;}",
+    "fn_on_fire_sys_ontouchmove": "function(touchinfos,changedtouchinfos,from_comp,from_refer_comp){if(this.ontouchmove&&this.ontouchmove._has_handlers){var evt=new nexacro.TouchEventInfo(this,\"ontouchmove\",touchinfos,changedtouchinfos,from_comp,from_refer_comp);return this.ontouchmove._fireSysEvent(this,evt);}return false;}",
+    "fn_on_fire_user_ondragmove": "function(src_comp,src_refer_comp,dragdata,userdata,button,alt_key,ctrl_key,shift_key,screenX,screenY,canvasX,canvasY,clientX,clientY,from_comp,from_refer_comp){if(this.ondragmove&&this.ondragmove._has_handlers){var evt=new nexacro.DragEventInfo(this,\"ondragmove\",dragdata,userdata,src_comp,src_refer_comp,from_comp,from_refer_comp,button,alt_key,ctrl_key,shift_key,screenX,screenY,canvasX,canvasY,clientX,clientY);return this.ondragmove._fireUserEvent(this,evt);}return false;}",
+    "fn_on_fire_user_onmousemove": "function(button,alt_key,ctrl_key,shift_key,screenX,screenY,canvasX,canvasY,clientX,clientY,from_comp,from_refer_comp){if(this.onmousemove&&this.onmousemove._has_handlers){var evt=new nexacro.MouseEventInfo(this,\"onmousemove\",button,alt_key,ctrl_key,shift_key,screenX,screenY,canvasX,canvasY,clientX,clientY,from_comp,from_refer_comp);return this.onmousemove._fireUserEvent(this,evt);}return false;}",
+    "fn_on_fire_user_ontouchmove": "function(touchinfos,changedtouchinfos,from_comp,from_refer_comp){if(this.ontouchmove&&this.ontouchmove._has_handlers){var evt=new nexacro.TouchEventInfo(this,\"ontouchmove\",touchinfos,changedtouchinfos,from_comp,from_refer_comp);return this.ontouchmove._fireUserEvent(this,evt);}return false;}",
+    "fn_on_mousemove_basic_action": "function(elem,button,alt_key,ctrl_key,shift_key,canvasX,canvasY,screenX,screenY,refer_comp){if(this._isPushed()){this._changeUserStatus(\"pushed\",true);}else{if(!nexacro._isTouchInteraction){this._changeStatus(\"mouseover\",true);}else{var win=this._getWindow();var ldown_elem=win._cur_ldown_elem;if(elem!=ldown_elem){var elem_comp=win.findComponent(ldown_elem,0,0)[0];if(elem_comp&&elem_comp._isPushed()){elem_comp._changeUserStatus(\"pushed\",false);}}}}}",
+    "fn_on_mousemove_default_action": "function(){}",
+    "fn_on_touchmove_basic_action": "function(touch_manager,touchinfos,changedtouchinfos,refer_comp){var win=this._getWindow();var firsttouchinput=touch_manager.getFirstTouchInputInfo(changedtouchinfos);if(firsttouchinput){var touch_elem=win._cur_touch_elem;if(firsttouchinput.target!=touch_elem){var elem_comp=win.findComponent(touch_elem,0,0)[0];if(elem_comp&&elem_comp._isPushed()){elem_comp._changeUserStatus(\"pushed\",false);}}}}",
+    "fn_on_touchmove_default_action": "function(){}",
+    "fn_removeChild": "function(id){if(!id||id.length<=0){return null;}var obj=this[id];if(!obj){return null;}if(obj._is_component){var is_focused=false;var _window=this._getWindow();if(_window){is_focused=(_window._indexOfCurrentFocusPaths(obj)> -1);}if(this._defaultbutton==obj){this._defaultbutton=null;}if(this._escapebutton==obj){this._escapebutton=null;}if(this._bind_manager){this._bind_manager._dettachSBindItem(obj);}this.components.delete_item(id);var cidx=nexacro._indexOf(this._child_list,obj);if(cidx> -1){this",
+    "fn_removeEventHandler": "function(evt_id,func,target){if(!func){return 0;}var listener=this[evt_id];var nRemovedEvt=0;if(listener){if(target){nRemovedEvt=listener._removeHandler(target,func,true);}else{nRemovedEvt=listener._removeHandler(null,func,true);}}return nRemovedEvt;}",
+    "fn_removeEventHandlerLookup": "function(evt_id,funcstr,target){var listener=this[evt_id];var nRemovedEvt=0;if(listener){if(target){nRemovedEvt=listener._removeHandlerLookup(target,funcstr);}else{nRemovedEvt=listener._removeHandlerLookup(this,funcstr);}}return nRemovedEvt;}",
+    "gdList_exists": true
+  },
+  "after_frames": [
+    "WorkFrame",
+    "STGJ020_M0"
+  ],
+  "tabs": [
+    {
+      "id": "mainframe.HFrameSet00.VFrameSet00.MdiFrame.form.tab_openList.tabbutton_1.tabbuttonitemtext",
+      "text": "통합 전표 조회"
+    },
+    {
+      "id": "mainframe.HFrameSet00.VFrameSet00.MdiFrame.form.tab_openList.tabbutton_1.tabbuttonitemtext:text",
+      "text": "통합 전표 조회"
+    }
+  ],
+  "frame_WorkFrame": {
+    "datasets": [
+      {
+        "colCount": 5,
+        "columns": [
+          "WIDGET_NM",
+          "DISP_SEQ",
+          "EXEC_ID",
+          "WIDGET_URL",
+          "CHANNEL_TYPE"
+        ],
+        "name": "ds_widget",
+        "path": "form.ds_widget",
+        "rowCount": 9,
+        "samples": [
+          {
+            "CHANNEL_TYPE": "1",
+            "DISP_SEQ": 2,
+            "EXEC_ID": "p",
+            "WIDGET_NM": "복수점 설정",
+            "WIDGET_URL": "CO::STZZ130_P0"
+          },
+          {
+            "CHANNEL_TYPE": "3",
+            "DISP_SEQ": 3,
+            "EXEC_ID": "l",
+            "WIDGET_NM": "회계시스템",
+            "WIDGET_URL": "http://etax.bgfretail.com:8080/uifc"
+          },
+          {
+            "CHANNEL_TYPE": "1",
+            "DISP_SEQ": 4,
+            "EXEC_ID": "m",
+            "WIDGET_NM": "시스템운영 꿀 TIP",
+            "WIDGET_URL": "STCM220_M0"
+          }
+        ]
+      },
+      {
+        "colCount": 0,
+        "columns": [],
+        "name": "dsMultiStore",
+        "path": "form.dsMultiStore",
+        "rowCount": 0
+      },
+      {
+        "colCount": 0,
+        "columns": [],
+        "name": "dsPdaFlag",
+        "path": "form.dsPdaFlag",
+        "rowCount": 0
+      },
+      {
+        "colCount": 3,
+        "columns": [
+          "CURTIME",
+          "PYUNSU",
+          "CRT_MOVE"
+        ],
+        "name": "dsTmpDate",
+        "path": "form.dsTmpDate",
+        "rowCount": 1,
+        "samples": [
+          {
+            "CRT_MOVE": "1",
+            "CURTIME": "123323",
+            "PYUNSU": "100000"
+          }
+        ]
+      },
+      {
+        "colCount": 16,
+        "columns": [
+          "CUR_PAGE_NUM",
+          "strOrdYmd",
+          "strItemId",
+          "strYmdSt",
+          "strYmdEd",
+          "SO_YMD",
+          "ORD_YMD",
+          "SORT_GUBN",
+          "SEARCH_G",
+          "DELI_FROM_DAY",
+          "DELI_TO_DAY",
+          "DELI_SERVICE_GUBUN",
+          "DELI_DEAL_GUBUN",
+          "DELI_CATCH_YN",
+          "DELI_COM_CD",
+          "SVC_ADD"
+        ],
+        "name": "dsCond",
+        "path": "form.dsCond",
+        "rowCount": 1,
+        "samples": [
+          {
+            "CUR_PAGE_NUM": null,
+            "DELI_CATCH_YN": null,
+            "DELI_COM_CD": null,
+            "DELI_DEAL_GUBUN": null,
+            "DELI_FROM_DAY": null,
+            "DELI_SERVICE_GUBUN": null,
+            "DELI_TO_DAY": null,
+            "ORD_YMD": null,
+            "SEARCH_G": null,
+            "SORT_GUBN": null,
+            "SO_YMD": null,
+            "SVC_ADD": null,
+            "strItemId": "1",
+            "strOrdYmd": "20260220",
+            "strYmdEd": "28",
+            "strYmdSt": "0"
+          }
+        ]
+      },
+      {
+        "colCount": 7,
+        "columns": [
+          "USER_NO",
+          "PASSWD",
+          "USER_GRP_ID",
+          "GV_POSPARAM1",
+          "GV_POSPARAM2",
+          "GV_POSPARAM3",
+          "GV_POSPARAM4"
+        ],
+        "name": "ds_login",
+        "path": "form.ds_login",
+        "rowCount": 1,
+        "samples": [
+          {
+            "GV_POSPARAM1": null,
+            "GV_POSPARAM2": null,
+            "GV_POSPARAM3": null,
+            "GV_POSPARAM4": null,
+            "PASSWD": "",
+            "USER_GRP_ID": "0001",
+            "USER_NO": ""
+          }
+        ]
+      },
+      {
+        "colCount": 8,
+        "columns": [
+          "SET_GB",
+          "SET_SEQ",
+          "VAL1",
+          "VAL2",
+          "VAL3",
+          "VAL4",
+          "VAL5",
+          "DEFAULT_YN"
+        ],
+        "name": "dsOptionList",
+        "path": "form.dsOptionList",
+        "rowCount": 13,
+        "samples": [
+          {
+            "DEFAULT_YN": "1",
+            "SET_GB": "07",
+            "SET_SEQ": 1,
+            "VAL1": "1",
+            "VAL2": "자동로그인여부",
+            "VAL3": "로그인시 자동으로 로그인하는 기능",
+            "VAL4": "",
+            "VAL5": ""
+          },
+          {
+            "DEFAULT_YN": "1",
+            "SET_GB": "08",
+            "SET_SEQ": 1,
+            "VAL1": "0",
+            "VAL2": "발주화면폰트굵기",
+            "VAL3": "발주상품 목록 글자 굵게 보기 기능",
+            "VAL4": "",
+            "VAL5": ""
+          },
+          {
+            "DEFAULT_YN": "1",
+            "SET_GB": "09",
+            "SET_SEQ": 1,
+            "VAL1": "0",
+            "VAL2": "2차비밀번호 다시묻지않기",
+            "VAL3": "HOME/화면보호기 클릭시 다시 잠김.",
+            "VAL4": "",
+            "VAL5": ""
+          }
+        ]
+      },
+      {
+        "colCount": 1,
+        "columns": [
+          "FLAG"
+        ],
+        "name": "ds_widgetSysTip",
+        "path": "form.ds_widgetSysTip",
+        "rowCount": 1,
+        "samples": [
+          {
+            "FLAG": "1"
+          }
+        ]
+      },
+      {
+        "colCount": 7,
+        "columns": [
+          "USER_NO",
+          "PASSWD",
+          "USER_GRP_ID",
+          "GV_POSPARAM1",
+          "GV_POSPARAM2",
+          "GV_POSPARAM3",
+          "GV_POSPARAM4"
+        ],
+        "name": "ds_multiStoreCheck",
+        "path": "form.ds_multiStoreCheck",
+        "rowCount": 1,
+        "samples": [
+          {
+            "GV_POSPARAM1": null,
+            "GV_POSPARAM2": null,
+            "GV_POSPARAM3": null,
+            "GV_POSPARAM4": null,
+            "PASSWD": "",
+            "USER_GRP_ID": "0001",
+            "USER_NO": ""
+          }
+        ]
+      },
+      {
+        "colCount": 1,
+        "columns": [
+          "FLAG"
+        ],
+        "name": "ds_widgetSurvey",
+        "path": "form.ds_widgetSurvey",
+        "rowCount": 0
+      },
+      {
+        "colCount": 4,
+        "columns": [
+          "KEYWORD",
+          "SEARCH_TYPE",
+          "ITEM_MAEGA",
+          "MID_CD"
+        ],
+        "name": "ds_cond",
+        "path": "form.ds_cond",
+        "rowCount": 1,
+        "samples": [
+          {
+            "ITEM_MAEGA": "0~3000,3000~5000",
+            "KEYWORD": null,
+            "MID_CD": "01",
+            "SEARCH_TYPE": ""
+          }
+        ]
+      },
+      {
+        "colCount": 0,
+        "columns": [],
+        "name": "ds_completeItem",
+        "path": "form.ds_completeItem",
+        "rowCount": 0
+      },
+      {
+        "colCount": 0,
+        "columns": [],
+        "name": "ds_completeItemTemp",
+        "path": "form.ds_completeItemTemp",
+        "rowCount": 0
+      },
+      {
+        "colCount": 1,
+        "columns": [
+          "TIME"
+        ],
+        "name": "ds_time",
+        "path": "form.ds_time",
+        "rowCount": 1,
+        "samples": [
+          {
+            "TIME": "0"
+          }
+        ]
+      },
+      {
+        "colCount": 0,
+        "columns": [],
+        "name": "ds_timeTemp",
+        "path": "form.ds_timeTemp",
+        "rowCount": 0
+      },
+      {
+        "colCount": 0,
+        "columns": [],
+        "name": "ds_completeMenu",
+        "path": "form.ds_completeMenu",
+        "rowCount": 0
+      },
+      {
+        "colCount": 0,
+        "columns": [],
+        "name": "ds_completeMenuTemp",
+        "path": "form.ds_completeMenuTemp",
+        "rowCount": 0
+      },
+      {
+        "colCount": 1,
+        "columns": [
+          "SERVER_NUMBER"
+        ],
+        "name": "dsServerNumber",
+        "path": "form.dsServerNumber",
+        "rowCount": 1,
+        "samples": [
+          {
+            "SERVER_NUMBER": "1"
+          }
+        ]
+      },
+      {
+        "colCount": 3,
+        "columns": [
+          "NAME",
+          "STATUS",
+          "GAP"
+        ],
+        "name": "ds_joinBestList",
+        "path": "form.ds_joinBestList",
+        "rowCount": 5,
+        "samples": [
+          {
+            "GAP": "-",
+            "NAME": "포켓몬",
+            "STATUS": "-"
+          },
+          {
+            "GAP": "-",
+            "NAME": "두바이",
+            "STATUS": "-"
+          },
+          {
+            "GAP": "-",
+            "NAME": "젤리",
+            "STATUS": "-"
+          }
+        ]
+      },
+      {
+        "colCount": 3,
+        "columns": [
+          "NAME",
+          "STATUS",
+          "GAP"
+        ],
+        "name": "ds_storeBestList",
+        "path": "form.ds_storeBestList",
+        "rowCount": 5,
+        "samples": [
+          {
+            "GAP": "-",
+            "NAME": "두바이",
+            "STATUS": "-"
+          },
+          {
+            "GAP": "-",
+            "NAME": "두바이쫀득찹쌀떡",
+            "STATUS": "-"
+          },
+          {
+            "GAP": "-",
+            "NAME": "불닭볶음탕면",
+            "STATUS": "-"
+          }
+        ]
+      },
+      {
+        "colCount": 18,
+        "columns": [
+          "TITLE",
+          "BANNER_TYP",
+          "INFO_CNT",
+          "CSS_CLASS",
+          "FILE_NM",
+          "FILE_PATH",
+          "TXT_1",
+          "CNT_1",
+          "MENU_ID_1",
+          "OPER_ID_1",
+          "TXT_2",
+          "CNT_2",
+          "MENU_ID_2",
+          "OPER_ID_2",
+          "TXT_3",
+          "CNT_3",
+          "MENU_ID_3",
+          "OPER_ID_3"
+        ],
+        "name": "dsBanner",
+        "path": "form.dsBanner",
+        "rowCount": 1,
+        "samples": [
+          {
+            "BANNER_TYP": "IMAGE",
+            "CNT_1": "",
+            "CNT_2": "",
+            "CNT_3": "",
+            "CSS_CLASS": "sta_banner_new",
+            "FILE_NM": "20260213102808_6_1.png",
+            "FILE_PATH": "fsmdat/img/itemnew/",
+            "INFO_CNT": 0,
+            "MENU_ID_1": "STCM120_M0",
+            "MENU_ID_2": "",
+            "MENU_ID_3": "",
+            "OPER_ID_1": "MENU",
+            "OPER_ID_2": "",
+            "OPER_ID_3": "",
+            "TITLE": "신상품",
+            "TXT_1": "",
+            "TXT_2": "",
+            "TXT_3": ""
+          }
+        ]
+      },
+      {
+        "colCount": 3,
+        "columns": [
+          "STORE_CD",
+          "QUICK_ID",
+          "MENU_ID"
+        ],
+        "name": "dsQuickMenu",
+        "path": "form.dsQuickMenu",
+        "rowCount": 0
+      },
+      {
+        "colCount": 11,
+        "columns": [
+          "MSG_CD",
+          "MSG_TITLE",
+          "ORG_MSG_TITLE",
+          "MSG_REGI_YMDHMS",
+          "SEND_ID",
+          "SEND_ID_NM",
+          "RCV_ID",
+          "URGENT_YN",
+          "BUSINESS_ID",
+          "ATTACH_FILE",
+          "SS_STORE_CD"
+        ],
+        "name": "dsMainNotice1",
+        "path": "form.dsMainNotice1",
+        "rowCount": 0
+      },
+      {
+        "colCount": 11,
+        "columns": [
+          "MSG_CD",
+          "MSG_TITLE",
+          "ORG_MSG_TITLE",
+          "MSG_REGI_YMDHMS",
+          "SEND_ID",
+          "SEND_ID_NM",
+          "RCV_ID",
+          "URGENT_YN",
+          "BUSINESS_ID",
+          "ATTACH_FILE",
+          "SS_STORE_CD"
+        ],
+        "name": "dsMainNotice2",
+        "path": "form.dsMainNotice2",
+        "rowCount": 0
+      },
+      {
+        "colCount": 11,
+        "columns": [
+          "MSG_CD",
+          "MSG_TITLE",
+          "ORG_MSG_TITLE",
+          "MSG_REGI_YMDHMS",
+          "SEND_ID",
+          "SEND_ID_NM",
+          "RCV_ID",
+          "URGENT_YN",
+          "BUSINESS_ID",
+          "ATTACH_FILE",
+          "SS_STORE_CD"
+        ],
+        "name": "dsMainNotice3",
+        "path": "form.dsMainNotice3",
+        "rowCount": 0
+      },
+      {
+        "colCount": 26,
+        "columns": [
+          "MSG_ICON_1",
+          "MSG_CD_1",
+          "MSG_TITLE_1",
+          "MSG_CONT_1",
+          "MSG_REGI_YMDHMS_1",
+          "SEND_ID_1",
+          "SEND_ID_NM_1",
+          "RCV_ID_1",
+          "URGENT_YN_1",
+          "BUSINESS_ID_1",
+          "MSG_ICON_2",
+          "MSG_CD_2",
+          "MSG_TITLE_2",
+          "MSG_CONT_2",
+          "MSG_REGI_YMDHMS_2",
+          "SEND_ID_2",
+          "SEND_ID_NM_2",
+          "RCV_ID_2",
+          "URGENT_YN_2",
+          "BUSINESS_ID_2",
+          "ATTACH_FILE_1",
+          "ATTACH_FILE_2",
+          "STORE_CD_1",
+          "STORE_CD_2",
+          "ORG_MSG_TITLE_1",
+          "ORG_MSG_TITLE_2"
+        ],
+        "name": "dsMainNotice",
+        "path": "form.dsMainNotice",
+        "rowCount": 0
+      },
+      {
+        "colCount": 17,
+        "columns": [
+          "ITEM_CD",
+          "ITEM_NM",
+          "ITEM_AMT",
+          "ITEM_EVT_FLAG01",
+          "ITEM_EVT_FLAG02",
+          "ITEM_EVT_FLAG03",
+          "ITEM_EVT_FLAG04",
+          "ITEM_QTY",
+          "ITEM_OUT_DD",
+          "PROFIT_RATE",
+          "IMG_CHK",
+          "IN_PAGE_IDX",
+          "PAGE_NUM",
+          "TOT_PAGE_NUM",
+          "ABS_NUM",
+          "PREV_ITEM_CD",
+          "NEXT_ITEM_CD"
+        ],
+        "name": "dsNewListAll",
+        "path": "form.dsNewListAll",
+        "rowCount": 0
+      },
+      {
+        "colCount": 6,
+        "columns": [
+          "HMS",
+          "AMT",
+          "CNT",
+          "CNT_DANGA",
+          "RATE",
+          "PAGE_CNT"
+        ],
+        "name": "dsList",
+        "path": "form.dsList",
+        "rowCount": 0
+      },
+      {
+        "colCount": 5,
+        "columns": [
+          "NSALE",
+          "RATE",
+          "AMT",
+          "CNT",
+          "CNT_DANGA"
+        ],
+        "name": "dsListSum",
+        "path": "form.dsListSum",
+        "rowCount": 0
+      },
+      {
+        "colCount": 10,
+        "columns": [
+          "INF_YMD",
+          "FILE_SEQNO",
+          "FILE_TITLE",
+          "FILE_ID",
+          "KEYWORD1",
+          "KEYWORD2",
+          "KEYWORD3",
+          "KEYWORD4",
+          "KEYWORD5",
+          "REG_YMDHMS"
+        ],
+        "name": "dsMainNotice6",
+        "path": "form.dsMainNotice6",
+        "rowCount": 0
+      },
+      {
+        "colCount": 4,
+        "columns": [
+          "D_CODE",
+          "D_TXT",
+          "TM_TXT",
+          "SALE_AMT"
+        ],
+        "name": "dsList1",
+        "path": "form.dsList1",
+        "rowCount": 0
+      },
+      {
+        "colCount": 9,
+        "columns": [
+          "TM_TXT",
+          "TM_GB",
+          "BD_AMT",
+          "BW_AMT",
+          "TD_AMT",
+          "REAL_BD_AMT",
+          "REAL_BW_AMT",
+          "REAL_TD_AMT",
+          "NOW_GB"
+        ],
+        "name": "dsSaleList",
+        "path": "form.dsSaleList",
+        "rowCount": 0
+      },
+      {
+        "colCount": 7,
+        "columns": [
+          "D_CODE",
+          "ORD_YMD",
+          "SANG",
+          "JUON",
+          "CIGA",
+          "ETC",
+          "ORD_AMT"
+        ],
+        "name": "dsOrdList",
+        "path": "form.dsOrdList",
+        "rowCount": 0
+      },
+      {
+        "colCount": 9,
+        "columns": [
+          "SCH_SEQ",
+          "USER_CD",
+          "SCH_YMD",
+          "SCH_HH",
+          "SCH_TITLE",
+          "SCH_CONT",
+          "REG_ID",
+          "REG_YMDHMS",
+          "EDIT_YN"
+        ],
+        "name": "dsSchedule",
+        "path": "form.dsSchedule",
+        "rowCount": 0
+      },
+      {
+        "colCount": 2,
+        "columns": [
+          "NEW_MSG_YN",
+          "NEW_MSG_CNT"
+        ],
+        "name": "dsNewMiniMsgYn",
+        "path": "form.dsNewMiniMsgYn",
+        "rowCount": 0
+      },
+      {
+        "colCount": 10,
+        "columns": [
+          "JD_AMT",
+          "TO_AMT",
+          "JJ_AMT",
+          "JM_AMT",
+          "JY_AMT",
+          "JD_QTY",
+          "TO_QTY",
+          "JJ_QTY",
+          "JM_QTY",
+          "JY_QTY"
+        ],
+        "name": "dsSaleRate",
+        "path": "form.dsSaleRate",
+        "rowCount": 1,
+        "samples": [
+          {
+            "JD_AMT": "250",
+            "JD_QTY": null,
+            "JJ_AMT": "123",
+            "JJ_QTY": null,
+            "JM_AMT": "123",
+            "JM_QTY": null,
+            "JY_AMT": "123",
+            "JY_QTY": null,
+            "TO_AMT": "123",
+            "TO_QTY": null
+          }
+        ]
+      },
+      {
+        "colCount": 3,
+        "columns": [
+          "NAME",
+          "CNT",
+          "No"
+        ],
+        "name": "dsCustomer",
+        "path": "form.dsCustomer",
+        "rowCount": 0
+      },
+      {
+        "colCount": 5,
+        "columns": [
+          "MINUS_PER",
+          "PLUS_PER",
+          "NAME",
+          "ORG_PLUS",
+          "ORG_MINUS"
+        ],
+        "name": "dsCustomerComp",
+        "path": "form.dsCustomerComp",
+        "rowCount": 1,
+        "samples": [
+          {
+            "MINUS_PER": -10,
+            "NAME": "대비",
+            "ORG_MINUS": -250,
+            "ORG_PLUS": 0,
+            "PLUS_PER": 100
+          }
+        ]
+      },
+      {
+        "colCount": 4,
+        "columns": [
+          "FILE_ID",
+          "SEQ",
+          "FILE_NM",
+          "FILE_PATH"
+        ],
+        "name": "dsNewGoodsImg",
+        "path": "form.dsNewGoodsImg",
+        "rowCount": 1,
+        "samples": [
+          {
+            "FILE_ID": "-10",
+            "FILE_NM": "대비",
+            "FILE_PATH": "0",
+            "SEQ": "100"
+          }
+        ]
+      },
+      {
+        "colCount": 1,
+        "columns": [
+          "NOTICE_CNT"
+        ],
+        "name": "dsMainNoticeCnt1",
+        "path": "form.dsMainNoticeCnt1",
+        "rowCount": 0
+      },
+      {
+        "colCount": 1,
+        "columns": [
+          "NOTICE_CNT"
+        ],
+        "name": "dsMainNoticeCnt2",
+        "path": "form.dsMainNoticeCnt2",
+        "rowCount": 0
+      },
+      {
+        "colCount": 1,
+        "columns": [
+          "NOTICE_CNT"
+        ],
+        "name": "dsMainNoticeCnt3",
+        "path": "form.dsMainNoticeCnt3",
+        "rowCount": 0
+      },
+      {
+        "colCount": 3,
+        "columns": [
+          "BW_RATE",
+          "BD_RATE",
+          "REMARK"
+        ],
+        "name": "dsOrdRate",
+        "path": "form.dsOrdRate",
+        "rowCount": 0
+      },
+      {
+        "colCount": 3,
+        "columns": [
+          "TD_AMT",
+          "BD_AMT",
+          "TM_GB"
+        ],
+        "name": "dsUserList",
+        "path": "form.dsUserList",
+        "rowCount": 0
+      },
+      {
+        "colCount": 3,
+        "columns": [
+          "NAME",
+          "CNT",
+          "No"
+        ],
+        "name": "dsUserRate",
+        "path": "form.dsUserRate",
+        "rowCount": 3,
+        "samples": [
+          {
+            "CNT": "500",
+            "NAME": "누계",
+            "No": "1"
+          },
+          {
+            "CNT": "200",
+            "NAME": "전주",
+            "No": "2"
+          },
+          {
+            "CNT": "300",
+            "NAME": "금주",
+            "No": "3"
+          }
+        ]
+      },
+      {
+        "colCount": 3,
+        "columns": [
+          "NAME",
+          "CNT",
+          "No"
+        ],
+        "name": "dsAround",
+        "path": "form.dsAround",
+        "rowCount": 0
+      },
+      {
+        "colCount": 4,
+        "columns": [
+          "WEEK_CNT",
+          "HEAD_CNT",
+          "REQ_CNT",
+          "IDEAL_CNT"
+        ],
+        "name": "dsScheduleCnt",
+        "path": "form.dsScheduleCnt",
+        "rowCount": 1,
+        "samples": [
+          {
+            "HEAD_CNT": 2,
+            "IDEAL_CNT": 48,
+            "REQ_CNT": 0,
+            "WEEK_CNT": 7
+          }
+        ]
+      },
+      {
+        "colCount": 3,
+        "columns": [
+          "RECT_AMT",
+          "RECT_CNT",
+          "YMD_GUBUN"
+        ],
+        "name": "dsDeliSaleList",
+        "path": "form.dsDeliSaleList",
+        "rowCount": 0
+      },
+      {
+        "colCount": 3,
+        "columns": [
+          "RECT_AMT",
+          "RECT_CNT",
+          "YMD_GUBUN"
+        ],
+        "name": "dsDeliCancelList",
+        "path": "form.dsDeliCancelList",
+        "rowCount": 0
+      },
+      {
+        "colCount": 6,
+        "columns": [
+          "DLV_ALL_CNT",
+          "DLV_CNC_CNT",
+          "DLV_CNC_RATE",
+          "PCK_ALL_CNT",
+          "PCK_CNC_CNT",
+          "PCK_CNC_RATE"
+        ],
+        "name": "dsDeliPick",
+        "path": "form.dsDeliPick",
+        "rowCount": 0
+      },
+      {
+        "colCount": 2,
+        "columns": [
+          "INQURY_CNT",
+          "NON_RES_CNT"
+        ],
+        "name": "dsItemWogInqury",
+        "path": "form.dsItemWogInqury",
+        "rowCount": 0
+      },
+      {
+        "colCount": 0,
+        "columns": [],
+        "name": "ds_itemGroup",
+        "path": "form.ds_itemGroup",
+        "rowCount": 0
+      },
+      {
+        "colCount": 0,
+        "columns": [],
+        "name": "ds_itemSearch",
+        "path": "form.ds_itemSearch",
+        "rowCount": 0
+      },
+      {
+        "colCount": 3,
+        "columns": [
+          "KEYWORD",
+          "SRCH_MD",
+          "DEL_YN"
+        ],
+        "name": "ds_lastSearch",
+        "path": "form.ds_lastSearch",
+        "rowCount": 0
+      },
+      {
+        "colCount": 1,
+        "columns": [
+          "BANNER_SPEED"
+        ],
+        "name": "dsBannerOption",
+        "path": "form.dsBannerOption",
+        "rowCount": 1,
+        "samples": [
+          {
+            "BANNER_SPEED": "5000"
+          }
+        ]
+      },
+      {
+        "colCount": 1,
+        "columns": [
+          "KEYWORD"
+        ],
+        "name": "ds_lastDelete",
+        "path": "form.ds_lastDelete",
+        "rowCount": 1,
+        "samples": [
+          {
+            "KEYWORD": null
+          }
+        ]
+      },
+      {
+        "colCount": 5,
+        "columns": [
+          "ENTRY_POINT_ID",
+          "STORE_CD",
+          "UPLOAD_DATE",
+          "DISP_DATE",
+          "UPLOAD_NEW"
+        ],
+        "name": "ds_commDate",
+        "path": "form.ds_commDate",
+        "rowCount": 4,
+        "samples": [
+          {
+            "DISP_DATE": "02.14",
+            "ENTRY_POINT_ID": "0212",
+            "STORE_CD": "46513",
+            "UPLOAD_DATE": "20260214",
+            "UPLOAD_NEW": "Y"
+          },
+          {
+            "DISP_DATE": "02.14",
+            "ENTRY_POINT_ID": "0210",
+            "STORE_CD": "46513",
+            "UPLOAD_DATE": "20260214",
+            "UPLOAD_NEW": "Y"
+          },
+          {
+            "DISP_DATE": "02.17",
+            "ENTRY_POINT_ID": "0404",
+            "STORE_CD": "46513",
+            "UPLOAD_DATE": "20260217",
+            "UPLOAD_NEW": "Y"
+          }
+        ]
+      },
+      {
+        "colCount": 3,
+        "columns": [
+          "STORE_CD",
+          "UPLOAD_YMD",
+          "UPLOAD_NEW"
+        ],
+        "name": "ds_RptWeek",
+        "path": "form.ds_RptWeek",
+        "rowCount": 0
+      },
+      {
+        "colCount": 3,
+        "columns": [
+          "STORE_CD",
+          "UPLOAD_YMD",
+          "UPLOAD_NEW"
+        ],
+        "name": "ds_RptMonth",
+        "path": "form.ds_RptMonth",
+        "rowCount": 0
+      },
+      {
+        "colCount": 3,
+        "columns": [
+          "STORE_CD",
+          "UPLOAD_YMD",
+          "UPLOAD_NEW"
+        ],
+        "name": "ds_RptEvent",
+        "path": "form.ds_RptEvent",
+        "rowCount": 0
+      },
+      {
+        "colCount": 3,
+        "columns": [
+          "STORE_CD",
+          "UPLOAD_YMD",
+          "UPLOAD_NEW"
+        ],
+        "name": "ds_RptProfitD25",
+        "path": "form.ds_RptProfitD25",
+        "rowCount": 0
+      },
+      {
+        "colCount": 3,
+        "columns": [
+          "STORE_CD",
+          "UPLOAD_YMD",
+          "UPLOAD_NEW"
+        ],
+        "name": "ds_RptProfitLoss",
+        "path": "form.ds_RptProfitLoss",
+        "rowCount": 0
+      },
+      {
+        "colCount": 3,
+        "columns": [
+          "STORE_CD",
+          "UPLOAD_YMD",
+          "UPLOAD_NEW"
+        ],
+        "name": "ds_RptProfitFf",
+        "path": "form.ds_RptProfitFf",
+        "rowCount": 0
+      },
+      {
+        "colCount": 11,
+        "columns": [
+          "MSG_CD",
+          "MSG_TITLE",
+          "ORG_MSG_TITLE",
+          "MSG_REGI_YMDHMS",
+          "SEND_ID",
+          "SEND_ID_NM",
+          "RCV_ID",
+          "URGENT_YN",
+          "BUSINESS_ID",
+          "ATTACH_FILE",
+          "SS_STORE_CD"
+        ],
+        "name": "dsMainNotice4",
+        "path": "form.dsMainNotice4",
+        "rowCount": 0
+      },
+      {
+        "colCount": 5,
+        "columns": [
+          "PGM_NM",
+          "PRG_NO",
+          "CNT",
+          "DIV_CD",
+          "TOT_CNT"
+        ],
+        "name": "dsTalkCnt",
+        "path": "form.dsTalkCnt",
+        "rowCount": 0
+      },
+      {
+        "colCount": 3,
+        "columns": [
+          "CURTIME",
+          "PYUNSU",
+          "CRT_MOVE"
+        ],
+        "name": "ds_tmpDate",
+        "path": "form.ds_tmpDate",
+        "rowCount": 0
+      },
+      {
+        "colCount": 2,
+        "columns": [
+          "CODE",
+          "NAME"
+        ],
+        "name": "ds_S225",
+        "path": "form.ds_S225",
+        "rowCount": 0
+      },
+      {
+        "colCount": 2,
+        "columns": [
+          "SUN_DAY",
+          "VALUE"
+        ],
+        "name": "ds_day",
+        "path": "form.ds_day",
+        "rowCount": 0
+      },
+      {
+        "colCount": 4,
+        "columns": [
+          "PGM_NM",
+          "PRG_NO",
+          "CNT",
+          "DIV_CD"
+        ],
+        "name": "ds_AlarmTalk",
+        "path": "form.ds_AlarmTalk",
+        "rowCount": 17,
+        "samples": [
+          {
+            "CNT": 1,
+            "DIV_CD": "Prd1",
+            "PGM_NM": "예약발주",
+            "PRG_NO": "STBJ040_M0"
+          },
+          {
+            "CNT": 0,
+            "DIV_CD": "Prd2",
+            "PGM_NM": "반품업무",
+            "PRG_NO": "STGJ100_M0"
+          },
+          {
+            "CNT": 0,
+            "DIV_CD": "Prd3",
+            "PGM_NM": "세트반품등록",
+            "PRG_NO": "STGJ150_M0"
+          }
+        ]
+      },
+      {
+        "colCount": 1,
+        "columns": [
+          "RATE"
+        ],
+        "name": "dsProfit",
+        "path": "form.dsProfit",
+        "rowCount": 1,
+        "samples": [
+          {
+            "RATE": ""
+          }
+        ]
+      },
+      {
+        "colCount": 0,
+        "columns": [],
+        "name": "dsAddRevenue",
+        "path": "form.dsAddRevenue",
+        "rowCount": 0
+      },
+      {
+        "colCount": 4,
+        "columns": [
+          "TOT_AMT",
+          "CURT_AMT",
+          "ADD_AMT",
+          "RATE"
+        ],
+        "name": "dsSubsidyList",
+        "path": "form.dsSubsidyList",
+        "rowCount": 0
+      },
+      {
+        "colCount": 2,
+        "columns": [
+          "SO_CNT",
+          "EXPT_SO_CNT"
+        ],
+        "name": "dsSoldOutItemList",
+        "path": "form.dsSoldOutItemList",
+        "rowCount": 0
+      },
+      {
+        "colCount": 2,
+        "columns": [
+          "DELI_CNT",
+          "RECT_AMT"
+        ],
+        "name": "dsDeliPickList",
+        "path": "form.dsDeliPickList",
+        "rowCount": 0
+      },
+      {
+        "colCount": 4,
+        "columns": [
+          "ORD_YMD",
+          "ROW_CNT",
+          "NEW_ITEM_CAT_TY",
+          "PLUS_ITEM_CAT_TY"
+        ],
+        "name": "dsCondRanking",
+        "path": "form.dsCondRanking",
+        "rowCount": 1,
+        "samples": [
+          {
+            "NEW_ITEM_CAT_TY": "0",
+            "ORD_YMD": "20260220",
+            "PLUS_ITEM_CAT_TY": "0",
+            "ROW_CNT": "9"
+          }
+        ]
+      },
+      {
+        "colCount": 6,
+        "columns": [
+          "ITEM_CD",
+          "ITEM_NM",
+          "RANK_GB",
+          "CHANGE_RANK",
+          "NOW_QTY",
+          "RESULT_YMD"
+        ],
+        "name": "dsNewItemList",
+        "path": "form.dsNewItemList",
+        "rowCount": 9,
+        "samples": [
+          {
+            "CHANGE_RANK": "▲1",
+            "ITEM_CD": "0000088024806",
+            "ITEM_NM": "테리아샤인펄",
+            "NOW_QTY": 7,
+            "RANK_GB": "up",
+            "RESULT_YMD": "20260219"
+          },
+          {
+            "CHANGE_RANK": "▼1",
+            "ITEM_CD": "8801753116640",
+            "ITEM_NM": "연세)명장메론크림빵",
+            "NOW_QTY": 1,
+            "RANK_GB": "down",
+            "RESULT_YMD": "20260219"
+          },
+          {
+            "CHANGE_RANK": "",
+            "ITEM_CD": "8801116046560",
+            "ITEM_NM": "레종이오니아썸머레드",
+            "NOW_QTY": 10,
+            "RANK_GB": "same",
+            "RESULT_YMD": "20260219"
+          }
+        ]
+      },
+      {
+        "colCount": 6,
+        "columns": [
+          "ITEM_CD",
+          "ITEM_NM",
+          "RANK_GB",
+          "CHANGE_RANK",
+          "NOW_QTY",
+          "RESULT_YMD"
+        ],
+        "name": "dsPlusItemList",
+        "path": "form.dsPlusItemList",
+        "rowCount": 9,
+        "samples": [
+          {
+            "CHANGE_RANK": "",
+            "ITEM_CD": "8801094082406",
+            "ITEM_NM": "코카)코카콜라제로P1.5L",
+            "NOW_QTY": 5,
+            "RANK_GB": "same",
+            "RESULT_YMD": "20260219"
+          },
+          {
+            "CHANGE_RANK": "",
+            "ITEM_CD": "8801056193010",
+            "ITEM_NM": "롯데)펩시콜라P600ml",
+            "NOW_QTY": 9,
+            "RANK_GB": "same",
+            "RESULT_YMD": "20260219"
+          },
+          {
+            "CHANGE_RANK": "",
+            "ITEM_CD": "8801056049881",
+            "ITEM_NM": "롯데)아이시스8.0P500ml",
+            "NOW_QTY": 16,
+            "RANK_GB": "same",
+            "RESULT_YMD": "20260219"
+          }
+        ]
+      },
+      {
+        "colCount": 11,
+        "columns": [
+          "SO_YMD",
+          "ORD_YMD",
+          "SORT_GUBN",
+          "SEARCH_G",
+          "DELI_FROM_DAY",
+          "DELI_TO_DAY",
+          "DELI_SERVICE_GUBUN",
+          "DELI_DEAL_GUBUN",
+          "DELI_CATCH_YN",
+          "DELI_COM_CD",
+          "SVC_ADD"
+        ],
+        "name": "dsCond",
+        "path": "form.div_pckAllCnt01.form.dsCond",
+        "rowCount": 1,
+        "samples": [
+          {
+            "DELI_CATCH_YN": "",
+            "DELI_COM_CD": "",
+            "DELI_DEAL_GUBUN": "3",
+            "DELI_FROM_DAY": "20260219",
+            "DELI_SERVICE_GUBUN": "",
+            "DELI_TO_DAY": "20260219",
+            "ORD_YMD": "20260220",
+            "SEARCH_G": "1",
+            "SORT_GUBN": "2",
+            "SO_YMD": "20260218",
+            "SVC_ADD": "0"
+          }
+        ]
+      },
+      {
+        "colCount": 1,
+        "columns": [
+          "RATE"
+        ],
+        "name": "dsProfit",
+        "path": "form.div_pckAllCnt01.form.dsProfit",
+        "rowCount": 1,
+        "samples": [
+          {
+            "RATE": "27"
+          }
+        ]
+      },
+      {
+        "colCount": 7,
+        "columns": [
+          "SET_GB",
+          "SET_SEQ",
+          "VAL1",
+          "VAL2",
+          "VAL3",
+          "VAL4",
+          "VAL5"
+        ],
+        "name": "dsOptionList",
+        "path": "form.div_pckAllCnt01.form.dsOptionList",
+        "rowCount": 0
+      },
+      {
+        "colCount": 3,
+        "columns": [
+          "BW_RATE",
+          "BD_RATE",
+          "REMARK"
+        ],
+        "name": "dsOrdRate",
+        "path": "form.div_pckAllCnt01.form.dsOrdRate",
+        "rowCount": 0
+      },
+      {
+        "colCount": 7,
+        "columns": [
+          "D_CODE",
+          "ORD_YMD",
+          "SANG",
+          "JUON",
+          "CIGA",
+          "ETC",
+          "ORD_AMT"
+        ],
+        "name": "dsOrdList",
+        "path": "form.div_pckAllCnt01.form.dsOrdList",
+        "rowCount": 0
+      },
+      {
+        "colCount": 10,
+        "columns": [
+          "JD_AMT",
+          "TO_AMT",
+          "JJ_AMT",
+          "JM_AMT",
+          "JY_AMT",
+          "JD_QTY",
+          "TO_QTY",
+          "JJ_QTY",
+          "JM_QTY",
+          "JY_QTY"
+        ],
+        "name": "dsSaleRate",
+        "path": "form.div_pckAllCnt01.form.dsSaleRate",
+        "rowCount": 0
+      },
+      {
+        "colCount": 9,
+        "columns": [
+          "TM_TXT",
+          "TM_GB",
+          "BD_AMT",
+          "BW_AMT",
+          "TD_AMT",
+          "REAL_BD_AMT",
+          "REAL_BW_AMT",
+          "REAL_TD_AMT",
+          "NOW_GB"
+        ],
+        "name": "dsSaleList",
+        "path": "form.div_pckAllCnt01.form.dsSaleList",
+        "rowCount": 0
+      },
+      {
+        "colCount": 3,
+        "columns": [
+          "NAME",
+          "CNT",
+          "No"
+        ],
+        "name": "dsUserRate",
+        "path": "form.div_pckAllCnt01.form.dsUserRate",
+        "rowCount": 3,
+        "samples": [
+          {
+            "CNT": "500",
+            "NAME": "누계",
+            "No": "1"
+          },
+          {
+            "CNT": "200",
+            "NAME": "전주",
+            "No": "2"
+          },
+          {
+            "CNT": "300",
+            "NAME": "금주",
+            "No": "3"
+          }
+        ]
+      },
+      {
+        "colCount": 3,
+        "columns": [
+          "TD_AMT",
+          "BD_AMT",
+          "TM_GB"
+        ],
+        "name": "dsUserList",
+        "path": "form.div_pckAllCnt01.form.dsUserList",
+        "rowCount": 0
+      },
+      {
+        "colCount": 3,
+        "columns": [
+          "RECT_AMT",
+          "RECT_CNT",
+          "YMD_GUBUN"
+        ],
+        "name": "dsDeliSaleList",
+        "path": "form.div_pckAllCnt01.form.dsDeliSaleList",
+        "rowCount": 0
+      },
+      {
+        "colCount": 3,
+        "columns": [
+          "RECT_AMT",
+          "RECT_CNT",
+          "YMD_GUBUN"
+        ],
+        "name": "dsDeliCancelList",
+        "path": "form.div_pckAllCnt01.form.dsDeliCancelList",
+        "rowCount": 0
+      },
+      {
+        "colCount": 0,
+        "columns": [],
+        "name": "dsAddRevenue",
+        "path": "form.div_pckAllCnt01.form.dsAddRevenue",
+        "rowCount": 0
+      },
+      {
+        "colCount": 5,
+        "columns": [
+          "TOT_AMT",
+          "CURT_AMT",
+          "ADD_AMT",
+          "RATE",
+          "UPD_YMDHMS"
+        ],
+        "name": "dsSubsidyList",
+        "path": "form.div_pckAllCnt01.form.dsSubsidyList",
+        "rowCount": 1,
+        "samples": [
+          {
+            "ADD_AMT": 706100,
+            "CURT_AMT": 262600,
+            "RATE": "27",
+            "TOT_AMT": 968700,
+            "UPD_YMDHMS": "20260219113008"
+          }
+        ]
+      },
+      {
+        "colCount": 1,
+        "columns": [
+          "SO_CNT"
+        ],
+        "name": "dsSoldOutItemList",
+        "path": "form.div_pckAllCnt01.form.dsSoldOutItemList",
+        "rowCount": 1,
+        "samples": [
+          {
+            "SO_CNT": 26
+          }
+        ]
+      },
+      {
+        "colCount": 2,
+        "columns": [
+          "DELI_CNT",
+          "RECT_AMT"
+        ],
+        "name": "dsDeliPickList",
+        "path": "form.div_pckAllCnt01.form.dsDeliPickList",
+        "rowCount": 1,
+        "samples": [
+          {
+            "DELI_CNT": 0,
+            "RECT_AMT": ""
+          }
+        ]
+      },
+      {
+        "colCount": 10,
+        "columns": [
+          "CODE",
+          "NAME",
+          "APPL_SYMD",
+          "APPL_EYMD",
+          "REMARKS1",
+          "REMARKS2",
+          "REMARKS3",
+          "REMARKS4",
+          "REMARKS5",
+          "REMARKS6"
+        ],
+        "name": "dsC105",
+        "path": "form.div_pckAllCnt01.form.dsC105",
+        "rowCount": 5,
+        "samples": [
+          {
+            "APPL_EYMD": "",
+            "APPL_SYMD": "",
+            "CODE": "01",
+            "NAME": "원가DC랭킹 사용여부",
+            "REMARKS1": "Y",
+            "REMARKS2": "25",
+            "REMARKS3": "",
+            "REMARKS4": "",
+            "REMARKS5": "",
+            "REMARKS6": ""
+          },
+          {
+            "APPL_EYMD": "",
+            "APPL_SYMD": "",
+            "CODE": "02",
+            "NAME": "행사 운영/미운영 적용여부",
+            "REMARKS1": "N",
+            "REMARKS2": "",
+            "REMARKS3": "",
+            "REMARKS4": "",
+            "REMARKS5": "",
+            "REMARKS6": ""
+          },
+          {
+            "APPL_EYMD": "",
+            "APPL_SYMD": "",
+            "CODE": "03",
+            "NAME": "장려금발주 배치여부",
+            "REMARKS1": "Y",
+            "REMARKS2": "",
+            "REMARKS3": "",
+            "REMARKS4": "",
+            "REMARKS5": "",
+            "REMARKS6": ""
+          }
+        ]
+      },
+      {
+        "colCount": 1,
+        "columns": [
+          "RATE"
+        ],
+        "name": "_ds_temp_chart",
+        "path": "form.div_pckAllCnt01.form._ds_temp_chart",
+        "rowCount": 1,
+        "samples": [
+          {
+            "RATE": "27"
+          }
+        ]
+      }
+    ],
+    "frame_id": "WorkFrame"
+  },
+  "frame_STGJ020_M0": {
+    "datasets": [
+      {
+        "colCount": 10,
+        "columns": [
+          "CODE",
+          "NAME",
+          "APPL_SYMD",
+          "APPL_EYMD",
+          "REMARKS1",
+          "REMARKS2",
+          "REMARKS3",
+          "REMARKS4",
+          "REMARKS5",
+          "REMARKS6"
+        ],
+        "name": "dsChitDiv",
+        "path": "form.div_workForm.form.dsChitDiv",
+        "rowCount": 31,
+        "samples": [
+          {
+            "APPL_EYMD": "",
+            "APPL_SYMD": "",
+            "CODE": "",
+            "NAME": "- 전체 -",
+            "REMARKS1": "",
+            "REMARKS2": "",
+            "REMARKS3": "",
+            "REMARKS4": "",
+            "REMARKS5": "",
+            "REMARKS6": ""
+          },
+          {
+            "APPL_EYMD": "",
+            "APPL_SYMD": "",
+            "CODE": "01",
+            "NAME": "일반매입",
+            "REMARKS1": "",
+            "REMARKS2": "",
+            "REMARKS3": "",
+            "REMARKS4": "",
+            "REMARKS5": "",
+            "REMARKS6": ""
+          },
+          {
+            "APPL_EYMD": "",
+            "APPL_SYMD": "",
+            "CODE": "02",
+            "NAME": "루트매입",
+            "REMARKS1": "",
+            "REMARKS2": "",
+            "REMARKS3": "",
+            "REMARKS4": "",
+            "REMARKS5": "",
+            "REMARKS6": ""
+          }
+        ]
+      },
+      {
+        "colCount": 7,
+        "columns": [
+          "strDate",
+          "strStoreCd",
+          "strChitDiv",
+          "strChitNo",
+          "strChitYmd",
+          "strToDt",
+          "strFromDt"
+        ],
+        "name": "dsSearch",
+        "path": "form.div_workForm.form.dsSearch",
+        "rowCount": 1,
+        "samples": [
+          {
+            "strChitDiv": "10",
+            "strChitNo": null,
+            "strChitYmd": null,
+            "strDate": null,
+            "strFromDt": "20260201",
+            "strStoreCd": "46513",
+            "strToDt": "20260219"
+          }
+        ]
+      },
+      {
+        "colCount": 21,
+        "columns": [
+          "CHK",
+          "CHIT_FLAG",
+          "CHIT_ID",
+          "CHIT_ID_VIEW",
+          "CHIT_ID_NM",
+          "NAP_PLAN_YMD",
+          "CHIT_YMD",
+          "CHIT_NO",
+          "CHIT_ID_NO",
+          "ITEM_CNT",
+          "LARGE_CD",
+          "CENTER_CD",
+          "CENTER_NM",
+          "MAEIP_CHIT_NO",
+          "RET_CHIT_NO",
+          "LSTORE_NM",
+          "RSTORE_NM",
+          "WONGA_AMT",
+          "MAEGA_AMT",
+          "CRE_YMDHMS",
+          "CONF_ID"
+        ],
+        "name": "dsList",
+        "path": "form.div_workForm.form.dsList",
+        "rowCount": 100,
+        "samples": [
+          {
+            "CENTER_CD": "9512204",
+            "CENTER_NM": "씨제이오산냉장1",
+            "CHIT_FLAG": "PC",
+            "CHIT_ID": "04",
+            "CHIT_ID_NM": "폐기",
+            "CHIT_ID_NO": "10044420011",
+            "CHIT_ID_VIEW": "04",
+            "CHIT_NO": "10044420011",
+            "CHIT_YMD": "20260219",
+            "CHK": "0",
+            "CONF_ID": "확정(점포)",
+            "CRE_YMDHMS": "20260219021002",
+            "ITEM_CNT": 1,
+            "LARGE_CD": "",
+            "LSTORE_NM": "",
+            "MAEGA_AMT": 5900,
+            "MAEIP_CHIT_NO": "",
+            "NAP_PLAN_YMD": "20260219",
+            "RET_CHIT_NO": "",
+            "RSTORE_NM": "",
+            "WONGA_AMT": 3835
+          },
+          {
+            "CENTER_CD": "9512204",
+            "CENTER_NM": "씨제이오산냉장1",
+            "CHIT_FLAG": "PC",
+            "CHIT_ID": "04",
+            "CHIT_ID_NM": "폐기",
+            "CHIT_ID_NO": "10044430011",
+            "CHIT_ID_VIEW": "04",
+            "CHIT_NO": "10044430011",
+            "CHIT_YMD": "20260219",
+            "CHK": "0",
+            "CONF_ID": "확정(점포)",
+            "CRE_YMDHMS": "20260219025328",
+            "ITEM_CNT": 1,
+            "LARGE_CD": "",
+            "LSTORE_NM": "",
+            "MAEGA_AMT": 3400,
+            "MAEIP_CHIT_NO": "",
+            "NAP_PLAN_YMD": "20260219",
+            "RET_CHIT_NO": "",
+            "RSTORE_NM": "",
+            "WONGA_AMT": 2100
+          },
+          {
+            "CENTER_CD": "9512204",
+            "CENTER_NM": "씨제이오산냉장1",
+            "CHIT_FLAG": "PC",
+            "CHIT_ID": "04",
+            "CHIT_ID_NM": "폐기",
+            "CHIT_ID_NO": "10044380011",
+            "CHIT_ID_VIEW": "04",
+            "CHIT_NO": "10044380011",
+            "CHIT_YMD": "20260218",
+            "CHK": "0",
+            "CONF_ID": "확정(점포)",
+            "CRE_YMDHMS": "20260218090442",
+            "ITEM_CNT": 1,
+            "LARGE_CD": "",
+            "LSTORE_NM": "",
+            "MAEGA_AMT": 1500,
+            "MAEIP_CHIT_NO": "",
+            "NAP_PLAN_YMD": "20260218",
+            "RET_CHIT_NO": "",
+            "RSTORE_NM": "",
+            "WONGA_AMT": 848
+          }
+        ]
+      },
+      {
+        "colCount": 20,
+        "columns": [
+          "gvVar01",
+          "gvVar02",
+          "gvVar03",
+          "gvVar04",
+          "gvVar05",
+          "gvVar06",
+          "gvVar07",
+          "gvVar08",
+          "gvVar09",
+          "gvVar10",
+          "gvVar11",
+          "gvVar12",
+          "gvVar13",
+          "gvVar14",
+          "gvVar15",
+          "gvVar16",
+          "gvVar17",
+          "gvVar18",
+          "gvVar19",
+          "gvVar20"
+        ],
+        "name": "dsGs",
+        "path": "form.div_workForm.form.dsGs",
+        "rowCount": 1,
+        "samples": [
+          {
+            "gvVar01": null,
+            "gvVar02": null,
+            "gvVar03": null,
+            "gvVar04": "04",
+            "gvVar05": "폐기",
+            "gvVar06": "20260219",
+            "gvVar07": "10044420011",
+            "gvVar08": "씨제이오산냉장1",
+            "gvVar09": "10044420011",
+            "gvVar10": "",
+            "gvVar11": "",
+            "gvVar12": "",
+            "gvVar13": "PC",
+            "gvVar14": "",
+            "gvVar15": "",
+            "gvVar16": null,
+            "gvVar17": null,
+            "gvVar18": "20260219",
+            "gvVar19": null,
+            "gvVar20": null
+          }
+        ]
+      },
+      {
+        "colCount": 4,
+        "columns": [
+          "STORE_CD",
+          "STORE_NM",
+          "PRE_STORE_CD",
+          "STORE_POS_QTY"
+        ],
+        "name": "dsScStoreList",
+        "path": "form.div_workForm.form.dsScStoreList",
+        "rowCount": 0
+      },
+      {
+        "colCount": 24,
+        "columns": [
+          "FUNC1",
+          "FUNC2",
+          "FUNC3",
+          "FUNC4",
+          "FUNC5",
+          "FUNC6",
+          "FUNC7",
+          "FUNC8",
+          "FUNC9",
+          "FUNC10",
+          "FUNC11",
+          "FUNC12",
+          "FUN1_TXT",
+          "FUN2_TXT",
+          "FUN3_TXT",
+          "FUN4_TXT",
+          "FUN5_TXT",
+          "FUN6_TXT",
+          "FUN7_TXT",
+          "FUN8_TXT",
+          "FUN9_TXT",
+          "FUN10_TXT",
+          "FUN11_TXT",
+          "FUN12_TXT"
+        ],
+        "name": "ds_btnList",
+        "path": "form.div_cmmbtn.form.ds_btnList",
+        "rowCount": 1,
+        "samples": [
+          {
+            "FUN10_TXT": "조 회",
+            "FUN11_TXT": "저 장",
+            "FUN12_TXT": "종 료",
+            "FUN1_TXT": "",
+            "FUN2_TXT": "",
+            "FUN3_TXT": "",
+            "FUN4_TXT": "",
+            "FUN5_TXT": "",
+            "FUN6_TXT": "",
+            "FUN7_TXT": "",
+            "FUN8_TXT": "",
+            "FUN9_TXT": "",
+            "FUNC1": "0",
+            "FUNC10": "1",
+            "FUNC11": "0",
+            "FUNC12": "1",
+            "FUNC2": "0",
+            "FUNC3": "0",
+            "FUNC4": "0",
+            "FUNC5": "0",
+            "FUNC6": "0",
+            "FUNC7": "0",
+            "FUNC8": "0",
+            "FUNC9": "0"
+          }
+        ]
+      },
+      {
+        "colCount": 2,
+        "columns": [
+          "USER_GRP_ID",
+          "MENU_ID"
+        ],
+        "name": "ds_menulog",
+        "path": "form.div_cmmbtn.form.ds_menulog",
+        "rowCount": 1,
+        "samples": [
+          {
+            "MENU_ID": "STGJ020_M0",
+            "USER_GRP_ID": "0001"
+          }
+        ]
+      }
+    ],
+    "frame_id": "STGJ020_M0"
+  },
+  "detail_frame_STGJ020_M0": {
+    "datasets": [
+      {
+        "columns": [
+          "CODE",
+          "NAME",
+          "APPL_SYMD",
+          "APPL_EYMD",
+          "REMARKS1",
+          "REMARKS2",
+          "REMARKS3",
+          "REMARKS4",
+          "REMARKS5",
+          "REMARKS6"
+        ],
+        "name": "dsChitDiv",
+        "path": "wf.dsChitDiv",
+        "rowCount": 31,
+        "samples": [
+          {
+            "APPL_EYMD": "",
+            "APPL_SYMD": "",
+            "CODE": "",
+            "NAME": "- 전체 -",
+            "REMARKS1": "",
+            "REMARKS2": "",
+            "REMARKS3": "",
+            "REMARKS4": "",
+            "REMARKS5": "",
+            "REMARKS6": ""
+          },
+          {
+            "APPL_EYMD": "",
+            "APPL_SYMD": "",
+            "CODE": "01",
+            "NAME": "일반매입",
+            "REMARKS1": "",
+            "REMARKS2": "",
+            "REMARKS3": "",
+            "REMARKS4": "",
+            "REMARKS5": "",
+            "REMARKS6": ""
+          },
+          {
+            "APPL_EYMD": "",
+            "APPL_SYMD": "",
+            "CODE": "02",
+            "NAME": "루트매입",
+            "REMARKS1": "",
+            "REMARKS2": "",
+            "REMARKS3": "",
+            "REMARKS4": "",
+            "REMARKS5": "",
+            "REMARKS6": ""
+          },
+          {
+            "APPL_EYMD": "",
+            "APPL_SYMD": "",
+            "CODE": "03",
+            "NAME": "점포직매입",
+            "REMARKS1": "",
+            "REMARKS2": "",
+            "REMARKS3": "",
+            "REMARKS4": "",
+            "REMARKS5": "",
+            "REMARKS6": ""
+          },
+          {
+            "APPL_EYMD": "",
+            "APPL_SYMD": "",
+            "CODE": "04",
+            "NAME": "무료택배",
+            "REMARKS1": "",
+            "REMARKS2": "",
+            "REMARKS3": "",
+            "REMARKS4": "",
+            "REMARKS5": "",
+            "REMARKS6": ""
+          }
+        ]
+      },
+      {
+        "columns": [
+          "strDate",
+          "strStoreCd",
+          "strChitDiv",
+          "strChitNo",
+          "strChitYmd",
+          "strToDt",
+          "strFromDt"
+        ],
+        "name": "dsSearch",
+        "path": "wf.dsSearch",
+        "rowCount": 1,
+        "samples": [
+          {
+            "strChitDiv": "10",
+            "strChitNo": null,
+            "strChitYmd": null,
+            "strDate": null,
+            "strFromDt": "20260201",
+            "strStoreCd": "46513",
+            "strToDt": "20260219"
+          }
+        ]
+      },
+      {
+        "columns": [
+          "CHK",
+          "CHIT_FLAG",
+          "CHIT_ID",
+          "CHIT_ID_VIEW",
+          "CHIT_ID_NM",
+          "NAP_PLAN_YMD",
+          "CHIT_YMD",
+          "CHIT_NO",
+          "CHIT_ID_NO",
+          "ITEM_CNT",
+          "LARGE_CD",
+          "CENTER_CD",
+          "CENTER_NM",
+          "MAEIP_CHIT_NO",
+          "RET_CHIT_NO",
+          "LSTORE_NM",
+          "RSTORE_NM",
+          "WONGA_AMT",
+          "MAEGA_AMT",
+          "CRE_YMDHMS",
+          "CONF_ID"
+        ],
+        "name": "dsList",
+        "path": "wf.dsList",
+        "rowCount": 100,
+        "samples": [
+          {
+            "CENTER_CD": "9512204",
+            "CENTER_NM": "씨제이오산냉장1",
+            "CHIT_FLAG": "PC",
+            "CHIT_ID": "04",
+            "CHIT_ID_NM": "폐기",
+            "CHIT_ID_NO": "10044420011",
+            "CHIT_ID_VIEW": "04",
+            "CHIT_NO": "10044420011",
+            "CHIT_YMD": "20260219",
+            "CHK": "0",
+            "CONF_ID": "확정(점포)",
+            "CRE_YMDHMS": "20260219021002",
+            "ITEM_CNT": 1,
+            "LARGE_CD": "",
+            "LSTORE_NM": "",
+            "MAEGA_AMT": 5900,
+            "MAEIP_CHIT_NO": "",
+            "NAP_PLAN_YMD": "20260219",
+            "RET_CHIT_NO": "",
+            "RSTORE_NM": "",
+            "WONGA_AMT": 3835
+          },
+          {
+            "CENTER_CD": "9512204",
+            "CENTER_NM": "씨제이오산냉장1",
+            "CHIT_FLAG": "PC",
+            "CHIT_ID": "04",
+            "CHIT_ID_NM": "폐기",
+            "CHIT_ID_NO": "10044430011",
+            "CHIT_ID_VIEW": "04",
+            "CHIT_NO": "10044430011",
+            "CHIT_YMD": "20260219",
+            "CHK": "0",
+            "CONF_ID": "확정(점포)",
+            "CRE_YMDHMS": "20260219025328",
+            "ITEM_CNT": 1,
+            "LARGE_CD": "",
+            "LSTORE_NM": "",
+            "MAEGA_AMT": 3400,
+            "MAEIP_CHIT_NO": "",
+            "NAP_PLAN_YMD": "20260219",
+            "RET_CHIT_NO": "",
+            "RSTORE_NM": "",
+            "WONGA_AMT": 2100
+          },
+          {
+            "CENTER_CD": "9512204",
+            "CENTER_NM": "씨제이오산냉장1",
+            "CHIT_FLAG": "PC",
+            "CHIT_ID": "04",
+            "CHIT_ID_NM": "폐기",
+            "CHIT_ID_NO": "10044380011",
+            "CHIT_ID_VIEW": "04",
+            "CHIT_NO": "10044380011",
+            "CHIT_YMD": "20260218",
+            "CHK": "0",
+            "CONF_ID": "확정(점포)",
+            "CRE_YMDHMS": "20260218090442",
+            "ITEM_CNT": 1,
+            "LARGE_CD": "",
+            "LSTORE_NM": "",
+            "MAEGA_AMT": 1500,
+            "MAEIP_CHIT_NO": "",
+            "NAP_PLAN_YMD": "20260218",
+            "RET_CHIT_NO": "",
+            "RSTORE_NM": "",
+            "WONGA_AMT": 848
+          },
+          {
+            "CENTER_CD": "9512204",
+            "CENTER_NM": "씨제이오산냉장1",
+            "CHIT_FLAG": "PC",
+            "CHIT_ID": "04",
+            "CHIT_ID_NM": "폐기",
+            "CHIT_ID_NO": "10044390011",
+            "CHIT_ID_VIEW": "04",
+            "CHIT_NO": "10044390011",
+            "CHIT_YMD": "20260218",
+            "CHK": "0",
+            "CONF_ID": "확정(점포)",
+            "CRE_YMDHMS": "20260218161155",
+            "ITEM_CNT": 1,
+            "LARGE_CD": "",
+            "LSTORE_NM": "",
+            "MAEGA_AMT": 2800,
+            "MAEIP_CHIT_NO": "",
+            "NAP_PLAN_YMD": "20260218",
+            "RET_CHIT_NO": "",
+            "RSTORE_NM": "",
+            "WONGA_AMT": 1694
+          },
+          {
+            "CENTER_CD": "9512204",
+            "CENTER_NM": "씨제이오산냉장1",
+            "CHIT_FLAG": "PC",
+            "CHIT_ID": "04",
+            "CHIT_ID_NM": "폐기",
+            "CHIT_ID_NO": "10044400011",
+            "CHIT_ID_VIEW": "04",
+            "CHIT_NO": "10044400011",
+            "CHIT_YMD": "20260218",
+            "CHK": "0",
+            "CONF_ID": "확정(점포)",
+            "CRE_YMDHMS": "20260218221835",
+            "ITEM_CNT": 3,
+            "LARGE_CD": "",
+            "LSTORE_NM": "",
+            "MAEGA_AMT": 8900,
+            "MAEIP_CHIT_NO": "",
+            "NAP_PLAN_YMD": "20260218",
+            "RET_CHIT_NO": "",
+            "RSTORE_NM": "",
+            "WONGA_AMT": 4112
+          }
+        ]
+      },
+      {
+        "columns": [
+          "gvVar01",
+          "gvVar02",
+          "gvVar03",
+          "gvVar04",
+          "gvVar05",
+          "gvVar06",
+          "gvVar07",
+          "gvVar08",
+          "gvVar09",
+          "gvVar10",
+          "gvVar11",
+          "gvVar12",
+          "gvVar13",
+          "gvVar14",
+          "gvVar15",
+          "gvVar16",
+          "gvVar17",
+          "gvVar18",
+          "gvVar19",
+          "gvVar20"
+        ],
+        "name": "dsGs",
+        "path": "wf.dsGs",
+        "rowCount": 1,
+        "samples": [
+          {
+            "gvVar01": null,
+            "gvVar02": null,
+            "gvVar03": null,
+            "gvVar04": "04",
+            "gvVar05": "폐기",
+            "gvVar06": "20260219",
+            "gvVar07": "10044420011",
+            "gvVar08": "씨제이오산냉장1",
+            "gvVar09": "10044420011",
+            "gvVar10": "",
+            "gvVar11": "",
+            "gvVar12": "",
+            "gvVar13": "PC",
+            "gvVar14": "",
+            "gvVar15": "",
+            "gvVar16": null,
+            "gvVar17": null,
+            "gvVar18": "20260219",
+            "gvVar19": null,
+            "gvVar20": null
+          }
+        ]
+      },
+      {
+        "columns": [
+          "CODE",
+          "NAME",
+          "APPL_SYMD",
+          "APPL_EYMD",
+          "REMARKS1",
+          "REMARKS2",
+          "REMARKS3",
+          "REMARKS4",
+          "REMARKS5",
+          "REMARKS6"
+        ],
+        "name": "dsChitDiv",
+        "path": "form.div_workForm.form.dsChitDiv",
+        "rowCount": 31,
+        "samples": [
+          {
+            "APPL_EYMD": "",
+            "APPL_SYMD": "",
+            "CODE": "",
+            "NAME": "- 전체 -",
+            "REMARKS1": "",
+            "REMARKS2": "",
+            "REMARKS3": "",
+            "REMARKS4": "",
+            "REMARKS5": "",
+            "REMARKS6": ""
+          },
+          {
+            "APPL_EYMD": "",
+            "APPL_SYMD": "",
+            "CODE": "01",
+            "NAME": "일반매입",
+            "REMARKS1": "",
+            "REMARKS2": "",
+            "REMARKS3": "",
+            "REMARKS4": "",
+            "REMARKS5": "",
+            "REMARKS6": ""
+          },
+          {
+            "APPL_EYMD": "",
+            "APPL_SYMD": "",
+            "CODE": "02",
+            "NAME": "루트매입",
+            "REMARKS1": "",
+            "REMARKS2": "",
+            "REMARKS3": "",
+            "REMARKS4": "",
+            "REMARKS5": "",
+            "REMARKS6": ""
+          },
+          {
+            "APPL_EYMD": "",
+            "APPL_SYMD": "",
+            "CODE": "03",
+            "NAME": "점포직매입",
+            "REMARKS1": "",
+            "REMARKS2": "",
+            "REMARKS3": "",
+            "REMARKS4": "",
+            "REMARKS5": "",
+            "REMARKS6": ""
+          },
+          {
+            "APPL_EYMD": "",
+            "APPL_SYMD": "",
+            "CODE": "04",
+            "NAME": "무료택배",
+            "REMARKS1": "",
+            "REMARKS2": "",
+            "REMARKS3": "",
+            "REMARKS4": "",
+            "REMARKS5": "",
+            "REMARKS6": ""
+          }
+        ]
+      },
+      {
+        "columns": [
+          "strDate",
+          "strStoreCd",
+          "strChitDiv",
+          "strChitNo",
+          "strChitYmd",
+          "strToDt",
+          "strFromDt"
+        ],
+        "name": "dsSearch",
+        "path": "form.div_workForm.form.dsSearch",
+        "rowCount": 1,
+        "samples": [
+          {
+            "strChitDiv": "10",
+            "strChitNo": null,
+            "strChitYmd": null,
+            "strDate": null,
+            "strFromDt": "20260201",
+            "strStoreCd": "46513",
+            "strToDt": "20260219"
+          }
+        ]
+      },
+      {
+        "columns": [
+          "CHK",
+          "CHIT_FLAG",
+          "CHIT_ID",
+          "CHIT_ID_VIEW",
+          "CHIT_ID_NM",
+          "NAP_PLAN_YMD",
+          "CHIT_YMD",
+          "CHIT_NO",
+          "CHIT_ID_NO",
+          "ITEM_CNT",
+          "LARGE_CD",
+          "CENTER_CD",
+          "CENTER_NM",
+          "MAEIP_CHIT_NO",
+          "RET_CHIT_NO",
+          "LSTORE_NM",
+          "RSTORE_NM",
+          "WONGA_AMT",
+          "MAEGA_AMT",
+          "CRE_YMDHMS",
+          "CONF_ID"
+        ],
+        "name": "dsList",
+        "path": "form.div_workForm.form.dsList",
+        "rowCount": 100,
+        "samples": [
+          {
+            "CENTER_CD": "9512204",
+            "CENTER_NM": "씨제이오산냉장1",
+            "CHIT_FLAG": "PC",
+            "CHIT_ID": "04",
+            "CHIT_ID_NM": "폐기",
+            "CHIT_ID_NO": "10044420011",
+            "CHIT_ID_VIEW": "04",
+            "CHIT_NO": "10044420011",
+            "CHIT_YMD": "20260219",
+            "CHK": "0",
+            "CONF_ID": "확정(점포)",
+            "CRE_YMDHMS": "20260219021002",
+            "ITEM_CNT": 1,
+            "LARGE_CD": "",
+            "LSTORE_NM": "",
+            "MAEGA_AMT": 5900,
+            "MAEIP_CHIT_NO": "",
+            "NAP_PLAN_YMD": "20260219",
+            "RET_CHIT_NO": "",
+            "RSTORE_NM": "",
+            "WONGA_AMT": 3835
+          },
+          {
+            "CENTER_CD": "9512204",
+            "CENTER_NM": "씨제이오산냉장1",
+            "CHIT_FLAG": "PC",
+            "CHIT_ID": "04",
+            "CHIT_ID_NM": "폐기",
+            "CHIT_ID_NO": "10044430011",
+            "CHIT_ID_VIEW": "04",
+            "CHIT_NO": "10044430011",
+            "CHIT_YMD": "20260219",
+            "CHK": "0",
+            "CONF_ID": "확정(점포)",
+            "CRE_YMDHMS": "20260219025328",
+            "ITEM_CNT": 1,
+            "LARGE_CD": "",
+            "LSTORE_NM": "",
+            "MAEGA_AMT": 3400,
+            "MAEIP_CHIT_NO": "",
+            "NAP_PLAN_YMD": "20260219",
+            "RET_CHIT_NO": "",
+            "RSTORE_NM": "",
+            "WONGA_AMT": 2100
+          },
+          {
+            "CENTER_CD": "9512204",
+            "CENTER_NM": "씨제이오산냉장1",
+            "CHIT_FLAG": "PC",
+            "CHIT_ID": "04",
+            "CHIT_ID_NM": "폐기",
+            "CHIT_ID_NO": "10044380011",
+            "CHIT_ID_VIEW": "04",
+            "CHIT_NO": "10044380011",
+            "CHIT_YMD": "20260218",
+            "CHK": "0",
+            "CONF_ID": "확정(점포)",
+            "CRE_YMDHMS": "20260218090442",
+            "ITEM_CNT": 1,
+            "LARGE_CD": "",
+            "LSTORE_NM": "",
+            "MAEGA_AMT": 1500,
+            "MAEIP_CHIT_NO": "",
+            "NAP_PLAN_YMD": "20260218",
+            "RET_CHIT_NO": "",
+            "RSTORE_NM": "",
+            "WONGA_AMT": 848
+          },
+          {
+            "CENTER_CD": "9512204",
+            "CENTER_NM": "씨제이오산냉장1",
+            "CHIT_FLAG": "PC",
+            "CHIT_ID": "04",
+            "CHIT_ID_NM": "폐기",
+            "CHIT_ID_NO": "10044390011",
+            "CHIT_ID_VIEW": "04",
+            "CHIT_NO": "10044390011",
+            "CHIT_YMD": "20260218",
+            "CHK": "0",
+            "CONF_ID": "확정(점포)",
+            "CRE_YMDHMS": "20260218161155",
+            "ITEM_CNT": 1,
+            "LARGE_CD": "",
+            "LSTORE_NM": "",
+            "MAEGA_AMT": 2800,
+            "MAEIP_CHIT_NO": "",
+            "NAP_PLAN_YMD": "20260218",
+            "RET_CHIT_NO": "",
+            "RSTORE_NM": "",
+            "WONGA_AMT": 1694
+          },
+          {
+            "CENTER_CD": "9512204",
+            "CENTER_NM": "씨제이오산냉장1",
+            "CHIT_FLAG": "PC",
+            "CHIT_ID": "04",
+            "CHIT_ID_NM": "폐기",
+            "CHIT_ID_NO": "10044400011",
+            "CHIT_ID_VIEW": "04",
+            "CHIT_NO": "10044400011",
+            "CHIT_YMD": "20260218",
+            "CHK": "0",
+            "CONF_ID": "확정(점포)",
+            "CRE_YMDHMS": "20260218221835",
+            "ITEM_CNT": 3,
+            "LARGE_CD": "",
+            "LSTORE_NM": "",
+            "MAEGA_AMT": 8900,
+            "MAEIP_CHIT_NO": "",
+            "NAP_PLAN_YMD": "20260218",
+            "RET_CHIT_NO": "",
+            "RSTORE_NM": "",
+            "WONGA_AMT": 4112
+          }
+        ]
+      },
+      {
+        "columns": [
+          "gvVar01",
+          "gvVar02",
+          "gvVar03",
+          "gvVar04",
+          "gvVar05",
+          "gvVar06",
+          "gvVar07",
+          "gvVar08",
+          "gvVar09",
+          "gvVar10",
+          "gvVar11",
+          "gvVar12",
+          "gvVar13",
+          "gvVar14",
+          "gvVar15",
+          "gvVar16",
+          "gvVar17",
+          "gvVar18",
+          "gvVar19",
+          "gvVar20"
+        ],
+        "name": "dsGs",
+        "path": "form.div_workForm.form.dsGs",
+        "rowCount": 1,
+        "samples": [
+          {
+            "gvVar01": null,
+            "gvVar02": null,
+            "gvVar03": null,
+            "gvVar04": "04",
+            "gvVar05": "폐기",
+            "gvVar06": "20260219",
+            "gvVar07": "10044420011",
+            "gvVar08": "씨제이오산냉장1",
+            "gvVar09": "10044420011",
+            "gvVar10": "",
+            "gvVar11": "",
+            "gvVar12": "",
+            "gvVar13": "PC",
+            "gvVar14": "",
+            "gvVar15": "",
+            "gvVar16": null,
+            "gvVar17": null,
+            "gvVar18": "20260219",
+            "gvVar19": null,
+            "gvVar20": null
+          }
+        ]
+      },
+      {
+        "columns": [
+          "FUNC1",
+          "FUNC2",
+          "FUNC3",
+          "FUNC4",
+          "FUNC5",
+          "FUNC6",
+          "FUNC7",
+          "FUNC8",
+          "FUNC9",
+          "FUNC10",
+          "FUNC11",
+          "FUNC12",
+          "FUN1_TXT",
+          "FUN2_TXT",
+          "FUN3_TXT",
+          "FUN4_TXT",
+          "FUN5_TXT",
+          "FUN6_TXT",
+          "FUN7_TXT",
+          "FUN8_TXT",
+          "FUN9_TXT",
+          "FUN10_TXT",
+          "FUN11_TXT",
+          "FUN12_TXT"
+        ],
+        "name": "ds_btnList",
+        "path": "form.div_cmmbtn.form.ds_btnList",
+        "rowCount": 1,
+        "samples": [
+          {
+            "FUN10_TXT": "조 회",
+            "FUN11_TXT": "저 장",
+            "FUN12_TXT": "종 료",
+            "FUN1_TXT": "",
+            "FUN2_TXT": "",
+            "FUN3_TXT": "",
+            "FUN4_TXT": "",
+            "FUN5_TXT": "",
+            "FUN6_TXT": "",
+            "FUN7_TXT": "",
+            "FUN8_TXT": "",
+            "FUN9_TXT": "",
+            "FUNC1": "0",
+            "FUNC10": "1",
+            "FUNC11": "0",
+            "FUNC12": "1",
+            "FUNC2": "0",
+            "FUNC3": "0",
+            "FUNC4": "0",
+            "FUNC5": "0",
+            "FUNC6": "0",
+            "FUNC7": "0",
+            "FUNC8": "0",
+            "FUNC9": "0"
+          }
+        ]
+      },
+      {
+        "columns": [
+          "USER_GRP_ID",
+          "MENU_ID"
+        ],
+        "name": "ds_menulog",
+        "path": "form.div_cmmbtn.form.ds_menulog",
+        "rowCount": 1,
+        "samples": [
+          {
+            "MENU_ID": "STGJ020_M0",
+            "USER_GRP_ID": "0001"
+          }
+        ]
+      }
+    ],
+    "frame_id": "STGJ020_M0"
+  }
+}
