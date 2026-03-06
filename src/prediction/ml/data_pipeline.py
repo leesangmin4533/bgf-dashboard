@@ -280,13 +280,13 @@ class MLDataPipeline:
 
     def get_items_meta(self, item_codes: List[str]) -> Dict[str, Dict[str, Any]]:
         """
-        상품별 메타정보 일괄 조회 (유통기한, 이익률, 폐기율)
+        상품별 메타정보 일괄 조회 (유통기한, 이익률, 폐기율, 대분류)
 
         Args:
             item_codes: 상품코드 리스트
 
         Returns:
-            {item_cd: {expiration_days, margin_rate, disuse_rate}, ...}
+            {item_cd: {expiration_days, margin_rate, disuse_rate, large_cd}, ...}
         """
         if not item_codes:
             return {}
@@ -294,12 +294,12 @@ class MLDataPipeline:
         result: Dict[str, Dict[str, Any]] = {}
         placeholders = ",".join("?" for _ in item_codes)
 
-        # 1. product_details → common.db에서 유통기한, 이익률
+        # 1. product_details → common.db에서 유통기한, 이익률, 대분류
         common_conn = self._get_common_conn()
         try:
             cursor = common_conn.cursor()
             cursor.execute(f"""
-                SELECT item_cd, expiration_days, margin_rate
+                SELECT item_cd, expiration_days, margin_rate, large_cd
                 FROM product_details
                 WHERE item_cd IN ({placeholders})
             """, item_codes)
@@ -309,6 +309,7 @@ class MLDataPipeline:
                     "expiration_days": row["expiration_days"] or 0,
                     "margin_rate": row["margin_rate"] or 0.0,
                     "disuse_rate": 0.0,
+                    "large_cd": row["large_cd"],
                 }
         except Exception as e:
             logger.warning(f"상품 메타정보(product_details) 조회 실패: {e}")
@@ -358,7 +359,7 @@ class MLDataPipeline:
                     ib_items.add(item_cd)
             except Exception:
                 # inventory_batches 테이블 미존재 시 전체 fallback
-                pass
+                logger.debug("inventory_batches 테이블 미존재, 전체 fallback", exc_info=True)
 
             # 2-2. fallback: inventory_batches 데이터 없는 상품은 daily_sales.disuse_qty 사용
             fallback_codes = [cd for cd in item_codes if cd not in ib_items]
@@ -458,6 +459,106 @@ class MLDataPipeline:
             return []
         finally:
             conn.close()
+
+    def get_smallcd_peer_avg_batch(self) -> Dict[str, float]:
+        """전체 small_cd별 최근 7일 평균 판매량 일괄 조회
+
+        Returns:
+            {small_cd: 7일 평균 판매량}
+        """
+        result: Dict[str, float] = {}
+        conn = self._get_conn()
+        try:
+            if self._use_split_db:
+                try:
+                    from src.infrastructure.database.connection import DBRouter
+                    common_path = str(DBRouter.get_common_db_path())
+                except ImportError:
+                    common_path = _COMMON_DB_PATH
+                conn.execute(f"ATTACH DATABASE '{common_path}' AS common")
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT pd.small_cd, AVG(ds.sale_qty) as avg_qty
+                    FROM daily_sales ds
+                    JOIN common.product_details pd ON ds.item_cd = pd.item_cd
+                    WHERE ds.sales_date >= date('now', '-7 days')
+                    AND pd.small_cd IS NOT NULL AND pd.small_cd != ''
+                    GROUP BY pd.small_cd
+                """)
+            else:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT pd.small_cd, AVG(ds.sale_qty) as avg_qty
+                    FROM daily_sales ds
+                    JOIN product_details pd ON ds.item_cd = pd.item_cd
+                    WHERE ds.sales_date >= date('now', '-7 days')
+                    AND pd.small_cd IS NOT NULL AND pd.small_cd != ''
+                    GROUP BY pd.small_cd
+                """)
+            for row in cursor.fetchall():
+                if row["small_cd"]:
+                    result[row["small_cd"]] = float(row["avg_qty"] or 0)
+        except Exception as e:
+            logger.debug(f"small_cd 피어 평균 조회 실패: {e}")
+        finally:
+            conn.close()
+        return result
+
+    def get_item_smallcd_map(self) -> Dict[str, str]:
+        """상품별 small_cd 매핑 일괄 조회
+
+        Returns:
+            {item_cd: small_cd}
+        """
+        result: Dict[str, str] = {}
+        conn = self._get_common_conn()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT item_cd, small_cd
+                FROM product_details
+                WHERE small_cd IS NOT NULL AND small_cd != ''
+            """)
+            for row in cursor.fetchall():
+                result[row["item_cd"]] = row["small_cd"]
+        except Exception as e:
+            logger.debug(f"item→small_cd 매핑 조회 실패: {e}")
+        finally:
+            conn.close()
+        return result
+
+    def get_lifecycle_stages_batch(self) -> Dict[str, float]:
+        """상품별 라이프사이클 단계 일괄 조회
+
+        Returns:
+            {item_cd: stage_value}
+            detected=0.0, monitoring=0.25, slow_start=0.5, stable=0.75, normal=1.0
+        """
+        _STAGE_MAP = {
+            "detected": 0.0,
+            "monitoring": 0.25,
+            "slow_start": 0.5,
+            "no_demand": 0.5,
+            "stable": 0.75,
+            "normal": 1.0,
+        }
+        result: Dict[str, float] = {}
+        conn = self._get_conn()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT item_cd, lifecycle_status
+                FROM detected_new_products
+                WHERE lifecycle_status IS NOT NULL
+            """)
+            for row in cursor.fetchall():
+                status = row["lifecycle_status"] or "normal"
+                result[row["item_cd"]] = _STAGE_MAP.get(status, 1.0)
+        except Exception as e:
+            logger.debug(f"라이프사이클 단계 조회 실패: {e}")
+        finally:
+            conn.close()
+        return result
 
     def _fill_missing_dates(self, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """

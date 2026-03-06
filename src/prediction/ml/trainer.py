@@ -23,15 +23,23 @@ logger = get_logger(__name__)
 # 학습 최소 데이터 수
 MIN_TRAINING_SAMPLES = 50
 
+# 그룹 모델 학습 설정 (food-ml-dual-model)
+GROUP_MIN_SAMPLES = 30  # 그룹 모델 최소 샘플 (개별보다 낮음)
+GROUP_TRAINING_DAYS = {
+    "food_group": 30,  # 푸드: 회전 빠름 → 짧은 윈도우
+    "default": 90,
+}
+
 # 카테고리 그룹별 비대칭 손실 계수 (quantile alpha)
 # alpha > 0.5: 과소예측 패널티 높음 (넉넉하게 발주)
 # alpha < 0.5: 과대예측 패널티 높음 (보수적 발주)
+# ml-improvement Phase D: 도메인 정합 반영
 GROUP_QUANTILE_ALPHA = {
-    "food_group": 0.6,        # 식품: 품절비용 > 폐기비용 → 넉넉히
-    "perishable_group": 0.55,  # 소멸성: 폐기 위험도 중간
-    "alcohol_group": 0.55,     # 주류: 품절 기회비용 높음
-    "tobacco_group": 0.5,      # 담배: 대칭 (재고 안정)
-    "general_group": 0.45,     # 일반: 장기유통 → 보수적
+    "food_group": 0.45,        # 보수적 (유통기한 짧음, 폐기비용 > 품절비용)
+    "perishable_group": 0.48,  # 약간 보수적 (유통기한 1~3일)
+    "alcohol_group": 0.55,     # 유지 (유통기한 길고 품절 기회비용 높음)
+    "tobacco_group": 0.55,     # 상향 (품절 시 고객 이탈 높음, 폐기 없음)
+    "general_group": 0.50,     # 중립 (장기 유통)
 }
 
 
@@ -95,6 +103,7 @@ class MLTrainer:
             finally:
                 _conn.close()
         except Exception:
+            logger.debug("DB 테이블 미존재, False 폴백", exc_info=True)
             pass  # 테이블 미존재 등 → 전부 False 폴백
 
         # 입고 패턴 통계 배치 캐시 (receiving-pattern)
@@ -227,6 +236,7 @@ class MLTrainer:
                     "is_pre_holiday": pre_holiday,
                     "is_post_holiday": post_holiday,
                     "receiving_stats": receiving_stats_cache.get(item_cd),
+                    "large_cd": meta.get("large_cd"),
                 }
 
                 group_data[group].append(sample)
@@ -238,12 +248,78 @@ class MLTrainer:
 
         return group_data
 
-    def train_all_groups(self, days: int = 90) -> Dict[str, Any]:
+    # 성능 보호 게이트 임계값 (MAE 악화 허용 비율)
+    PERFORMANCE_GATE_THRESHOLD = 0.2  # 20%
+
+    # Accuracy@1 하락 허용 임계값 (ml-improvement Phase E)
+    ACCURACY_GATE_THRESHOLD = 0.05  # 5%p
+
+    def _check_performance_gate(self, group_name: str, new_mae: float,
+                                accuracy_at_1: Optional[float] = None) -> bool:
+        """기존 모델 대비 성능 악화 여부 확인.
+
+        Returns:
+            True: 신규 모델 수용 (개선 또는 허용 범위 내)
+            False: 롤백 필요 (MAE 20% 이상 악화 OR Accuracy@1 5%p 하락)
+        """
+        meta = self.predictor._load_meta()
+        group_meta = meta.get("groups", {}).get(group_name, {}).get("metrics", {})
+        prev_mae = group_meta.get("mae")
+
+        if prev_mae is None or prev_mae <= 0:
+            return True  # 기존 기록 없음 → 수용
+
+        degradation = (new_mae - prev_mae) / prev_mae
+        if degradation > self.PERFORMANCE_GATE_THRESHOLD:
+            logger.warning(
+                f"[{group_name}] 성능 게이트 FAIL (MAE): "
+                f"기존 MAE={prev_mae:.2f} -> 신규 MAE={new_mae:.2f} "
+                f"(악화 {degradation:.1%}). 이전 모델 유지."
+            )
+            return False
+
+        # Accuracy@1 게이트 (ml-improvement Phase E)
+        if accuracy_at_1 is not None:
+            prev_acc = group_meta.get("accuracy_at_1")
+            if prev_acc is not None and prev_acc > 0:
+                acc_drop = prev_acc - accuracy_at_1
+                if acc_drop > self.ACCURACY_GATE_THRESHOLD:
+                    logger.warning(
+                        f"[{group_name}] 성능 게이트 FAIL (Acc@1): "
+                        f"기존 Acc@1={prev_acc:.1%} -> 신규 Acc@1={accuracy_at_1:.1%} "
+                        f"(하락 {acc_drop:.1%}p). 이전 모델 유지."
+                    )
+                    return False
+
+        improvement = "개선" if degradation < 0 else "허용"
+        logger.info(
+            f"[{group_name}] 성능 게이트 PASS: "
+            f"기존 MAE={prev_mae:.2f} -> 신규 MAE={new_mae:.2f} "
+            f"({improvement} {degradation:+.1%})"
+        )
+        return True
+
+    def _rollback_model(self, group_name: str) -> bool:
+        """_prev 모델로 롤백."""
+        import shutil as _shutil
+        prev_path = self.predictor.model_dir / f"model_{group_name}_prev.joblib"
+        model_path = self.predictor.model_dir / f"model_{group_name}.joblib"
+
+        if not prev_path.exists():
+            logger.warning(f"[{group_name}] 이전 모델 없음. 롤백 불가.")
+            return False
+
+        _shutil.copy2(prev_path, model_path)
+        logger.info(f"[{group_name}] 이전 모델로 롤백 완료")
+        return True
+
+    def train_all_groups(self, days: int = 90, incremental: bool = False) -> Dict[str, Any]:
         """
         전체 카테고리 그룹 모델 학습
 
         Args:
             days: 학습 데이터 기간
+            incremental: True면 증분학습 (성능 보호 게이트 적용)
 
         Returns:
             학습 결과 {group: {success, samples, metrics}}
@@ -257,8 +333,9 @@ class MLTrainer:
             return {"error": "scikit-learn not installed"}
 
         store_label = f" (store={self.store_id})" if self.store_id else " (글로벌)"
+        mode_label = f"증분({days}일)" if incremental else f"전체({days}일)"
         logger.info("=" * 60)
-        logger.info(f"ML 모델 학습 시작{store_label}: {datetime.now().isoformat()}")
+        logger.info(f"ML 모델 학습 시작 [{mode_label}]{store_label}: {datetime.now().isoformat()}")
         logger.info("=" * 60)
 
         # 학습 데이터 준비
@@ -300,6 +377,7 @@ class MLTrainer:
                     is_pre_holiday=s.get("is_pre_holiday", False),
                     is_post_holiday=s.get("is_post_holiday", False),
                     receiving_stats=s.get("receiving_stats"),
+                    large_cd=s.get("large_cd"),
                 )
                 if feat is not None:
                     X_list.append(feat)
@@ -373,9 +451,15 @@ class MLTrainer:
                 errors = y_test - y_pred
                 pinball = np.mean(np.where(errors >= 0, alpha * errors, (alpha - 1) * errors))
 
+                # Accuracy@N 메트릭 (ml-improvement Phase E)
+                # 편의점 저판매량에서 ±1/2개 이내 정확도가 실질적 지표
+                accuracy_at_1 = float(np.mean(np.abs(y_test - y_pred) <= 1.0))
+                accuracy_at_2 = float(np.mean(np.abs(y_test - y_pred) <= 2.0))
+
                 logger.info(
                     f"  MAE: {mae:.2f}, RMSE: {rmse:.2f}, "
                     f"MAPE: {mape:.1f}%, Pinball(α={alpha}): {pinball:.3f}, "
+                    f"Acc@1: {accuracy_at_1:.1%}, Acc@2: {accuracy_at_2:.1%}, "
                     f"Mean: {mean_y:.2f}"
                 )
 
@@ -389,7 +473,23 @@ class MLTrainer:
                     top5 = sorted(avg_imp.items(), key=lambda x: -x[1])[:5]
                     logger.info(f"  Feature Top5: {[(n, f'{v:.4f}') for n, v in top5]}")
                 except Exception:
-                    pass
+                    logger.debug("Feature Top5 로깅 실패, 학습 결과 영향 없음", exc_info=True)
+
+                # 성능 보호 게이트 (증분학습 시)
+                # ml-improvement Phase E: MAE 20% 악화 OR Accuracy@1 5%p 하락 시 롤백
+                if incremental and not self._check_performance_gate(
+                    group_name, mae, accuracy_at_1=accuracy_at_1
+                ):
+                    self._rollback_model(group_name)
+                    results[group_name] = {
+                        "success": False,
+                        "gated": True,
+                        "reason": "performance_gate_failed",
+                        "samples": len(X),
+                        "mae": round(float(mae), 2),
+                        "accuracy_at_1": round(float(accuracy_at_1), 3),
+                    }
+                    continue
 
                 # 모델 저장 (이전 모델 백업 + 메타데이터 기록)
                 save_metrics = {
@@ -397,6 +497,8 @@ class MLTrainer:
                     "rmse": round(float(rmse), 2),
                     "mape": round(float(mape), 1),
                     "pinball_loss": round(float(pinball), 3),
+                    "accuracy_at_1": round(float(accuracy_at_1), 3),
+                    "accuracy_at_2": round(float(accuracy_at_2), 3),
                     "samples": len(X),
                     "train_size": len(X_train),
                     "test_size": len(X_test),
@@ -408,10 +510,12 @@ class MLTrainer:
                     "samples": len(X),
                     "train_size": len(X_train),
                     "test_size": len(X_test),
-                    "mae": round(mae, 2),
-                    "rmse": round(rmse, 2),
-                    "mape": round(mape, 1),
-                    "pinball_loss": round(pinball, 3),
+                    "mae": round(float(mae), 2),
+                    "rmse": round(float(rmse), 2),
+                    "mape": round(float(mape), 1),
+                    "pinball_loss": round(float(pinball), 3),
+                    "accuracy_at_1": round(float(accuracy_at_1), 3),
+                    "accuracy_at_2": round(float(accuracy_at_2), 3),
                     "quantile_alpha": alpha,
                     "feature_importance": avg_imp,
                 }
@@ -429,9 +533,212 @@ class MLTrainer:
         logger.info(f"성공: {success_count}/{len(results)} 그룹")
         logger.info("=" * 60)
 
+        # 그룹 모델 학습 (food-ml-dual-model)
+        try:
+            group_days = GROUP_TRAINING_DAYS.get("food_group", days)
+            group_results = self.train_group_models(days=group_days)
+            results["_group_models"] = group_results
+        except Exception as e:
+            logger.warning(f"그룹 모델 학습 실패 (무시): {e}")
+            results["_group_models"] = {"error": str(e)}
+
         # 학습 지표 DB 저장
         self._save_training_metrics(results)
 
+        return results
+
+    def train_group_models(self, days: int = 30) -> Dict[str, Any]:
+        """small_cd 기반 그룹 모델 학습 (food_group 전용)
+
+        Args:
+            days: 학습 데이터 기간
+
+        Returns:
+            {key: {success, samples, mae, ...}}
+        """
+        try:
+            from sklearn.ensemble import GradientBoostingRegressor
+            from sklearn.metrics import mean_absolute_error
+        except ImportError:
+            return {"error": "scikit-learn not installed"}
+
+        logger.info(f"[그룹모델] 학습 시작 ({days}일 윈도우)")
+
+        # food 상품만 조회 (min_days=3으로 낮춤)
+        food_mids = CATEGORY_GROUPS.get("food_group", [])
+        if not food_mids:
+            return {}
+
+        active_items = self.pipeline.get_active_items(min_days=3)
+        food_items = [i for i in active_items if i["mid_cd"] in food_mids]
+
+        if not food_items:
+            logger.info("[그룹모델] 푸드 상품 없음")
+            return {}
+
+        # small_cd 매핑 조회
+        item_smallcd = self.pipeline.get_item_smallcd_map()
+        peer_avgs = self.pipeline.get_smallcd_peer_avg_batch()
+        lifecycle_stages = self.pipeline.get_lifecycle_stages_batch()
+        item_meta = self.pipeline.get_items_meta([i["item_cd"] for i in food_items])
+
+        # 기온/외부요인
+        end_date = datetime.now().strftime("%Y-%m-%d")
+        start_date = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+        weather_data = self.pipeline.get_external_factors(start_date, end_date)
+
+        # small_cd별로 학습 데이터 그룹화
+        smallcd_data: Dict[str, List[Dict]] = {}
+
+        for item_info in food_items:
+            item_cd = item_info["item_cd"]
+            mid_cd = item_info["mid_cd"]
+            small_cd = item_smallcd.get(item_cd, "")
+            if not small_cd:
+                small_cd = f"mid_{mid_cd}"  # small_cd 없으면 mid_cd 그룹
+
+            daily_sales = self.pipeline.get_item_daily_stats(item_cd, days)
+            if len(daily_sales) < 3:
+                continue
+
+            meta = item_meta.get(item_cd, {})
+            _peer_avg = peer_avgs.get(item_smallcd.get(item_cd, ""), 0.0)
+            _lifecycle = lifecycle_stages.get(item_cd, 1.0)
+            _data_days = item_info.get("data_days", len(daily_sales))
+
+            for i in range(min(7, len(daily_sales)), len(daily_sales)):
+                target_row = daily_sales[i]
+                history = daily_sales[:i]
+                target_date_str = target_row["sales_date"]
+
+                day_factors = weather_data.get(target_date_str, {})
+                temp_val = None
+                temp_str = day_factors.get("temperature")
+                if temp_str:
+                    try:
+                        temp_val = float(temp_str)
+                    except (ValueError, TypeError):
+                        pass
+
+                is_holiday = day_factors.get("is_holiday", "false").lower() in ("true", "1")
+
+                sample = {
+                    "item_cd": item_cd,
+                    "daily_sales": history,
+                    "target_date": target_date_str,
+                    "mid_cd": mid_cd,
+                    "actual_sale_qty": target_row.get("sale_qty", 0) or 0,
+                    "stock_qty": daily_sales[i - 1].get("stock_qty", 0) or 0,
+                    "pending_qty": 0,
+                    "promo_active": False,
+                    "expiration_days": meta.get("expiration_days", 0),
+                    "disuse_rate": meta.get("disuse_rate", 0.0),
+                    "margin_rate": meta.get("margin_rate", 0.0),
+                    "temperature": temp_val,
+                    "temperature_delta": None,
+                    "is_holiday": is_holiday,
+                    "large_cd": meta.get("large_cd"),
+                    "data_days": _data_days,
+                    "smallcd_peer_avg": _peer_avg,
+                    "lifecycle_stage": _lifecycle,
+                }
+                smallcd_data.setdefault(small_cd, []).append(sample)
+
+        # small_cd별 학습
+        results: Dict[str, Any] = {}
+        alpha = GROUP_QUANTILE_ALPHA.get("food_group", 0.45)
+
+        # 샘플 부족 small_cd → mid_cd로 합치기
+        mid_fallback: Dict[str, List[Dict]] = {}
+        trainable_keys: List[str] = []
+
+        for key, samples in smallcd_data.items():
+            if len(samples) >= GROUP_MIN_SAMPLES:
+                trainable_keys.append(key)
+            else:
+                # mid_cd 폴백으로 합침
+                mid_key = f"mid_{key[:3]}" if not key.startswith("mid_") else key
+                mid_fallback.setdefault(mid_key, []).extend(samples)
+
+        # mid_cd 폴백도 trainable에 추가
+        for mid_key, samples in mid_fallback.items():
+            if len(samples) >= GROUP_MIN_SAMPLES:
+                smallcd_data[mid_key] = samples
+                trainable_keys.append(mid_key)
+
+        for key in trainable_keys:
+            samples = smallcd_data[key]
+            # Feature 배열 생성
+            X_list, y_list = [], []
+            for s in samples:
+                feat = MLFeatureBuilder.build_features(
+                    daily_sales=s.get("daily_sales", []),
+                    target_date=s.get("target_date", ""),
+                    mid_cd=s.get("mid_cd", ""),
+                    stock_qty=s.get("stock_qty", 0),
+                    pending_qty=0,
+                    expiration_days=s.get("expiration_days", 0),
+                    disuse_rate=s.get("disuse_rate", 0.0),
+                    margin_rate=s.get("margin_rate", 0.0),
+                    temperature=s.get("temperature"),
+                    is_holiday=s.get("is_holiday", False),
+                    large_cd=s.get("large_cd"),
+                    data_days=s.get("data_days", 0),
+                    smallcd_peer_avg=s.get("smallcd_peer_avg", 0.0),
+                    lifecycle_stage=s.get("lifecycle_stage", 1.0),
+                )
+                if feat is not None:
+                    X_list.append(feat)
+                    y_list.append(float(s.get("actual_sale_qty", 0)))
+
+            if len(X_list) < GROUP_MIN_SAMPLES:
+                continue
+
+            X = np.vstack(X_list)
+            y = np.array(y_list, dtype=np.float32)
+
+            # 80/20 분할
+            split = max(1, int(len(X) * 0.8))
+            X_train, X_test = X[:split], X[split:]
+            y_train, y_test = y[:split], y[split:]
+
+            if len(X_test) < 3:
+                continue
+
+            try:
+                gb = GradientBoostingRegressor(
+                    n_estimators=80,
+                    max_depth=4,
+                    learning_rate=0.1,
+                    min_samples_leaf=3,
+                    random_state=42,
+                    loss="quantile",
+                    alpha=alpha,
+                )
+                gb.fit(X_train, y_train)
+
+                y_pred = gb.predict(X_test)
+                mae = mean_absolute_error(y_test, y_pred)
+
+                # 모델 키 정리 (small_cd or mid_cd)
+                model_key = f"small_{key}" if not key.startswith("mid_") else key
+
+                metrics = {
+                    "mae": round(float(mae), 2),
+                    "samples": len(X),
+                    "train_size": len(X_train),
+                    "test_size": len(X_test),
+                }
+                self.predictor.save_group_model(model_key, gb, metrics=metrics)
+
+                logger.info(f"  [그룹모델] {model_key}: MAE={mae:.2f}, 샘플={len(X)}")
+                results[model_key] = {"success": True, **metrics}
+
+            except Exception as e:
+                logger.warning(f"  [그룹모델] {key} 학습 실패: {e}")
+                results[key] = {"success": False, "reason": str(e)}
+
+        logger.info(f"[그룹모델] 학습 완료: {sum(1 for r in results.values() if r.get('success'))}개 성공")
         return results
 
     def _save_training_metrics(self, results: Dict[str, Any]) -> None:
@@ -454,6 +761,8 @@ class MLTrainer:
                     rmse REAL,
                     mape REAL,
                     pinball_loss REAL,
+                    accuracy_at_1 REAL,
+                    accuracy_at_2 REAL,
                     quantile_alpha REAL,
                     feature_importance TEXT,
                     created_at TEXT DEFAULT (datetime('now'))
@@ -469,14 +778,17 @@ class MLTrainer:
                     INSERT INTO ml_training_logs (
                         store_id, group_name, trained_at,
                         samples, train_size, test_size,
-                        mae, rmse, mape, pinball_loss, quantile_alpha,
-                        feature_importance
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        mae, rmse, mape, pinball_loss,
+                        accuracy_at_1, accuracy_at_2,
+                        quantile_alpha, feature_importance
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     self.store_id, group_name, trained_at,
                     r.get("samples"), r.get("train_size"), r.get("test_size"),
                     r.get("mae"), r.get("rmse"), r.get("mape"),
-                    r.get("pinball_loss"), r.get("quantile_alpha"),
+                    r.get("pinball_loss"),
+                    r.get("accuracy_at_1"), r.get("accuracy_at_2"),
+                    r.get("quantile_alpha"),
                     fi_json,
                 ))
 

@@ -31,6 +31,7 @@ from src.settings.constants import (
     DIFF_FEEDBACK_ADDITION_MIN_QTY,
     SNACK_DEFAULT_ORDERABLE_DAYS,
     RAMEN_DEFAULT_ORDERABLE_DAYS,
+    DEFAULT_ORDERABLE_DAYS,
 )
 
 logger = get_logger(__name__)
@@ -79,6 +80,7 @@ from .categories import (
     calculate_delivery_gap_consumption,
     get_food_weekday_coefficient,
     get_food_weather_cross_coefficient,
+    get_food_precipitation_cross_coefficient,
     FoodExpiryResult,
     FOOD_EXPIRY_SAFETY_CONFIG,
     FOOD_ANALYSIS_DAYS,
@@ -126,6 +128,9 @@ from .prediction_config import (
     ORDER_ADJUSTMENT_RULES,
     get_seasonal_coefficient,
 )
+
+# 비용 최적화
+from .cost_optimizer import CostOptimizer
 
 
 @dataclass
@@ -187,7 +192,7 @@ class PredictionResult:
     food_safety_days: float = 0.0         # 안전재고 일수
     food_data_source: str = ""            # 유통기한 소스 (db/fallback)
     food_disuse_coef: float = 1.0         # 폐기율 계수
-    food_gap_consumption: float = 0.0     # 배송 갭 소비량
+    food_gap_consumption: float = 0.0     # 배송 갭 소비량 (참조용, need_qty에 미가산)
 
     # 간헐적 수요 보정 정보
     sell_day_ratio: float = 1.0           # 판매일 비율 (데이터일수 / 달력범위, 1.0=매일 판매)
@@ -203,6 +208,9 @@ class PredictionResult:
     stock_source: str = ""                # "cache"|"ri"|"ri_stale_ds"|"ri_stale_ri"|"ds"
     pending_source: str = ""              # "cache"|"ri"|"ri_stale_zero"|"ri_fresh"|"none"
     is_stock_stale: bool = False          # realtime_inventory TTL 초과 여부
+
+    # 수요 패턴 (prediction-redesign)
+    demand_pattern: str = ""              # daily/frequent/intermittent/slow (비어있으면 미분류)
 
 
 class ImprovedPredictor:
@@ -238,8 +246,8 @@ class ImprovedPredictor:
         self._promo_adjuster = PromotionAdjuster(PromotionManager(str(self.db_path), store_id=self.store_id))
         self._use_promo_adjustment = True  # 행사 조정 활성화 여부
 
-        # 비용 최적화 모듈 (비활성화 - SQL 버그 및 레거시 DB 경로 이슈)
-        self._cost_optimizer = None
+        # 비용 최적화 모듈 (마진x회전율 2D 매트릭스)
+        self._cost_optimizer = CostOptimizer(store_id=self.store_id)
 
         # 연관 상품 조정기
         self._association_adjuster = None
@@ -266,6 +274,24 @@ class ImprovedPredictor:
         # 폐기 원인 피드백 조정기 (lazy-load)
         self._waste_feedback = None
 
+        # 잠식 감지 조정기 (lazy-load)
+        self._substitution_detector = None
+
+        # 추출 클래스 (god-class-decomposition)
+        from .base_predictor import BasePredictor
+        from .coefficient_adjuster import CoefficientAdjuster
+        from .inventory_resolver import InventoryResolver
+        from .prediction_cache import PredictionCacheManager
+        self._base = BasePredictor(
+            data_provider=self._data,
+            feature_calculator=self._feature_calculator,
+            store_id=self.store_id,
+            holiday_context_fn=self._get_holiday_context,
+        )
+        self._coef = CoefficientAdjuster(store_id=self.store_id)
+        self._inventory = InventoryResolver(self._data, self.store_id)
+        self._cache = PredictionCacheManager(self._data, self.store_id, self.db_path)
+
         # ML 예측기 (Phase 2) — 매장별 모델 분리
         self._ml_predictor = None
         try:
@@ -276,6 +302,55 @@ class ImprovedPredictor:
 
         # 입고 패턴 통계 배치 캐시 (receiving-pattern)
         self._receiving_stats_cache: Dict[str, Dict[str, float]] = {}
+
+        # 그룹 컨텍스트 캐시 (food-ml-dual-model)
+        self._smallcd_peer_cache: Dict[str, float] = {}
+        self._item_smallcd_map: Dict[str, str] = {}
+        self._lifecycle_cache: Dict[str, float] = {}
+
+        # 푸드 요일 계수 배치 캐시 (food-prediction-cache)
+        # disuse 캐시 제거 — 통합 폐기 계수로 대체 (food-waste-unify)
+        self._food_weekday_cache: Dict[str, float] = {}  # mid_cd → weekday_coef
+
+        # 수요 패턴 분류 캐시 (prediction-redesign)
+        self._demand_pattern_cache: Dict = {}
+
+        # order_tracking 미입고 교차검증 캐시 (None=미로드, {}=로드완료+비어있음)
+        self._ot_pending_cache: Optional[Dict[str, int]] = None
+
+        # 신제품 모니터링 캐시 (new-product-lifecycle)
+        self._new_product_cache: Dict[str, Dict] = {}
+
+    def __getattr__(self, name):
+        """Lazy 속성 생성 — __init__ 우회 테스트 호환 (god-class-decomposition)"""
+        if name == '_base':
+            from .base_predictor import BasePredictor
+            base = BasePredictor(
+                data_provider=self._data,
+                feature_calculator=getattr(self, '_feature_calculator', None),
+                store_id=self.store_id,
+                holiday_context_fn=self._get_holiday_context,
+            )
+            self._base = base
+            return base
+        if name == '_coef':
+            from .coefficient_adjuster import CoefficientAdjuster
+            coef = CoefficientAdjuster(store_id=self.__dict__.get('store_id'))
+            self._coef = coef
+            return coef
+        if name == '_inventory':
+            from .inventory_resolver import InventoryResolver
+            _data = self.__dict__.get('_data')
+            inv = InventoryResolver(_data, self.__dict__.get('store_id'))
+            self._inventory = inv
+            return inv
+        if name == '_cache':
+            from .prediction_cache import PredictionCacheManager
+            _data = self.__dict__.get('_data')
+            cm = PredictionCacheManager(_data, self.__dict__.get('store_id'), self.__dict__.get('db_path'))
+            self._cache = cm
+            return cm
+        raise AttributeError(f"'{type(self).__name__}' has no attribute '{name}'")
 
     # =========================================================================
     # Phase 6-2: 데이터 접근 위임 메서드 + 캐시 프로퍼티
@@ -320,43 +395,80 @@ class ImprovedPredictor:
                 self._waste_feedback = False  # sentinel: don't retry
         return self._waste_feedback if self._waste_feedback is not False else None
 
-    def _check_holiday(self, date_str: str) -> bool:
-        """external_factors 테이블에서 휴일 여부 확인
+    def _get_substitution_detector(self):
+        """SubstitutionDetector lazy 로드"""
+        if self._substitution_detector is None:
+            try:
+                from src.analysis.substitution_detector import SubstitutionDetector
+                self._substitution_detector = SubstitutionDetector(store_id=self.store_id)
+            except Exception as e:
+                logger.debug(f"SubstitutionDetector 초기화 실패: {e}")
+                self._substitution_detector = False  # sentinel: don't retry
+        return self._substitution_detector if self._substitution_detector is not False else None
 
-        DB 조회 → calendar_collector fallback 순서로 확인
+    def _load_new_product_cache(self) -> None:
+        """신제품 모니터링 캐시 로딩 → PredictionCacheManager에 위임"""
+        if not hasattr(self, "_new_product_cache"):
+            self._new_product_cache = {}
+        self._new_product_cache = self._cache.load_new_products(self._new_product_cache)
 
-        Args:
-            date_str: 날짜 문자열 (YYYY-MM-DD)
+    def _enrich_cache_with_small_cd(self) -> None:
+        """캐시에 small_cd 정보 추가 → PredictionCacheManager에 위임"""
+        self._cache._enrich_with_small_cd(self._new_product_cache)
 
-        Returns:
-            휴일이면 True, 아니면 False
+    def _apply_new_product_boost(
+        self, item_cd: str, mid_cd: str, order_qty: int,
+        prediction: float, current_stock: int, pending_qty: int,
+        safety_stock: float,
+    ) -> int:
+        """신제품 초기 발주량 보정 (small_cd 기반 유사상품 매칭)
+
+        조건:
+            1. detected_new_products에 존재
+            2. lifecycle_status == 'monitoring'
+            3. similar_item_avg가 유효
+        보정:
+            max(similar_avg * 0.7, prediction) → order_qty 재계산
         """
+        self._load_new_product_cache()
+
+        if not self._new_product_cache:
+            return order_qty
+
+        np_info = self._new_product_cache.get(item_cd)
+        if not np_info or np_info.get("lifecycle_status") != "monitoring":
+            return order_qty
+
+        similar_avg = np_info.get("similar_item_avg")
+        if similar_avg is None or similar_avg <= 0:
+            return order_qty
+
+        small_cd = np_info.get("small_cd")
+
+        boosted = max(similar_avg * 0.7, prediction)
+        if boosted > prediction:
+            new_order = max(1, round(boosted - current_stock - pending_qty + safety_stock))
+            if new_order > order_qty:
+                logger.info(
+                    f"[신제품보정] {item_cd}: {order_qty}->{new_order} "
+                    f"(유사avg={similar_avg:.1f}, small_cd={small_cd})"
+                )
+                return new_order
+        return order_qty
+
+    def _check_holiday(self, date_str: str) -> bool:
+        """external_factors 테이블에서 휴일 여부 확인"""
         ctx = self._get_holiday_context(date_str)
         return ctx.get("is_holiday", False)
 
     def _get_holiday_context(self, date_str: str) -> Dict:
-        """연휴 맥락 정보 조회 (DB 우선 → calendar_collector fallback)
-
-        Returns:
-            {
-                "is_holiday": bool,
-                "in_period": bool,
-                "period_days": int,
-                "position": int,
-                "is_pre_holiday": bool,
-                "is_post_holiday": bool,
-            }
-        """
+        """연휴 맥락 정보 조회 (DB 우선 → calendar_collector fallback)"""
         default = {
-            "is_holiday": False,
-            "in_period": False,
-            "period_days": 0,
-            "position": 0,
-            "is_pre_holiday": False,
-            "is_post_holiday": False,
+            "is_holiday": False, "in_period": False,
+            "period_days": 0, "position": 0,
+            "is_pre_holiday": False, "is_post_holiday": False,
         }
         try:
-            # DB에서 calendar factor 조회
             repo = ExternalFactorRepository()
             factors = repo.get_factors(date_str, factor_type='calendar')
             if factors:
@@ -371,7 +483,6 @@ class ImprovedPredictor:
                     "is_pre_holiday": factor_map.get('is_pre_holiday', 'false').lower() in ('true', '1'),
                     "is_post_holiday": factor_map.get('is_post_holiday', 'false').lower() in ('true', '1'),
                 }
-            # DB에 없으면 calendar_collector fallback
             from src.collectors.calendar_collector import get_holiday_context
             return get_holiday_context(date_str)
         except Exception as e:
@@ -383,29 +494,16 @@ class ImprovedPredictor:
                 return default
 
     def _get_holiday_coefficient(self, date_str: str, mid_cd: str) -> float:
-        """연휴 맥락 기반 차등 계수 계산
-
-        연휴 길이, 연휴 내 위치, 카테고리에 따라 차등화된 계수를 반환한다.
-        비연휴/비관련일이면 1.0을 반환.
-
-        Args:
-            date_str: 대상 날짜 (YYYY-MM-DD)
-            mid_cd: 중분류 코드
-
-        Returns:
-            계수 (1.0 = 조정 없음)
-        """
+        """연휴 맥락 기반 차등 계수 계산"""
         holiday_cfg = PREDICTION_PARAMS.get("holiday", {})
         if not holiday_cfg.get("enabled", False):
             return 1.0
 
         ctx = self._get_holiday_context(date_str)
 
-        # 연휴 기간 내도 아니고 전날/후일도 아니면 1.0
         if not ctx["in_period"] and not ctx["is_pre_holiday"] and not ctx["is_post_holiday"]:
             return 1.0
 
-        # 1. 연휴 길이별 기본 계수
         period_days = ctx["period_days"]
         thresholds = holiday_cfg.get("period_thresholds", {"short": 2, "long": 5})
         period_coefs = holiday_cfg.get("period_coefficients", {"single": 1.2, "short": 1.3, "long": 1.4})
@@ -417,7 +515,6 @@ class ImprovedPredictor:
         else:
             base_coef = period_coefs.get("single", 1.2)
 
-        # 2. 위치별 보정
         pos_mods = holiday_cfg.get("position_modifiers", {})
         if ctx["is_pre_holiday"]:
             position_mod = pos_mods.get("pre_holiday", 1.15)
@@ -435,65 +532,22 @@ class ImprovedPredictor:
         else:
             position_mod = 1.0
 
-        # 3. 카테고리 보정
         cat_mults = holiday_cfg.get("category_multipliers", {})
         from src.prediction.ml.feature_builder import get_category_group
         group = get_category_group(mid_cd)
-        # group은 "food_group", "alcohol_group" 등 → 키 매핑
         group_key = group.replace("_group", "")
         cat_mult = cat_mults.get(group_key, 1.0)
 
-        # 최종 계수 = 위치 보정 × 카테고리 보정
-        # (기본 계수는 위치 보정에 이미 반영된 형태)
-        # pre_holiday/post_holiday는 기본 계수 없이 위치 보정만 × 카테고리
         if ctx["is_pre_holiday"] or ctx["is_post_holiday"]:
             final = position_mod * cat_mult
         else:
             final = base_coef * position_mod * cat_mult
 
-        # 합리적 범위 제한 (0.7 ~ 2.5)
         final = max(0.7, min(final, 2.5))
-
         return round(final, 3)
 
-    # 기온 기반 카테고리별 수요 조정 계수
-    # 카테고리 그룹: {기온 조건: 계수}
-    WEATHER_COEFFICIENTS = {
-        # 음료/아이스크림: 고온에 수요 증가
-        "hot_boost": {
-            "categories": ["010", "034", "039", "043", "045", "048", "021", "100"],
-            "temp_threshold": 30,
-            "coefficient": 1.15,  # 30도 이상 시 15% 증가
-        },
-        # 도시락/김밥/샌드위치: 고온에 수요 감소 (뜨거운 음식 기피)
-        "hot_reduce": {
-            "categories": ["001", "002", "003", "004", "005"],
-            "temp_threshold": 30,
-            "coefficient": 0.90,  # 30도 이상 시 10% 감소
-        },
-        # 즉석식품/라면: 저온에 수요 증가
-        "cold_boost": {
-            "categories": ["006", "027", "028", "031", "032", "033", "035"],
-            "temp_threshold": 5,
-            "coefficient": 1.10,  # 5도 이하 시 10% 증가
-            "below": True,
-        },
-    }
-
     def _get_temperature_for_date(self, date_str: str) -> Optional[float]:
-        """날짜별 기온 조회 (예보 우선, 실측 폴백)
-
-        조회 우선순위:
-        1. temperature_forecast (예보) — 미래 날짜에 가장 정확
-        2. temperature (실측) — 오늘/과거 날짜에 정확
-        3. None → 호출자에서 1.0 폴백
-
-        Args:
-            date_str: 대상 날짜 (YYYY-MM-DD)
-
-        Returns:
-            기온(float) 또는 None
-        """
+        """날짜별 기온 조회 (예보 우선, 실측 폴백)"""
         try:
             repo = ExternalFactorRepository()
             factors = repo.get_factors(date_str, factor_type='weather')
@@ -507,103 +561,41 @@ class ImprovedPredictor:
                     val = float(factor.get('factor_value', ''))
                 except (ValueError, TypeError):
                     continue
-
                 if key == 'temperature_forecast':
                     forecast_temp = val
                 elif key == 'temperature':
                     actual_temp = val
 
-            # 예보 우선 (미래 날짜), 실측 폴백 (오늘/과거)
             return forecast_temp if forecast_temp is not None else actual_temp
         except Exception as e:
             logger.debug(f"기온 조회 실패 (날짜: {date_str}): {e}")
             return None
 
     def _get_temperature_delta(self, date_str: str) -> Optional[float]:
-        """전일 대비 기온 변화량 계산
-
-        target_date 기온 - (target_date - 1일) 기온.
-        양 날짜 모두 기온 데이터가 있어야 계산 가능.
-
-        Args:
-            date_str: 대상 날짜 (YYYY-MM-DD)
-
-        Returns:
-            기온 변화량(float) 또는 None (데이터 부족)
-        """
+        """전일 대비 기온 변화량 계산"""
         try:
             target_temp = self._get_temperature_for_date(date_str)
             if target_temp is None:
                 return None
-
             prev_date = (datetime.strptime(date_str, "%Y-%m-%d") - timedelta(days=1)).strftime("%Y-%m-%d")
             prev_temp = self._get_temperature_for_date(prev_date)
             if prev_temp is None:
                 return None
-
             return target_temp - prev_temp
         except Exception as e:
             logger.debug(f"기온 변화량 계산 실패 (날짜: {date_str}): {e}")
             return None
 
-    # 기온 급변 보정 계수 (전일 대비 변화량 기반)
-    # 양 날짜 모두 정확한 기온 데이터가 있을 때만 적용
-    WEATHER_DELTA_COEFFICIENTS = {
-        # 급격한 기온 하락 (10도 이상 하락) → 따뜻한 음식 수요 증가
-        "sudden_cold": {
-            "categories": ["006", "027", "028", "031", "032", "033", "035",
-                           "001", "002", "003", "004", "005"],
-            "delta_threshold": -10,
-            "below": True,
-            "coefficient": 1.10,  # 10% 증가
-        },
-        # 급격한 기온 하락 (10도 이상 하락) → 음료/아이스크림 수요 감소
-        "sudden_cold_reduce": {
-            "categories": ["010", "034", "039", "043", "045", "048", "021", "100"],
-            "delta_threshold": -10,
-            "below": True,
-            "coefficient": 0.90,  # 10% 감소
-        },
-        # 급격한 기온 상승 (10도 이상 상승) → 음료/아이스크림 수요 증가
-        "sudden_hot": {
-            "categories": ["010", "034", "039", "043", "045", "048", "021", "100"],
-            "delta_threshold": 10,
-            "below": False,
-            "coefficient": 1.10,  # 10% 증가
-        },
-        # 급격한 기온 상승 (10도 이상 상승) → 따뜻한 음식 수요 감소
-        "sudden_hot_reduce": {
-            "categories": ["001", "002", "003", "004", "005",
-                           "006", "027", "028", "031", "032", "033", "035"],
-            "delta_threshold": 10,
-            "below": False,
-            "coefficient": 0.90,  # 10% 감소
-        },
-    }
-
     def _get_weather_coefficient(self, date_str: str, mid_cd: str) -> float:
-        """기온 기반 수요 조정 계수 반환
-
-        1. 절대 기온 임계값 (30도↑, 5도↓) 체크
-        2. 전일 대비 기온 급변 (10도↑↓) 체크 (양 날짜 데이터 필요)
-        3. 두 계수를 곱하여 반환
-
-        Args:
-            date_str: 대상 날짜 (YYYY-MM-DD)
-            mid_cd: 중분류 코드
-
-        Returns:
-            기온 계수 (1.0=조정 없음)
-        """
+        """기온 기반 수요 조정 계수 반환"""
+        from .coefficient_adjuster import CoefficientAdjuster
         try:
             coef = 1.0
-
             temp = self._get_temperature_for_date(date_str)
             if temp is None:
                 return 1.0
 
-            # 1. 절대 기온 임계값 계수
-            for rule_name, rule in self.WEATHER_COEFFICIENTS.items():
+            for rule_name, rule in CoefficientAdjuster.WEATHER_COEFFICIENTS.items():
                 if mid_cd in rule["categories"]:
                     if rule.get("below", False):
                         if temp <= rule["temp_threshold"]:
@@ -614,26 +606,20 @@ class ImprovedPredictor:
                             coef = rule["coefficient"]
                             break
 
-            # 2. 기온 급변 계수 (전일 대비 변화량)
             delta = self._get_temperature_delta(date_str)
             if delta is not None:
-                for rule_name, rule in self.WEATHER_DELTA_COEFFICIENTS.items():
+                for rule_name, rule in CoefficientAdjuster.WEATHER_DELTA_COEFFICIENTS.items():
                     if mid_cd in rule["categories"]:
                         if rule.get("below", False):
                             if delta <= rule["delta_threshold"]:
                                 coef *= rule["coefficient"]
-                                logger.debug(
-                                    f"[기온급변] {rule_name}: delta={delta:+.1f}도 → {rule['coefficient']}x"
-                                )
+                                logger.debug(f"[기온급변] {rule_name}: delta={delta:+.1f}도 → {rule['coefficient']}x")
                                 break
                         else:
                             if delta >= rule["delta_threshold"]:
                                 coef *= rule["coefficient"]
-                                logger.debug(
-                                    f"[기온급변] {rule_name}: delta={delta:+.1f}도 → {rule['coefficient']}x"
-                                )
+                                logger.debug(f"[기온급변] {rule_name}: delta={delta:+.1f}도 → {rule['coefficient']}x")
                                 break
-
             return coef
         except Exception as e:
             logger.debug(f"기온 계수 조회 실패 (날짜: {date_str}): {e}")
@@ -716,95 +702,12 @@ class ImprovedPredictor:
         return 2
 
     def _calculate_sell_day_ratio(self, item_cd: str, data_days: int) -> float:
-        """
-        판매일 비율 계산 (달력일수 대비 판매일 비율)
-
-        가중이동평균은 판매 기록이 있는 날만 대상으로 계산하므로,
-        간헐적 수요 상품의 일평균을 과대 추정할 수 있음.
-        이 메서드는 실제 달력 범위 대비 판매일 비율을 반환.
-
-        예: 18일 달력 범위 중 3일 판매 → 3/18 = 0.17
-
-        Args:
-            item_cd: 상품코드
-            data_days: 판매 기록이 있는 일수
-
-        Returns:
-            판매일 비율 (0.0 ~ 1.0). 데이터 부족 시 1.0 반환
-        """
-        if data_days <= 0:
-            return 1.0
-
-        conn = self._get_connection()
-        cursor = conn.cursor()
-        try:
-            # 최신 날짜와 최고(가장 오래된) 날짜의 달력 범위 계산
-            cursor.execute("""
-                SELECT MIN(sales_date), MAX(sales_date)
-                FROM daily_sales
-                WHERE item_cd = ? AND store_id = ?
-                AND sales_date >= date('now', '-' || ? || ' days')
-                AND sale_qty > 0
-            """, (item_cd, self.store_id, PREDICTION_PARAMS["moving_avg_days"]))
-
-            row = cursor.fetchone()
-            if not row or not row[0] or not row[1]:
-                return 1.0
-
-            min_date = datetime.strptime(row[0], "%Y-%m-%d")
-            max_date = datetime.strptime(row[1], "%Y-%m-%d")
-            calendar_span = (max_date - min_date).days + 1  # 양 끝 포함
-
-            if calendar_span <= 0:
-                return 1.0
-
-            return min(data_days / calendar_span, 1.0)
-        finally:
-            conn.close()
+        """판매일 비율 계산 — BasePredictor에 위임"""
+        return self._base._calculate_sell_day_ratio(item_cd, data_days)
 
     def _calculate_available_sell_ratio(self, item_cd: str) -> float:
-        """
-        가용일 중 판매일 비율 계산 (품절일 제외)
-
-        품절일(stock_qty=0)을 제외하고, 재고가 있었던 날 중
-        실제 판매가 발생한 날의 비율을 반환한다.
-        기존 _calculate_sell_day_ratio()와 달리 품절과 비판매를 구분한다.
-
-        예: 7일 중 4일 품절, 3일 재고 보유, 3일 모두 판매 → 3/3 = 1.0
-        예: 7일 중 0일 품절, 3일 판매, 4일 미판매 → 3/7 = 0.43
-
-        Args:
-            item_cd: 상품코드
-
-        Returns:
-            가용일 중 판매일 비율 (0.0 ~ 1.0). 가용일=0이면 1.0 반환
-        """
-        conn = self._get_connection()
-        cursor = conn.cursor()
-        try:
-            days = PREDICTION_PARAMS["moving_avg_days"]
-            cursor.execute("""
-                SELECT
-                    SUM(CASE WHEN stock_qty > 0 AND sale_qty > 0 THEN 1 ELSE 0 END) as sell_days,
-                    SUM(CASE WHEN stock_qty > 0 THEN 1 ELSE 0 END) as available_days
-                FROM daily_sales
-                WHERE item_cd = ? AND store_id = ?
-                AND sales_date >= date('now', '-' || ? || ' days')
-            """, (item_cd, self.store_id, days))
-
-            row = cursor.fetchone()
-            if not row:
-                return 1.0
-
-            sell_days = row[0] or 0
-            available_days = row[1] or 0
-
-            if available_days == 0:
-                return 1.0
-
-            return min(sell_days / available_days, 1.0)
-        finally:
-            conn.close()
+        """가용일 중 판매일 비율 계산 — BasePredictor에 위임"""
+        return self._base._calculate_available_sell_ratio(item_cd)
 
     def calculate_weighted_average(
         self,
@@ -813,122 +716,11 @@ class ImprovedPredictor:
         mid_cd: Optional[str] = None,
         item_cd: Optional[str] = None
     ) -> Tuple[float, int]:
-        """
-        가중 이동평균 계산 (이상치 처리 + 품절일 imputation + 행사일 감쇄)
-
-        품절일(stock_qty=0)은 수요 부재가 아니라 공급 부재이므로
-        품절일의 판매량을 비품절일 평균으로 대체(imputation)한다.
-        기존 "품절일 제외" 방식은 간헐적 판매 상품을 과대추정하는 문제가 있어
-        전체 달력일 기준 WMA + 품절일 imputation 방식으로 개선.
-
-        행사 기간 데이터는 연휴 보정과 동일하게 가중치를 감소시켜
-        행사 종료 직후 예측 뻥튀기를 방지한다.
-
-        Args:
-            sales_history: [(날짜, 판매량, 재고량), ...] 리스트
-                           (2-tuple도 하위 호환으로 허용)
-            clean_outliers: 이상치 처리 여부 (기본 True)
-            mid_cd: 중분류 코드 (카테고리별 이상치 설정용)
-            item_cd: 상품코드 (행사 기간 필터링용, None이면 행사 보정 생략)
-
-        Returns: (평균값, 사용된 데이터 일수)
-        """
-        if not sales_history:
-            return 0.0, 0
-
-        original_count = len(sales_history)
-
-        # 품절일 imputation (3-tuple이고 설정 활성화 시)
-        # - stock_qty > 0  : 정상 판매일 (원본 유지)
-        # - stock_qty == 0 : 확인된 품절일 → 비품절일 평균으로 대체 (공급 부재)
-        # - stock_qty is None : 레코드 없는 날 → sale_qty=0 유지 (수요 없음/미수집)
-        stockout_cfg = PREDICTION_PARAMS.get("stockout_filter", {})
-        has_stock_info = len(sales_history[0]) >= 3
-        if stockout_cfg.get("enabled", False) and has_stock_info:
-            available = [(d, qty, stk) for d, qty, stk in sales_history
-                         if stk is not None and stk > 0]
-            stockout = [(d, qty, stk) for d, qty, stk in sales_history
-                        if stk is not None and stk == 0]
-            # stk is None인 날(레코드 없음)은 imputation 대상에서 제외
-
-            if available and stockout:
-                # 비품절일의 평균 판매량 계산
-                avg_available_sales = sum(row[1] for row in available) / len(available)
-
-                # 확인된 품절일(stock_qty==0)만 비품절일 평균으로 대체
-                imputed_history = []
-                for row in sales_history:
-                    if row[2] is not None and row[2] == 0:  # 확인된 품절일
-                        imputed_history.append((row[0], avg_available_sales, row[2]))
-                    else:
-                        imputed_history.append(row)
-                sales_history = imputed_history
-
-        # 판매량 + 날짜 추출 (2-tuple, 3-tuple 모두 호환)
-        sales = [row[1] for row in sales_history]
-        dates = [row[0] for row in sales_history]
-
-        # 이상치 처리 (최소 5일 이상일 때만)
-        if clean_outliers and len(sales) >= 5:
-            try:
-                from .utils.outlier_handler import clean_sales_data
-                result = clean_sales_data(sales, mid_cd=mid_cd, handle_zeros=True)
-                sales = result.cleaned_data
-            except ImportError:
-                pass  # 모듈 없으면 원본 사용
-
-        # 연휴일 WMA 가중치 감소 (연휴 매출 데이터의 예측 왜곡 방지)
-        holiday_wma_cfg = PREDICTION_PARAMS.get("holiday_wma_correction", {})
-        holiday_weight_factor = 1.0
-        holiday_dates_set = set()
-        if holiday_wma_cfg.get("enabled", False):
-            holiday_weight_factor = holiday_wma_cfg.get("holiday_weight_factor", 0.3)
-            for d in dates:
-                try:
-                    ctx = self._get_holiday_context(d)
-                    if ctx.get("in_period", False):
-                        holiday_dates_set.add(d)
-                except Exception:
-                    pass
-
-        # 행사일 WMA 가중치 감소 (행사 매출 데이터의 예측 왜곡 방지)
-        promo_wma_cfg = PREDICTION_PARAMS.get("promo_wma_correction", {})
-        promo_weight_factor = promo_wma_cfg.get("promo_weight_factor", 0.25)
-        promo_dates_set = set()
-        if promo_wma_cfg.get("enabled", True) and item_cd:
-            try:
-                promo_dates_set = self._get_promo_dates(item_cd, dates)
-            except Exception:
-                pass  # promotions 테이블 미존재 등
-
-        weights = PREDICTION_PARAMS["weights"]
-        total_weight = 0.0
-        weighted_sum = 0.0
-
-        for i, qty in enumerate(sales):
-            if i == 0:
-                w = weights["day_1"]
-            elif i == 1:
-                w = weights["day_2"]
-            elif i == 2:
-                w = weights["day_3"]
-            else:
-                w = weights["day_4_7"] / max(len(sales) - 3, 1)
-
-            # 연휴일이면 가중치 감소
-            if i < len(dates) and dates[i] in holiday_dates_set:
-                w *= holiday_weight_factor
-
-            # 행사일이면 가중치 감소 (행사 종료 후 예측 뻥튀기 방지)
-            if i < len(dates) and dates[i] in promo_dates_set:
-                w *= promo_weight_factor
-
-            weighted_sum += qty * w
-            total_weight += w
-
-        if total_weight > 0:
-            return weighted_sum / total_weight, original_count  # 원본 데이터 일수 반환
-        return 0.0, 0
+        """가중 이동평균 계산 — BasePredictor에 위임"""
+        return self._base.calculate_weighted_average(
+            sales_history, clean_outliers=clean_outliers,
+            mid_cd=mid_cd, item_cd=item_cd
+        )
 
     def predict(
         self,
@@ -1055,6 +847,8 @@ class ImprovedPredictor:
             stock_source=_stock_src,
             pending_source=_pending_src,
             is_stock_stale=_is_stale,
+            # 수요 패턴 (prediction-redesign)
+            demand_pattern=self._demand_pattern_cache[item_cd].pattern.value if item_cd in self._demand_pattern_cache else "",
         )
 
     # =========================================================================
@@ -1062,279 +856,177 @@ class ImprovedPredictor:
     # =========================================================================
 
     def _compute_base_prediction(self, item_cd, product, target_date):
-        """기본 예측 계산: WMA + Feature 블렌딩 + 간헐적 수요 보정
+        """기본 예측 계산 — 수요 패턴 분기 (Facade: self. 메서드 호출 유지)
 
-        Returns:
-            (base_prediction, data_days, _wma_days, feat_result,
-             sell_day_ratio, intermittent_adjusted)
+        라우팅 로직은 Facade에 유지하여 기존 테스트의 patch.object 호환성 보장.
+        실제 계산은 BasePredictor에 위임.
         """
-        # 판매 이력 조회 + WMA (행사 기간 가중치 감쇄 포함)
-        history = self.get_sales_history(item_cd, PREDICTION_PARAMS["moving_avg_days"])
-        wma_prediction, _wma_days = self.calculate_weighted_average(
-            history, clean_outliers=True, mid_cd=product["mid_cd"],
-            item_cd=item_cd
-        )
+        from src.prediction.demand_classifier import DEMAND_PATTERN_EXEMPT_MIDS
+
+        mid_cd = product.get("mid_cd", "")
+        pattern_result = self._demand_pattern_cache.get(item_cd)
+        pattern = pattern_result.pattern if pattern_result else "frequent"
+
+        # 푸드/디저트: 기존 파이프라인 유지
+        if mid_cd in DEMAND_PATTERN_EXEMPT_MIDS or not self._demand_pattern_cache:
+            return self._compute_base_prediction_wma(item_cd, product, target_date)
+
+        # slow: 예측 불필요 (ROP에서 처리)
+        if pattern == "slow":
+            sell_day_ratio = pattern_result.sell_day_ratio if pattern_result else 0.0
+            logger.info(
+                f"[PRED][slow] {product.get('item_nm', item_cd)}: "
+                f"pattern=slow, ratio={sell_day_ratio:.2%} -> 예측 스킵 (ROP)"
+            )
+            data_days = self._get_data_span_days(item_cd)
+            return 0.0, data_days, 0, None, sell_day_ratio, False
+
+        # intermittent: Croston/TSB 예측
+        if pattern == "intermittent":
+            return self._compute_croston_prediction(item_cd, product, target_date, pattern_result)
+
+        # daily / frequent: 기존 WMA (간헐보정은 DemandClassifier가 대체)
+        return self._compute_base_prediction_wma(item_cd, product, target_date)
+
+    def _compute_croston_prediction(self, item_cd, product, target_date, pattern_result):
+        """Croston/TSB 기반 간헐수요 예측 (Facade: self. 메서드 호출 유지)"""
+        from src.prediction.croston_predictor import CrostonPredictor
+
+        history = self._get_daily_sales_history(item_cd, days=60)
+        predictor = CrostonPredictor()
+        result = predictor.predict(history)
+
         data_days = self._get_data_span_days(item_cd)
+        sell_day_ratio = pattern_result.sell_day_ratio if pattern_result else 0.25
+
         logger.info(
-            f"[PRED][1-WMA] {product['item_nm']}({item_cd}): "
-            f"WMA={wma_prediction:.2f} (days={_wma_days})"
+            f"[PRED][Croston] {product.get('item_nm', item_cd)}({item_cd}): "
+            f"forecast={result.forecast:.3f}, "
+            f"size={result.demand_size:.2f}, prob={result.demand_probability:.3f}, "
+            f"interval={result.intervals_estimate:.1f}d, method={result.method}"
         )
 
-        # Feature 기반 예측 블렌딩 (EWM + 동요일 평균 + 트렌드)
-        base_prediction = wma_prediction
-        feat_result = None
-        try:
-            feat_result = self._feature_calculator.calculate(item_cd, target_date)
-            if feat_result.rolling_features and feat_result.rolling_features.data_days >= 7:
-                wp = feat_result.weighted_prediction
-                if wp > 0 and wma_prediction > 0:
-                    if feat_result.data_quality == "high":
-                        feat_weight = 0.40
-                    elif feat_result.data_quality == "medium":
-                        feat_weight = 0.25
-                    else:
-                        feat_weight = 0.10
-                    wma_weight = 1.0 - feat_weight
-                    base_prediction = round(
-                        wma_prediction * wma_weight + wp * feat_weight, 2
-                    )
-                    if abs(base_prediction - wma_prediction) > 0.1:
-                        logger.info(
-                            f"[PRED][1-Feat] {product.get('item_nm', item_cd)}: "
-                            f"WMA={wma_prediction:.2f} + Feat={wp:.2f} "
-                            f"(w={feat_weight:.0%}) -> {base_prediction:.2f}"
-                        )
-        except Exception as e:
-            logger.debug(f"[기간대비] Feature 계산 실패 ({item_cd}): {e}")
+        return result.forecast, data_days, 0, None, sell_day_ratio, True
 
-        # 간헐적 수요 보정 (가용일 기준)
-        intermittent_config = PREDICTION_PARAMS.get("intermittent_demand", {})
-        sell_day_ratio = 1.0
-        intermittent_adjusted = False
+    def _get_daily_sales_history(self, item_cd: str, days: int = 60) -> list:
+        """일별 판매량 리스트 — BasePredictor에 위임"""
+        return self._base._get_daily_sales_history(item_cd, days)
 
-        if intermittent_config.get("enabled", False) and data_days > 0:
-            sell_day_ratio = self._calculate_available_sell_ratio(item_cd)
-            intermittent_threshold = intermittent_config.get("threshold", 0.6)
-            very_intermittent_threshold = intermittent_config.get("very_intermittent_threshold", 0.3)
-            min_prediction_floor = intermittent_config.get("min_prediction_floor", 0.2)
-
-            if sell_day_ratio < very_intermittent_threshold:
-                original_pred = base_prediction
-                base_prediction = max(base_prediction * 0.5, min_prediction_floor)
-                intermittent_adjusted = True
-                logger.info(
-                    f"[간헐적v2-매우] {product['item_nm']}: "
-                    f"ratio={sell_day_ratio:.2%}, "
-                    f"{original_pred:.2f}→{base_prediction:.2f} "
-                    f"(min_floor={min_prediction_floor})"
-                )
-            elif sell_day_ratio < intermittent_threshold:
-                base_prediction *= sell_day_ratio
-                intermittent_adjusted = True
-                logger.info(
-                    f"[간헐적v2-일반] {product['item_nm']}: "
-                    f"ratio={sell_day_ratio:.2%}, pred={base_prediction:.2f}"
-                )
-
-        return base_prediction, data_days, _wma_days, feat_result, sell_day_ratio, intermittent_adjusted
+    def _compute_base_prediction_wma(self, item_cd, product, target_date):
+        """기존 WMA 기반 예측 — BasePredictor에 위임"""
+        return self._base._compute_wma(item_cd, product, target_date)
 
     def _apply_all_coefficients(self, base_prediction, item_cd, product, target_date,
                                 sqlite_weekday, feat_result):
         """연휴/기온/요일/계절/연관/트렌드 계수 일괄 적용
 
+        prediction-redesign: 비면제 카테고리는 덧셈(additive) 방식,
+        면제 카테고리(food/dessert)와 캐시 미로드 시 기존 곱셈(multiplicative) 방식 유지.
+
         Returns:
             (base_prediction, adjusted_prediction, weekday_coef, assoc_boost)
         """
+        from src.prediction.demand_classifier import DEMAND_PATTERN_EXEMPT_MIDS
+
+        mid_cd = product["mid_cd"]
         target_date_str = target_date.strftime("%Y-%m-%d")
         _temp = self._get_temperature_for_date(target_date_str)
 
-        # 연휴 차등 계수
-        holiday_coef = self._get_holiday_coefficient(target_date_str, product["mid_cd"])
-        if holiday_coef != 1.0:
-            base_prediction *= holiday_coef
-            logger.info(f"[PRED][2-Holiday] {product.get('item_nm', item_cd)}: {holiday_coef}x (date={target_date_str})")
+        # -- 공통: 계수값 계산 --
+        holiday_coef = self._get_holiday_coefficient(target_date_str, mid_cd)
+        weather_coef = self._get_weather_coefficient(target_date_str, mid_cd)
 
-        # 기온 계수
-        weather_coef = self._get_weather_coefficient(target_date_str, product["mid_cd"])
-        if weather_coef != 1.0:
-            base_prediction *= weather_coef
-            logger.info(
-                f"[PRED][2-Weather] {product.get('item_nm', item_cd)}: "
-                f"{weather_coef:.2f}x (temp={_temp})"
+        # 강수 계수 (기온 계수에 곱하기 병합)
+        precip_coef = self._coef.get_precipitation_coefficient(target_date_str, mid_cd)
+        weather_coef *= precip_coef
+
+        food_wx_coef = 1.0
+        food_precip_coef = 1.0
+        if is_food_category(mid_cd):
+            food_wx_coef = get_food_weather_cross_coefficient(mid_cd, _temp)
+            food_precip_coef = get_food_precipitation_cross_coefficient(
+                mid_cd, self._coef.get_precipitation_for_date(target_date_str).get("rain_rate")
             )
 
-        # 기온×푸드 교차 효과 (카테고리별 기온 민감도)
-        if is_food_category(product["mid_cd"]):
-            food_wx_coef = get_food_weather_cross_coefficient(product["mid_cd"], _temp)
-            if food_wx_coef != 1.0:
-                base_prediction *= food_wx_coef
-                logger.info(
-                    f"[PRED][2-FoodWx] {product.get('item_nm', item_cd)}: "
-                    f"temp={_temp}, {food_wx_coef:.2f}x"
-                )
-
-        # 요일 계수 (푸드: DB 기반 동적 계수 우선)
-        weekday_coef = get_weekday_coefficient(product["mid_cd"], sqlite_weekday)
+        weekday_coef = get_weekday_coefficient(mid_cd, sqlite_weekday)
         weekday_source = "static"
-        if is_food_category(product["mid_cd"]):
-            food_wd_coef = get_food_weekday_coefficient(
-                product["mid_cd"], sqlite_weekday,
-                store_id=self.store_id, db_path=self.db_path,
-            )
+        if is_food_category(mid_cd):
+            # 배치 캐시 우선, 없으면 개별 DB 쿼리 폴백
+            if getattr(self, '_food_weekday_cache', {}).get(mid_cd) is not None:
+                food_wd_coef = self._food_weekday_cache[mid_cd]
+            else:
+                food_wd_coef = get_food_weekday_coefficient(
+                    mid_cd, sqlite_weekday,
+                    store_id=self.store_id, db_path=self.db_path,
+                )
             if food_wd_coef != 1.0:
                 weekday_coef = food_wd_coef
-                weekday_source = "food-DB"
-        adjusted_prediction = base_prediction * weekday_coef
-        if weekday_coef != 1.0:
-            logger.info(
-                f"[PRED][2-Weekday] {product.get('item_nm', item_cd)}: "
-                f"{weekday_coef:.2f}x (day={sqlite_weekday}, src={weekday_source})"
-            )
+                weekday_source = "food-cache" if getattr(self, '_food_weekday_cache', {}).get(mid_cd) is not None else "food-DB"
 
-        # 계절 계수
-        seasonal_coef = get_seasonal_coefficient(product["mid_cd"], target_date.month)
-        if seasonal_coef != 1.0:
-            before_seasonal = adjusted_prediction
-            adjusted_prediction *= seasonal_coef
-            logger.info(
-                f"[PRED][2-Season] {product.get('item_nm', item_cd)}: "
-                f"{before_seasonal:.2f} x {seasonal_coef} "
-                f"(month={target_date.month}) -> {adjusted_prediction:.2f}"
-            )
+        seasonal_coef = get_seasonal_coefficient(mid_cd, target_date.month)
 
-        # 연관 상품 부스트
         assoc_boost = 1.0
         if self._association_adjuster:
             try:
-                assoc_boost = self._association_adjuster.get_association_boost(
-                    item_cd, product["mid_cd"]
-                )
-                if assoc_boost > 1.0:
-                    before_assoc = adjusted_prediction
-                    adjusted_prediction *= assoc_boost
-                    logger.info(
-                        f"[연관분석] {product.get('item_nm', item_cd)}: "
-                        f"{before_assoc:.2f} × {assoc_boost:.3f} → {adjusted_prediction:.2f}"
-                    )
+                assoc_boost = self._association_adjuster.get_association_boost(item_cd, mid_cd)
             except Exception as e:
                 logger.debug(f"[연관분석] 부스트 실패 ({item_cd}): {e}")
 
-        # 트렌드 조정
         _trend_adjustment = 1.0
-        _trend_direction = "stable"
         if feat_result:
             try:
                 _trend_adjustment = feat_result.trend_adjustment
-                _trend_direction = feat_result.trend_direction
-            except Exception:
-                pass
-        if _trend_adjustment != 1.0:
-            before_trend = adjusted_prediction
-            adjusted_prediction *= _trend_adjustment
-            logger.info(
-                f"[PRED][2-Trend] {product.get('item_nm', item_cd)}: "
-                f"{before_trend:.2f} x {_trend_adjustment} "
-                f"({_trend_direction}) -> {adjusted_prediction:.2f}"
+            except Exception as e:
+                logger.warning(f"[WMA] 추세 조정값 조회 실패 ({item_cd}): {e}", exc_info=True)
+
+        # -- 분기: 덧셈 vs 곱셈 --
+        pattern_result = self._demand_pattern_cache.get(item_cd)
+        use_additive = (
+            self._demand_pattern_cache
+            and mid_cd not in DEMAND_PATTERN_EXEMPT_MIDS
+            and pattern_result is not None
+        )
+
+        if use_additive:
+            return self._apply_coefficients_additive(
+                base_prediction, item_cd, product, target_date_str,
+                pattern_result, _temp,
+                holiday_coef, weather_coef, food_wx_coef, food_precip_coef,
+                weekday_coef, weekday_source, seasonal_coef,
+                assoc_boost, _trend_adjustment, feat_result,
             )
 
-        # 복합 계수 바닥값: 7개 계수 곱이 극단적으로 낮아지는 것 방지
-        compound_floor = base_prediction * 0.15
-        if adjusted_prediction < compound_floor:
-            logger.warning(
-                f"[PRED][2-Floor] {product.get('item_nm', item_cd)}: "
-                f"{adjusted_prediction:.2f} < floor {compound_floor:.2f}, "
-                f"clamped to {compound_floor:.2f}"
-            )
-            adjusted_prediction = compound_floor
+        # -- 기존 곱셈 파이프라인 (food/dessert/미분류) → CoefficientAdjuster 위임 --
+        return self._coef._apply_multiplicative(
+            base_prediction, item_cd, product, target_date, target_date_str,
+            _temp, holiday_coef, weather_coef, food_wx_coef, food_precip_coef,
+            weekday_coef, weekday_source, seasonal_coef,
+            assoc_boost, _trend_adjustment, feat_result, sqlite_weekday,
+        )
 
-        return base_prediction, adjusted_prediction, weekday_coef, assoc_boost
+    def _apply_coefficients_additive(
+        self, base_prediction, item_cd, product, target_date_str,
+        pattern_result, temp,
+        holiday_coef, weather_coef, food_wx_coef, food_precip_coef,
+        weekday_coef, weekday_source, seasonal_coef,
+        assoc_boost, trend_adjustment, feat_result,
+    ):
+        """덧셈 기반 계수 통합 → CoefficientAdjuster 위임"""
+        return self._coef._apply_additive(
+            base_prediction, item_cd, product, target_date_str,
+            pattern_result, temp,
+            holiday_coef, weather_coef, food_wx_coef, food_precip_coef,
+            weekday_coef, weekday_source, seasonal_coef,
+            assoc_boost, trend_adjustment, feat_result,
+        )
 
     def _resolve_stock_and_pending(self, item_cd, pending_qty):
-        """현재 재고 및 미입고 수량 조회 (캐시/DB 우선순위)
-
-        재고 조회 우선순위:
-        1. _stock_cache (외부에서 직접 설정한 캐시)
-        2. realtime_inventory (BGF 사이트 실시간 조회) — 유통기한 기반 TTL 이내만
-        3. daily_sales 최근 stock_qty (폴백)
-
-        ※ realtime_inventory의 queried_at이 유통기한 기반 TTL 초과 시
-           오래된 '유령 재고'로 판단하여 daily_sales 폴백 사용
-           (1일 유통기한: 18h, 2일: 36h, 3일+: 54h/36h)
-
-        Returns:
-            (current_stock, pending_qty, stock_source, pending_source, is_stale)
-        """
-        inv_data = None
-        stock_source = ""
-        pending_source = ""
-        is_stale = False
-
-        if self._use_db_inventory and self._inventory_repo:
-            if item_cd not in self._stock_cache or (pending_qty is None and item_cd not in self._pending_cache):
-                inv_data = self._inventory_repo.get(item_cd)
-
-        if item_cd in self._stock_cache:
-            current_stock = self._stock_cache[item_cd]
-            stock_source = "cache"
-        elif inv_data and inv_data.get('stock_qty') is not None:
-            # 유효기간 검증: 오래된 데이터면 daily_sales 폴백
-            if inv_data.get('_stale', False):
-                is_stale = True
-                ds_stock = self.get_current_stock(item_cd)
-                ri_stock = inv_data['stock_qty']
-                # 오래된 ri 값보다 daily_sales가 더 작으면(=더 현실적) ds 채택
-                if ds_stock < ri_stock:
-                    logger.debug(
-                        f"[{item_cd}] 오래된 재고 데이터 감지 "
-                        f"(ri={ri_stock}, ds={ds_stock}, queried={inv_data.get('queried_at', '?')}) "
-                        f"-> daily_sales 값 사용"
-                    )
-                    current_stock = ds_stock
-                    stock_source = "ri_stale_ds"
-                else:
-                    current_stock = ri_stock
-                    stock_source = "ri_stale_ri"
-            else:
-                current_stock = inv_data['stock_qty']
-                stock_source = "ri"
-        else:
-            current_stock = self.get_current_stock(item_cd)
-            stock_source = "ds"
-
-        # 음수 재고 방어
-        if current_stock < 0:
-            logger.warning(f"[{item_cd}] 음수 재고 감지: {current_stock}개 -> 0으로 초기화")
-            current_stock = 0
-
-        if pending_qty is None:
-            if item_cd in self._pending_cache:
-                pending_qty = self._pending_cache[item_cd]
-                pending_source = "cache"
-            elif inv_data:
-                if inv_data.get('_stale', False):
-                    ri_pending = inv_data.get('pending_qty', 0)
-                    if ri_pending > 0:
-                        logger.debug(
-                            f"[{item_cd}] 오래된 미입고 데이터 무시 "
-                            f"(pending={ri_pending}, queried={inv_data.get('queried_at', '?')})"
-                        )
-                    pending_qty = 0
-                    pending_source = "ri_stale_zero"
-                else:
-                    pending_qty = inv_data.get('pending_qty', 0)
-                    pending_source = "ri_fresh"
-            else:
-                pending_qty = 0
-                pending_source = "none"
-        else:
-            pending_source = "cache" if item_cd in self._pending_cache else "param"
-
-        # 음수 미입고 방어
-        if pending_qty < 0:
-            logger.warning(f"[{item_cd}] 음수 미입고 감지: {pending_qty}개 -> 0으로 초기화")
-            pending_qty = 0
-
-        return current_stock, pending_qty, stock_source, pending_source, is_stale
+        """재고/미입고 조회 → InventoryResolver에 위임"""
+        return self._inventory.resolve(
+            item_cd, pending_qty,
+            get_current_stock_fn=self.get_current_stock,
+            ot_pending_cache=getattr(self, '_ot_pending_cache', None),
+        )
 
     def _compute_safety_and_order(
         self, item_cd, product, target_date, weekday, mid_cd,
@@ -1374,8 +1066,43 @@ class ImprovedPredictor:
         is_default_category = False
         food_skip_order = False
 
+        # prediction-redesign: slow/intermittent 패턴은 Croston 기반 안전재고
+        from src.prediction.demand_classifier import DEMAND_PATTERN_EXEMPT_MIDS
+        pattern_result = self._demand_pattern_cache.get(item_cd)
+        _use_croston_safety = (
+            self._demand_pattern_cache
+            and mid_cd not in DEMAND_PATTERN_EXEMPT_MIDS
+            and pattern_result is not None
+            and pattern_result.pattern.value in ("slow", "intermittent")
+        )
+
+        if _use_croston_safety:
+            from src.prediction.croston_predictor import CrostonPredictor
+            pattern_name = pattern_result.pattern.value
+            if pattern_name == "slow":
+                # slow: safety=0, ROP에서 1개 보장
+                safety_stock = 0.0
+                logger.info(
+                    f"[PRED][3-Safety] {product['item_nm']}: "
+                    f"slow pattern -> safety=0 (ROP will handle)"
+                )
+            else:
+                # intermittent: Croston safety stock
+                history = self._get_daily_sales_history(item_cd, days=60)
+                _croston = CrostonPredictor()
+                _, croston_safety = _croston.predict_with_safety(
+                    history,
+                    order_interval=max(2, int(1.0 / max(pattern_result.sell_day_ratio, 0.01)))
+                )
+                safety_stock = croston_safety
+                logger.info(
+                    f"[PRED][3-Safety] {product['item_nm']}: "
+                    f"intermittent -> Croston safety={safety_stock:.2f} "
+                    f"(ratio={pattern_result.sell_day_ratio:.2%})"
+                )
+
         # 카테고리별 안전재고 계산
-        if is_ramen_category(mid_cd):
+        elif is_ramen_category(mid_cd):
             ramen_orderable_day = product.get("orderable_day") or RAMEN_DEFAULT_ORDERABLE_DAYS
             safety_stock, ramen_pattern = get_safety_stock_with_ramen_pattern(
                 mid_cd, daily_avg, product["expiration_days"], item_cd,
@@ -1389,11 +1116,6 @@ class ImprovedPredictor:
                 ctx["ramen_safety_days"] = ramen_pattern.safety_days
                 ctx["ramen_max_stock"] = ramen_pattern.max_stock
                 ctx["ramen_skip_order"] = ramen_pattern.skip_order
-                if ramen_pattern.skip_order and not ramen_pattern.is_orderable_today:
-                    logger.info(
-                        f"[라면 비발주일] {product['item_nm']} ({item_cd}): "
-                        f"orderable_day={ramen_orderable_day} -> 오늘 발주 스킵"
-                    )
 
         elif is_tobacco_category(mid_cd):
             safety_stock, tobacco_pattern = get_safety_stock_with_tobacco_pattern(
@@ -1445,35 +1167,78 @@ class ImprovedPredictor:
                 ctx["weekday_coef"] = weekday_coef
 
         elif is_food_category(mid_cd):
-            food_disuse_coef = get_dynamic_disuse_coefficient(
-                item_cd, mid_cd, db_path=self.db_path, store_id=self.store_id
+            from src.prediction.categories.food import (
+                get_unified_waste_coefficient,
+                get_stockout_boost_coefficient,
             )
+            unified_waste_coef = get_unified_waste_coefficient(
+                item_cd, mid_cd, store_id=self.store_id, db_path=self.db_path
+            )
+            food_disuse_coef = unified_waste_coef  # ctx 호환
             disuse_rate = self._get_disuse_rate(item_cd)
 
-            if self._cost_optimizer and self._cost_optimizer.enabled:
-                cost_info = self._cost_optimizer.get_item_cost_info(item_cd, daily_avg=daily_avg, mid_cd=mid_cd)
-                if cost_info.enabled and cost_info.disuse_modifier != 1.0:
-                    original_coef = food_disuse_coef
-                    food_disuse_coef = min(food_disuse_coef * cost_info.disuse_modifier, 1.0)
-                    logger.info(
-                        f"[비용최적화] {product['item_nm']}: "
-                        f"폐기계수 {original_coef:.2f}→{food_disuse_coef:.2f} "
-                        f"(마진={cost_info.margin_rate}%, 회전={cost_info.turnover_level}, "
-                        f"비중={cost_info.category_share:.1%})"
-                    )
+            # --- A: 폐기계수 조건부 적용 (food-stockout-balance-fix) ---
+            stockout_freq = 1.0 - sell_day_ratio if sell_day_ratio is not None else 0.0
+            ctx["stockout_freq"] = stockout_freq
 
-            delivery_waste_adj = get_delivery_waste_adjustment(
-                item_cd, product["item_nm"], store_id=self.store_id
-            )
-            effective_waste_coef = min(food_disuse_coef, delivery_waste_adj)
+            if stockout_freq > 0.50:
+                # 50% 이상 품절: 폐기계수 면제
+                effective_waste_coef = 1.0
+                logger.info(
+                    f"[폐기계수면제] {product['item_nm']}: "
+                    f"stockout={stockout_freq:.0%} > 50% "
+                    f"→ waste_coef={unified_waste_coef:.2f} 면제"
+                )
+            elif stockout_freq > 0.30:
+                # 30~50% 품절: 최소 0.90 보장
+                effective_waste_coef = max(unified_waste_coef, 0.90)
+                if effective_waste_coef != unified_waste_coef:
+                    logger.info(
+                        f"[폐기계수완화] {product['item_nm']}: "
+                        f"stockout={stockout_freq:.0%}, "
+                        f"waste_coef {unified_waste_coef:.2f} → {effective_waste_coef:.2f}"
+                    )
+            else:
+                # 30% 미만 품절: 기존 로직 유지
+                effective_waste_coef = unified_waste_coef
+
+            ctx["effective_waste_coef"] = effective_waste_coef
+
             if effective_waste_coef < 1.0:
                 adjusted_prediction *= effective_waste_coef
                 daily_avg = adjusted_prediction
                 ctx["adjusted_prediction"] = adjusted_prediction
                 logger.info(
                     f"폐기 보정: {product['item_nm']} "
-                    f"(disuse={food_disuse_coef:.2f}, delivery={delivery_waste_adj:.2f}, "
+                    f"(unified={unified_waste_coef:.2f}, "
                     f"effective={effective_waste_coef:.2f})"
+                )
+
+            # --- B: compound floor 이후 최종 하한 보장 ---
+            final_floor = base_prediction * 0.20
+            if adjusted_prediction < final_floor and base_prediction > 0:
+                logger.info(
+                    f"[최종하한] {product['item_nm']}: "
+                    f"adj={adjusted_prediction:.2f} < floor={final_floor:.2f} "
+                    f"→ {final_floor:.2f}"
+                )
+                adjusted_prediction = final_floor
+                daily_avg = adjusted_prediction
+                ctx["adjusted_prediction"] = adjusted_prediction
+
+            # --- C: stockout 부스트 피드백 ---
+            stockout_boost = get_stockout_boost_coefficient(stockout_freq)
+            ctx["stockout_boost"] = stockout_boost
+            if stockout_boost > 1.0:
+                before_boost = adjusted_prediction
+                adjusted_prediction *= stockout_boost
+                daily_avg = adjusted_prediction
+                ctx["adjusted_prediction"] = adjusted_prediction
+                logger.info(
+                    f"[품절부스트] {product['item_nm']}: "
+                    f"stockout={stockout_freq:.0%}, "
+                    f"boost={stockout_boost:.2f}x, "
+                    f"{before_boost:.2f} → {adjusted_prediction:.2f}"
                 )
 
             safety_stock, food_pattern = get_safety_stock_with_food_pattern(
@@ -1513,7 +1278,9 @@ class ImprovedPredictor:
             exp_days = ctx["food_expiration_days"] if ctx["food_expiration_days"] else product["expiration_days"]
             food_max_stock_days = min(exp_days + 1, 7)
             food_max_stock = daily_avg * food_max_stock_days
-            if daily_avg >= 0.5 and food_max_stock > 0 and current_stock + pending_qty >= food_max_stock:
+            # 유통기한 1일 이하: 재고 무시 (어제 재고는 오늘 폐기 대상)
+            food_avail = (0 if exp_days is not None and exp_days <= 1 else current_stock) + pending_qty
+            if daily_avg >= 0.5 and food_max_stock > 0 and food_avail >= food_max_stock:
                 food_skip_order = True
 
         elif is_perishable_category(mid_cd):
@@ -1565,11 +1332,6 @@ class ImprovedPredictor:
             )
             if new_cat_pattern and new_cat_pattern.skip_order:
                 new_cat_skip_order = True
-                if not new_cat_pattern.is_orderable_today:
-                    logger.info(
-                        f"[스낵 비발주일] {product['item_nm']} ({item_cd}): "
-                        f"orderable_day={snack_orderable_day} -> 오늘 발주 스킵"
-                    )
 
         elif is_alcohol_general_category(mid_cd):
             safety_stock, new_cat_pattern = get_safety_stock_with_alcohol_general_pattern(
@@ -1642,21 +1404,38 @@ class ImprovedPredictor:
                 f"lead_time={lead_time}일, 추가수요={lead_time_demand:.1f}"
             )
 
-        food_gap_consumption = ctx.get("food_gap_consumption", 0.0)
+        # food_gap_consumption은 safety_days에 흡수됨 → need_qty에 더하지 않음 (need-qty-fix)
+        food_gap_consumption = ctx.get("food_gap_consumption", 0.0)  # 로그 참조용 유지
+
+        # 유통기한 1일 이하 푸드류: 어제 재고는 오늘 폐기 대상이므로 재고 차감 무시
+        exp_days = product.get("expiration_days")
+        if (exp_days is not None and exp_days <= 1
+                and is_food_category(mid_cd)
+                and current_stock > 0):
+            logger.debug(
+                f"[단기유통재고무시] {product['item_nm']} mid={mid_cd} "
+                f"유통기한={exp_days}일: 재고 {current_stock}개 무시"
+            )
+            effective_stock_for_need = 0
+        else:
+            effective_stock_for_need = current_stock
+
         need_qty = (adjusted_prediction + lead_time_demand
-                    + safety_stock + food_gap_consumption
-                    - current_stock - pending_qty)
+                    + safety_stock
+                    - effective_stock_for_need - pending_qty)
 
         if need_qty > 0:
+            gap_info = f", gap_ref={food_gap_consumption:.1f}" if food_gap_consumption > 0 else ""
             logger.info(
                 f"[PRED][3-Need] {product['item_nm']}: need={need_qty:.1f} "
                 f"(pred={adjusted_prediction:.2f}+lead={lead_time_demand:.1f}"
-                f"+safety={safety_stock:.1f}+gap={food_gap_consumption:.1f}"
-                f"-stock={current_stock}-pending={pending_qty})"
+                f"+safety={safety_stock:.1f}"
+                f"-stock={current_stock}-pending={pending_qty}"
+                f"{gap_info})"
             )
 
         # ★ 최소재고 전략: 가용재고(재고+미입고)가 다음 발주일까지 충분하면 발주 불필요
-        effective_stock = current_stock + pending_qty
+        effective_stock = effective_stock_for_need + pending_qty
         if effective_stock > 0 and need_qty > 0:
             days_until_next = self._calculate_days_until_next_order(
                 product.get("orderable_day", "일월화수목금토"))
@@ -1697,23 +1476,23 @@ class ImprovedPredictor:
         if new_cat_skip_order:
             need_qty = 0
 
-        # 발주 조정 규칙 적용
+        # 발주 조정 규칙 적용 (유통기한 1일 이하는 effective_stock_for_need=0 전달)
         order_qty = self._apply_order_rules(
             need_qty=need_qty, product=product, weekday=weekday,
-            current_stock=current_stock, daily_avg=daily_avg,
+            current_stock=effective_stock_for_need, daily_avg=daily_avg,
             pending_qty=pending_qty
         )
 
         # ROP (재주문점) 로직
         rop_enabled = intermittent_config.get("rop_enabled", True)
         if rop_enabled and sell_day_ratio < 0.3:
-            if current_stock == 0 and order_qty == 0:
+            if effective_stock_for_need == 0 and order_qty == 0:
                 order_qty = 1
                 logger.info(
                     f"[ROP] {product['item_nm']}: "
                     f"재고=0, ratio={sell_day_ratio:.2%} → 발주 1개"
                 )
-            elif current_stock == 0 and pending_qty > 0:
+            elif effective_stock_for_need == 0 and pending_qty > 0:
                 logger.debug(
                     f"[ROP Skip] {product['item_nm']}: "
                     f"재고=0 but 미입고={pending_qty}개 → 발주 생략"
@@ -1723,26 +1502,24 @@ class ImprovedPredictor:
         if self._use_promo_adjustment:
             order_qty = self._apply_promotion_adjustment(
                 item_cd, product, order_qty, weekday_coef,
-                safety_stock, current_stock, pending_qty, daily_avg
+                safety_stock, effective_stock_for_need, pending_qty, daily_avg
             )
 
-        # ML 앙상블
+        # ML 앙상블 (유통기한 1일 이하는 effective_stock_for_need=0 전달)
         order_qty, model_type = self._apply_ml_ensemble(
             item_cd, product, mid_cd, order_qty, data_days, target_date,
-            current_stock, pending_qty, safety_stock, feat_result
+            effective_stock_for_need, pending_qty, safety_stock, feat_result, ctx=ctx
         )
         ctx["model_type"] = model_type
 
-        # 발주 단위 맞춤 (올림 + max_stock 체크)
-        order_unit = product["order_unit_qty"]
-        if order_qty > 0 and order_unit > 1:
-            order_qty = self._round_to_order_unit(
-                order_qty, order_unit, mid_cd, product, daily_avg,
-                current_stock, pending_qty, safety_stock, adjusted_prediction,
-                ctx, new_cat_pattern, is_default_category
+        # 신제품 초기 보정 (monitoring 상태만)
+        if order_qty > 0:
+            order_qty = self._apply_new_product_boost(
+                item_cd, mid_cd, order_qty, adjusted_prediction,
+                effective_stock_for_need, pending_qty, safety_stock
             )
 
-        # 발주 차이 피드백 페널티
+        # 발주 차이 피드백 페널티 (배수 정렬 전 적용)
         if self._diff_feedback and self._diff_feedback.enabled and order_qty > 0:
             penalty = self._diff_feedback.get_removal_penalty(item_cd)
             if penalty < 1.0:
@@ -1754,25 +1531,25 @@ class ImprovedPredictor:
                     f"제거 {self._diff_feedback._removal_cache.get(item_cd, {}).get('removal_count', 0)}회)"
                 )
 
-        # 폐기 원인 피드백
-        waste_fb = self._get_waste_feedback()
-        if waste_fb and waste_fb.enabled and order_qty > 0:
+        # 폐기 원인 피드백 — 통합 폐기 계수에 흡수 (food-waste-unify)
+        # WasteFeedbackAdjuster 클래스는 유지하되, 여기서 호출하지 않음
+
+        # 소분류 내 잠식 계수 적용 (배수 정렬 전 적용)
+        sub_detector = self._get_substitution_detector()
+        if sub_detector and order_qty > 0:
             try:
-                fb_result = waste_fb.get_adjustment(item_cd, product["mid_cd"])
-                if fb_result.has_active_feedback and fb_result.multiplier < 1.0:
+                sub_coef = sub_detector.get_adjustment(item_cd)
+                if sub_coef < 1.0:
                     old_qty = order_qty
-                    order_qty = max(1, int(order_qty * fb_result.multiplier))
+                    order_qty = max(1, int(order_qty * sub_coef))
                     logger.info(
-                        f"[폐기피드백] {product['item_nm']}: "
-                        f"{old_qty}->{order_qty} "
-                        f"(원인={fb_result.primary_cause}, "
-                        f"승수={fb_result.multiplier:.2f}, "
-                        f"신뢰={fb_result.confidence:.2f})"
+                        f"[잠식감지] {product['item_nm']}: "
+                        f"{old_qty}->{order_qty} (계수={sub_coef:.2f})"
                     )
             except Exception as e:
-                logger.debug(f"[폐기피드백] 실패 ({item_cd}): {e}")
+                logger.debug(f"[잠식감지] 실패 ({item_cd}): {e}")
 
-        # 카테고리별 최대 발주량 상한
+        # 카테고리별 최대 발주량 상한 (배수 정렬 전 적용)
         max_qty = MAX_ORDER_QTY_BY_CATEGORY.get(product["mid_cd"])
         if max_qty and order_qty > max_qty:
             logger.warning(
@@ -1780,6 +1557,15 @@ class ImprovedPredictor:
                 f"(카테고리: {product['mid_cd']})"
             )
             order_qty = max_qty
+
+        # 발주 단위 맞춤 (모든 후처리 완료 후 마지막 정렬 — order-unit-alignment)
+        order_unit = product["order_unit_qty"]
+        if order_qty > 0 and order_unit > 1:
+            order_qty = self._round_to_order_unit(
+                order_qty, order_unit, mid_cd, product, daily_avg,
+                effective_stock_for_need, pending_qty, safety_stock, adjusted_prediction,
+                ctx, new_cat_pattern, is_default_category
+            )
 
         ctx["safety_stock"] = safety_stock
         ctx["order_qty"] = order_qty
@@ -1800,7 +1586,8 @@ class ImprovedPredictor:
                 return order_qty
 
             # 행사/비행사 통계 미산출 시 on-demand 계산
-            if promo_status.current_promo and promo_status.promo_avg == 0:
+            has_promo = promo_status.current_promo or promo_status.next_promo
+            if has_promo and promo_status.promo_avg == 0:
                 try:
                     promo_mgr.calculate_promotion_stats(item_cd)
                     promo_status = promo_mgr.get_promotion_status(item_cd)
@@ -1853,18 +1640,27 @@ class ImprovedPredictor:
             elif (promo_status.current_promo
                   and promo_status.promo_avg > 0
                   and daily_avg < promo_status.promo_avg * 0.8):
-                promo_need = (promo_status.promo_avg * weekday_coef
-                              + safety_stock - current_stock - pending_qty)
-                promo_order = int(max(0, promo_need))
-                if promo_order > order_qty:
-                    old_qty = order_qty
-                    order_qty = promo_order
+                # ★ Fix B: 재고가 행사 일수요를 이미 커버하면 보정 스킵
+                promo_daily_demand = promo_status.promo_avg * weekday_coef
+                if current_stock + pending_qty >= promo_daily_demand:
                     logger.info(
-                        f"[행사중보정] {item_cd}: {promo_status.current_promo} "
-                        f"행사avg {promo_status.promo_avg:.1f} 적용 "
-                        f"(예측avg {daily_avg:.1f} < 행사avg×0.8), "
-                        f"발주 {old_qty}→{order_qty}"
+                        f"[행사중보정] {item_cd}: "
+                        f"재고({current_stock}+{pending_qty}) >= "
+                        f"행사일수요({promo_daily_demand:.1f}), 보정 스킵"
                     )
+                else:
+                    promo_need = (promo_daily_demand
+                                  + safety_stock - current_stock - pending_qty)
+                    promo_order = int(max(0, promo_need))
+                    if promo_order > order_qty:
+                        old_qty = order_qty
+                        order_qty = promo_order
+                        logger.info(
+                            f"[행사중보정] {item_cd}: {promo_status.current_promo} "
+                            f"행사avg {promo_status.promo_avg:.1f} 적용 "
+                            f"(예측avg {daily_avg:.1f} < 행사avg×0.8), "
+                            f"발주 {old_qty}→{order_qty}"
+                        )
 
             # (D) 비행사 안정기 -> 예측 과다 시 평시 일평균 보정
             elif (not promo_status.current_promo
@@ -1917,7 +1713,7 @@ class ImprovedPredictor:
     def _apply_ml_ensemble(self, item_cd, product, mid_cd, order_qty,
                            data_days, target_date,
                            current_stock, pending_qty, safety_stock,
-                           feat_result):
+                           feat_result, ctx=None):
         """ML 앙상블 (규칙 기반과 ML 예측의 가중 평균)
 
         Returns:
@@ -1943,16 +1739,16 @@ class ImprovedPredictor:
                     _lag_7 = lf.lag_7
                     _lag_28 = lf.lag_28
                     _wow = lf.week_over_week_change
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"[ML앙상블] Lag 피처 조회 실패 ({item_cd}): {e}", exc_info=True)
 
             # 연관 점수
             _assoc_score = 0.0
             if self._association_adjuster:
                 try:
                     _assoc_score = self._association_adjuster.get_association_score(item_cd, mid_cd)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning(f"[ML앙상블] 연관 점수 조회 실패 ({item_cd}): {e}", exc_info=True)
 
             # 연휴/기온 맥락
             _holiday_ctx = self._get_holiday_context(target_date_str)
@@ -1965,11 +1761,16 @@ class ImprovedPredictor:
                 try:
                     promo_status = self._promo_adjuster.promo_manager.get_promotion_status(item_cd)
                     _promo_active = bool(promo_status and promo_status.current_promo)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning(f"[ML앙상블] 프로모션 상태 조회 실패 ({item_cd}): {e}", exc_info=True)
 
             # 입고 패턴 캐시 조회 (receiving-pattern)
             _recv_stats = self._receiving_stats_cache.get(item_cd, {})
+
+            # 그룹 컨텍스트 피처 (food-ml-dual-model)
+            _small_cd = product.get("small_cd") or getattr(self, '_item_smallcd_map', {}).get(item_cd)
+            _peer_avg = getattr(self, '_smallcd_peer_cache', {}).get(_small_cd, 0.0) if _small_cd else 0.0
+            _lifecycle = getattr(self, '_lifecycle_cache', {}).get(item_cd, 1.0)
 
             features = MLFeatureBuilder.build_features(
                 daily_sales=daily_sales,
@@ -1992,38 +1793,120 @@ class ImprovedPredictor:
                 is_post_holiday=_holiday_ctx.get("is_post_holiday", False),
                 promo_active=_promo_active,
                 receiving_stats=_recv_stats,
+                large_cd=product.get("large_cd"),
+                data_days=data_days,
+                smallcd_peer_avg=_peer_avg,
+                lifecycle_stage=_lifecycle,
             )
 
             if features is not None:
-                ml_pred = self._ml_predictor.predict(features, mid_cd)
+                ml_pred = self._ml_predictor.predict_dual(
+                    features, mid_cd, _small_cd, data_days
+                )
                 if ml_pred is not None:
                     rule_order = order_qty
-                    if data_days < 60:
-                        ml_weight = 0.3
-                        model_type = "ensemble_30"
-                    else:
-                        ml_weight = 0.5
-                        model_type = "ensemble_50"
+
+                    # 적응형 ML 가중치 (ml-improvement Phase B)
+                    ml_weight = self._get_ml_weight(mid_cd, data_days, item_cd)
+                    if ml_weight <= 0:
+                        # 데이터 부족 → ML 미사용
+                        if ctx is not None:
+                            ctx["ml_delta"] = 0
+                            ctx["ml_abs_delta"] = 0
+                            ctx["ml_changed_final"] = False
+                            ctx["ml_weight"] = 0.0
+                        return order_qty, model_type
+
+                    model_type = f"ensemble_{int(ml_weight*100)}"
 
                     ml_order = max(0, ml_pred + safety_stock - current_stock - pending_qty)
                     blended = (1 - ml_weight) * rule_order + ml_weight * ml_order
                     order_qty = max(0, round(blended))
 
+                    # ML 기여도 로깅 (ml-improvement Phase A)
+                    if ctx is not None:
+                        ctx["ml_delta"] = ml_order - rule_order
+                        ctx["ml_abs_delta"] = abs(ml_order - rule_order)
+                        ctx["ml_changed_final"] = (order_qty != rule_order)
+                        ctx["ml_weight"] = ml_weight
+                        ctx["ml_rule_order"] = rule_order
+                        ctx["ml_pred_sale"] = round(ml_pred, 2)
+
                     logger.debug(
                         f"[ML앙상블] {item_cd}: rule={rule_order}, "
                         f"ml_sale={ml_pred:.1f}, ml_order={ml_order:.0f}, "
-                        f"weight={ml_weight}, blended={order_qty}"
+                        f"weight={ml_weight:.2f}, blended={order_qty}, "
+                        f"delta={ml_order - rule_order:.0f}"
                     )
         except Exception as e:
             logger.debug(f"[ML앙상블] 실패 ({item_cd}), 규칙 기반 유지: {e}")
 
         return order_qty, model_type
 
+    def _get_group_mae(self, group: str) -> Optional[float]:
+        """모델 메타에서 그룹별 MAE 조회 (ml-improvement Phase B)"""
+        if not self._ml_predictor:
+            return None
+        try:
+            meta = self._ml_predictor._load_meta()
+            group_info = meta.get("groups", {}).get(group, {})
+            metrics = group_info.get("metrics", {})
+            mae = metrics.get("mae")
+            return float(mae) if mae is not None else None
+        except Exception:
+            return None
+
+    # ml-weight-adjust: 카테고리별 ML 최대 가중치 (실측 데이터 기반 하향)
+    ML_MAX_WEIGHT = {
+        "food_group": 0.15,       # 푸드: Rule MAE 0.26 vs ML 0.70
+        "perishable_group": 0.15, # 유사 특성
+        "alcohol_group": 0.25,
+        "tobacco_group": 0.25,
+        "general_group": 0.25,
+    }
+    ML_MAX_WEIGHT_DEFAULT = 0.20
+
+    def _get_ml_weight(self, mid_cd: str, data_days: int, item_cd: str = "") -> float:
+        """MAE 기반 적응형 ML 가중치 (ml-weight-adjust)
+
+        원리: MAE가 낮을수록 ML에 더 높은 가중치.
+        카테고리별 상한 차등 적용 (food=0.15, general=0.25).
+        MAE >= 2.0이면 최소 0.05.
+        """
+        if data_days < 30:
+            # food-ml-dual-model: 푸드는 그룹 모델로 폴백 참여
+            _small_cd = getattr(self, '_item_smallcd_map', {}).get(item_cd) if item_cd else None
+            if is_food_category(mid_cd) and self._ml_predictor and self._ml_predictor.has_group_model(_small_cd):
+                return 0.05  # 그룹 모델 의존 (최소 가중치)
+            return 0.0  # 데이터 부족 → ML 미사용
+
+        from src.prediction.ml.feature_builder import get_category_group
+        group = get_category_group(mid_cd)
+        group_mae = self._get_group_mae(group)
+
+        if group_mae is None:
+            return 0.10  # 메타 없으면 보수적
+
+        # 카테고리별 최대 가중치
+        max_w = self.ML_MAX_WEIGHT.get(group, self.ML_MAX_WEIGHT_DEFAULT)
+
+        # MAE → 가중치 선형 매핑: max_w(MAE≤0.5) ~ 0.05(MAE≥2.0)
+        weight = max(0.05, min(max_w, max_w - (group_mae - 0.5) * (max_w / 1.5)))
+
+        # 데이터 부족 감쇄
+        if data_days < 60:
+            weight *= 0.6
+
+        return round(weight, 2)
+
     def _round_to_order_unit(self, order_qty, order_unit, mid_cd, product,
                              daily_avg, current_stock, pending_qty,
                              safety_stock, adjusted_prediction,
                              ctx, new_cat_pattern, is_default_category):
-        """발주 단위 맞춤 (올림 + max_stock 체크)
+        """발주 단위 맞춤 (내림 우선 + 결품 안전망)
+
+        need-qty-fix: 기존 올림 기본 → 30~50% 과잉 유발
+        새 로직: 내림 기본 → 재고 0.5일치 미만이면 올림
 
         Returns:
             조정된 order_qty
@@ -2031,7 +1914,7 @@ class ImprovedPredictor:
         ceil_qty = ((order_qty + order_unit - 1) // order_unit) * order_unit
         floor_qty = (order_qty // order_unit) * order_unit
 
-        # 카테고리별 max_stock 결정
+        # 카테고리별 max_stock 결정 (기존 로직 유지)
         cat_max_stock = None
         if is_tobacco_category(mid_cd):
             cat_max_stock = ctx["tobacco_max_stock"]
@@ -2050,26 +1933,74 @@ class ImprovedPredictor:
         if max_cat_qty:
             cat_max_stock = min(cat_max_stock, max_cat_qty) if cat_max_stock else max_cat_qty
 
-        # 올림 시 max_stock 초과 여부 체크 -> 초과하면 내림 적용
+        # ★ 결품 위험 판정: 가용재고가 0.5일치 미만이면 올림 필요
+        effective_stock = current_stock + pending_qty
+        days_cover = effective_stock / daily_avg if daily_avg > 0 else 999
+        needs_ceil = days_cover < 0.5  # 0.5일치 미만 = 결품 위험
+
+        # max_stock 제약이 있는 카테고리
         if cat_max_stock and cat_max_stock > 0:
             if current_stock + pending_qty + ceil_qty > cat_max_stock and floor_qty > 0:
                 logger.info(
                     f"[발주단위] {product['item_nm']}: "
-                    f"올림 {ceil_qty} → 내림 {floor_qty} "
+                    f"올림 {ceil_qty} -> 내림 {floor_qty} "
                     f"(max_stock={cat_max_stock:.0f}, "
                     f"재고={current_stock}+미입고={pending_qty})"
                 )
                 return floor_qty
-            else:
+            elif needs_ceil:
                 return ceil_qty
+            else:
+                # ★ 변경: max_stock 미초과라도 기본 내림
+                if floor_qty > 0:
+                    logger.debug(
+                        f"[발주단위] {product['item_nm']}: "
+                        f"내림 {floor_qty} (days_cover={days_cover:.1f})"
+                    )
+                    return floor_qty
+                else:
+                    # ★ Fix A: floor=0일 때 surplus 취소 체크
+                    # default 카테고리와 동일한 안전 체크 적용
+                    surplus = ceil_qty - order_qty
+                    if (surplus >= safety_stock
+                            and current_stock + surplus >= adjusted_prediction + safety_stock):
+                        logger.info(
+                            f"[발주단위] {product['item_nm']}: "
+                            f"올림 {ceil_qty}개 잉여({surplus}) >= "
+                            f"안전재고({safety_stock:.0f}), "
+                            f"재고 충분 → 발주 취소"
+                        )
+                        return 0
+                    return ceil_qty
+
+        # default 카테고리 (기존 로직 + 내림 우선)
         elif is_default_category:
             surplus = ceil_qty - order_qty
             if surplus >= safety_stock and current_stock + surplus >= adjusted_prediction + safety_stock:
                 return 0
+            elif needs_ceil:
+                return ceil_qty
+            elif floor_qty > 0:
+                return floor_qty
             else:
                 return ceil_qty
-        else:
+
+        # 담배: 올림 유지 (99% 서비스 레벨 요구)
+        elif is_tobacco_category(mid_cd):
             return ceil_qty
+
+        # 그 외 카테고리: ★ 내림 우선
+        else:
+            if needs_ceil:
+                return ceil_qty
+            elif floor_qty > 0:
+                logger.debug(
+                    f"[발주단위] {product['item_nm']}: "
+                    f"내림 {floor_qty} (days_cover={days_cover:.1f})"
+                )
+                return floor_qty
+            else:
+                return order_unit  # floor=0이고 order_qty>0이면 최소 1단위
 
     def _apply_order_rules(
         self,
@@ -2140,38 +2071,33 @@ class ImprovedPredictor:
             return int(order_qty)
 
     def _load_receiving_stats_cache(self) -> None:
-        """입고 패턴 통계 배치 캐시 로드 (receiving-pattern)
+        """입고 패턴 통계 배치 캐시 → PredictionCacheManager에 위임"""
+        from .prediction_cache import PredictionCacheManager
+        cm = PredictionCacheManager(None, getattr(self, 'store_id', None))
+        self._receiving_stats_cache = cm.load_receiving_stats()
 
-        receiving_repo + order_tracking_repo에서 1회 배치 쿼리하여
-        self._receiving_stats_cache에 {item_cd: stats_dict} 저장
-        """
-        try:
-            from src.infrastructure.database.repos.receiving_repo import ReceivingRepository
-            from src.infrastructure.database.repos.order_tracking_repo import OrderTrackingRepository
+    def _load_group_context_caches(self) -> None:
+        """그룹 컨텍스트 캐시 프리로드 → PredictionCacheManager에 위임"""
+        peer, smap, lifecycle = self._cache.load_group_contexts(
+            ml_predictor=getattr(self, '_ml_predictor', None)
+        )
+        self._smallcd_peer_cache = peer
+        self._item_smallcd_map = smap
+        self._lifecycle_cache = lifecycle
 
-            recv_repo = ReceivingRepository(store_id=self.store_id)
-            ot_repo = OrderTrackingRepository(store_id=self.store_id)
+    def _load_food_coef_cache(self, item_codes: list) -> None:
+        """푸드 요일 계수 배치 캐시 → PredictionCacheManager에 위임"""
+        self._food_weekday_cache = self._cache.load_food_weekday(
+            item_codes, get_connection_fn=self._get_connection
+        )
 
-            # 입고 패턴 (30일)
-            pattern_stats = recv_repo.get_receiving_pattern_stats_batch(
-                store_id=self.store_id, days=30
-            )
+    def _load_ot_pending_cache(self) -> None:
+        """order_tracking 미입고 교차검증 캐시 → PredictionCacheManager에 위임"""
+        self._ot_pending_cache = self._cache.load_ot_pending()
 
-            # pending 경과일
-            pending_ages = ot_repo.get_pending_age_batch(store_id=self.store_id)
-
-            # 머지
-            self._receiving_stats_cache = {}
-            all_items = set(pattern_stats.keys()) | set(pending_ages.keys())
-            for item_cd in all_items:
-                stats = dict(pattern_stats.get(item_cd, {}))
-                stats["pending_age_days"] = pending_ages.get(item_cd, 0)
-                self._receiving_stats_cache[item_cd] = stats
-
-            logger.info(f"[입고패턴] 캐시 로드: {len(self._receiving_stats_cache)}개 상품")
-        except Exception as e:
-            logger.warning(f"[입고패턴] 캐시 로드 실패 (무시): {e}")
-            self._receiving_stats_cache = {}
+    def _load_demand_pattern_cache(self, item_codes: List[str]) -> None:
+        """수요 패턴 분류 배치 캐시 → PredictionCacheManager에 위임"""
+        self._demand_pattern_cache = self._cache.load_demand_patterns(item_codes)
 
     def predict_batch(
         self,
@@ -2195,13 +2121,28 @@ class ImprovedPredictor:
         # 입고 패턴 배치 캐시 프리로드 (DB 쿼리 2회)
         self._load_receiving_stats_cache()
 
-        # 폐기 원인 피드백 프리로드 (DB 쿼리 1회)
-        waste_fb = self._get_waste_feedback()
-        if waste_fb and waste_fb.enabled:
+        # order_tracking 미입고 교차검증 캐시 프리로드 (DB 쿼리 1회)
+        self._load_ot_pending_cache()
+
+        # 수요 패턴 분류 배치 캐시 프리로드 (prediction-redesign)
+        self._load_demand_pattern_cache(item_codes)
+
+        # 푸드 계수 배치 캐시 프리로드 (N+1 → 배치 쿼리)
+        self._load_food_coef_cache(item_codes)
+
+        # 그룹 컨텍스트 캐시 프리로드 (food-ml-dual-model)
+        self._load_group_context_caches()
+
+        # 폐기 원인 피드백 — 통합 폐기 계수에 흡수 (food-waste-unify)
+        # preload 호출 제거
+
+        # 잠식 감지 프리로드 (DB 쿼리 1회)
+        sub_detector = self._get_substitution_detector()
+        if sub_detector:
             try:
-                waste_fb.preload(item_codes)
+                sub_detector.preload(item_codes)
             except Exception as e:
-                logger.debug(f"WasteFeedback preload 실패: {e}")
+                logger.debug(f"SubstitutionDetector preload 실패: {e}")
 
         for item_cd in item_codes:
             pending = pending_quantities.get(item_cd, None)
@@ -2343,7 +2284,20 @@ class ImprovedPredictor:
         safety_days = enhanced['safety_days']
         safety_stock = base_prediction * safety_days
 
-        need_qty = adjusted_prediction + safety_stock - current_stock - pending_qty
+        # 유통기한 1일 이하 푸드류: 어제 재고는 오늘 폐기 대상이므로 재고 차감 무시
+        exp_days = product.get("expiration_days")
+        if (exp_days is not None and exp_days <= 1
+                and is_food_category(mid_cd)
+                and current_stock > 0):
+            logger.debug(
+                f"[단기유통재고무시] {item_cd} mid={mid_cd} 유통기한={exp_days}일: "
+                f"재고 {current_stock}개 무시"
+            )
+            effective_stock = 0
+        else:
+            effective_stock = current_stock
+
+        need_qty = adjusted_prediction + safety_stock - effective_stock - pending_qty
 
         # 8. 발주 조정 규칙 적용
         order_qty = self._apply_order_rules(
@@ -2626,8 +2580,8 @@ class ImprovedPredictor:
             if verification_items:
                 item_codes = [cd for cd in item_codes if cd not in verification_items]
                 logger.info(f"신상품 검증기간 {len(verification_items)}개 예측 제외")
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"[predict_batch] 신상품 검증기간 조회 실패: {e}", exc_info=True)
 
         # 발주정지 상품 제외 (common.db stopped_items)
         try:
@@ -2700,6 +2654,41 @@ class ImprovedPredictor:
             if excluded:
                 logger.info(f"미취급 상품 {excluded}개 예측 대상에서 제외")
 
+        # 비발주일 상품 예측 스킵 (당일 배송 불가 → 예측 불필요)
+        if item_codes:
+            try:
+                from src.infrastructure.database.connection import DBRouter
+                today_weekday = datetime.now().weekday()
+                day_map = {"월": 0, "화": 1, "수": 2, "목": 3, "금": 4, "토": 5, "일": 6}
+                non_orderable = set()
+                common_conn = DBRouter.get_common_connection()
+                try:
+                    cursor = common_conn.cursor()
+                    chunk_size = 500
+                    for i in range(0, len(item_codes), chunk_size):
+                        chunk = item_codes[i:i + chunk_size]
+                        placeholders = ','.join('?' * len(chunk))
+                        cursor.execute(
+                            f"SELECT item_cd, orderable_day FROM product_details "
+                            f"WHERE item_cd IN ({placeholders}) AND orderable_day IS NOT NULL "
+                            f"AND orderable_day != ''",
+                            chunk
+                        )
+                        for row in cursor.fetchall():
+                            orderable_day = row[1] if isinstance(row, (list, tuple)) else row["orderable_day"]
+                            item_cd_val = row[0] if isinstance(row, (list, tuple)) else row["item_cd"]
+                            available = {day_map[c] for c in orderable_day if c in day_map}
+                            if available and today_weekday not in available:
+                                non_orderable.add(item_cd_val)
+                finally:
+                    common_conn.close()
+                if non_orderable:
+                    before = len(item_codes)
+                    item_codes = [cd for cd in item_codes if cd not in non_orderable]
+                    logger.info(f"비발주일 상품 {len(non_orderable)}개 예측 스킵 (해당 일에 재예측)")
+            except Exception as e:
+                logger.warning(f"비발주일 필터 실패 (전체 예측 진행): {e}")
+
         # 일괄 예측
         results = self.predict_batch(item_codes, target_date)
 
@@ -2728,8 +2717,8 @@ class ImprovedPredictor:
                                     f"[Diff주입] {fa['item_nm']}: "
                                     f"추가 {fa['count']}회 -> 발주 {pr.order_qty}개"
                                 )
-                        except Exception:
-                            pass  # 개별 상품 예측 실패 무시
+                        except Exception as e:
+                            logger.warning(f"[Diff주입] 개별 상품 예측 실패 ({fa['item_cd']}): {e}", exc_info=True)
                 if injected > 0:
                     logger.info(f"[Diff피드백] 반복 추가 상품 {injected}개 주입")
             except Exception as e:
@@ -2753,7 +2742,9 @@ class ImprovedPredictor:
         """
         prediction_logger = PredictionLogger(self.db_path, store_id=self.store_id)
 
-        # 중복 체크: 오늘 이미 기록했으면 스킵
+        # 중복 체크: 오늘 이미 충분히 기록했으면 스킵
+        # Phase 2(자동발주)에서 부분 기록(~100건)만 있는 경우, 전체 예측 로깅을 재수행
+        FULL_PREDICTION_THRESHOLD = 500
         conn = self._get_connection()
         try:
             cursor = conn.cursor()
@@ -2765,9 +2756,17 @@ class ImprovedPredictor:
                 (today,) + sp
             )
             existing = cursor.fetchone()[0]
-            if existing > 0:
+            if existing >= FULL_PREDICTION_THRESHOLD:
                 logger.info(f"예측 로깅 스킵: 오늘({today}) 이미 {existing}건 기록됨")
                 return 0
+            if existing > 0:
+                # Phase 2의 부분 기록 삭제 후 전체 재기록
+                cursor.execute(
+                    f"DELETE FROM prediction_logs WHERE prediction_date = ? {sf}",
+                    (today,) + sp
+                )
+                conn.commit()
+                logger.info(f"예측 로깅: 부분 기록 {existing}건 삭제 후 전체 재기록")
         finally:
             conn.close()
 

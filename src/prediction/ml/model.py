@@ -70,7 +70,9 @@ class MLPredictor:
         self.model_dir.mkdir(parents=True, exist_ok=True)
         self.store_id = store_id
         self.models: Dict[str, Any] = {}
+        self.group_models: Dict[str, Any] = {}
         self._loaded = False
+        self._group_loaded = False
 
     def _load_from_dir(self, target_dir: Path) -> int:
         """지정 디렉토리에서 모델 로드 (feature 호환성 검증 포함)
@@ -99,7 +101,7 @@ class MLPredictor:
                     if saved_hash and saved_hash != current_hash:
                         stale_groups.add(gname)
             except Exception:
-                pass
+                logger.debug("메타 파일 파싱 실패, stale 체크 스킵", exc_info=True)
 
         loaded_count = 0
         for group_name in CATEGORY_GROUPS:
@@ -224,6 +226,7 @@ class MLPredictor:
             try:
                 return json.loads(meta_path.read_text(encoding="utf-8"))
             except Exception:
+                logger.debug("메타 파일 손상 또는 없음, 빈 dict 반환", exc_info=True)
                 return {}
         return {}
 
@@ -261,6 +264,162 @@ class MLPredictor:
 
         names_str = ",".join(MLFeatureBuilder.FEATURE_NAMES)
         return hashlib.md5(names_str.encode()).hexdigest()[:8]
+
+    def load_group_models(self) -> int:
+        """small_cd/mid_cd 그룹 모델 로드
+
+        Returns:
+            로드된 그룹 모델 수
+        """
+        if self._group_loaded:
+            return len(self.group_models)
+
+        try:
+            import joblib
+        except ImportError:
+            self._group_loaded = True
+            return 0
+
+        loaded = 0
+        meta = self._load_meta()
+        current_hash = self._feature_hash()
+        group_meta = meta.get("group_models", {})
+
+        import glob as _glob
+        pattern = str(self.model_dir / "group_*.joblib")
+        for fpath in _glob.glob(pattern):
+            fname = Path(fpath).stem  # e.g., "group_small_001A"
+            key = fname.replace("group_", "", 1)  # e.g., "small_001A"
+
+            # feature 호환성 확인
+            saved_hash = group_meta.get(key, {}).get("feature_hash", "")
+            if saved_hash and saved_hash != current_hash:
+                logger.debug(f"[그룹모델] {key}: feature 불일치, 스킵")
+                continue
+
+            try:
+                self.group_models[key] = joblib.load(fpath)
+                loaded += 1
+            except Exception as e:
+                logger.debug(f"[그룹모델] {key} 로드 실패: {e}")
+
+        self._group_loaded = True
+        if loaded > 0:
+            logger.info(f"그룹 모델 로드: {loaded}개")
+        return loaded
+
+    def predict_group(self, features: np.ndarray, small_cd: Optional[str]) -> Optional[float]:
+        """그룹 모델 예측 (small_cd → mid_cd 폴백)
+
+        Args:
+            features: feature 배열 (1D, 35개)
+            small_cd: 소분류 코드
+
+        Returns:
+            예측값 또는 None
+        """
+        if not small_cd or not self.group_models:
+            return None
+
+        # small_cd 모델 우선
+        model = self.group_models.get(f"small_{small_cd}")
+        if model is None:
+            # mid_cd 폴백 (small_cd 앞 3자리 = mid_cd)
+            mid_prefix = small_cd[:3] if len(small_cd) >= 3 else small_cd
+            model = self.group_models.get(f"mid_{mid_prefix}")
+        if model is None:
+            return None
+
+        try:
+            X = features.reshape(1, -1)
+            pred = model.predict(X)[0]
+            return max(0.0, float(pred))
+        except Exception as e:
+            logger.debug(f"그룹 모델 예측 실패 (small_cd={small_cd}): {e}")
+            return None
+
+    def predict_dual(
+        self, features: np.ndarray, mid_cd: str,
+        small_cd: Optional[str] = None, data_days: int = 0,
+    ) -> Optional[float]:
+        """이중 모델 블렌딩 예측
+
+        Args:
+            features: feature 배열 (35개)
+            mid_cd: 중분류 코드 (개별 모델 선택용)
+            small_cd: 소분류 코드 (그룹 모델 선택용)
+            data_days: 상품 데이터 일수 (블렌딩 가중치)
+
+        Returns:
+            블렌딩 예측값 또는 None
+        """
+        pred_ind = self.predict(features, mid_cd)
+        pred_grp = self.predict_group(features, small_cd)
+
+        if pred_ind is None and pred_grp is None:
+            return None
+        if pred_ind is None:
+            return pred_grp
+        if pred_grp is None:
+            return pred_ind
+
+        # data_confidence 기반 블렌딩
+        confidence = min(1.0, data_days / 60.0)
+        return confidence * pred_ind + (1.0 - confidence) * pred_grp
+
+    def has_group_model(self, small_cd: Optional[str]) -> bool:
+        """그룹 모델 존재 여부 확인"""
+        if not small_cd:
+            return False
+        if not self.group_models and not self._group_loaded:
+            self.load_group_models()
+        mid_prefix = small_cd[:3] if len(small_cd) >= 3 else small_cd
+        return (f"small_{small_cd}" in self.group_models or
+                f"mid_{mid_prefix}" in self.group_models)
+
+    def save_group_model(
+        self, key: str, model: Any, metrics: Optional[Dict[str, Any]] = None
+    ) -> bool:
+        """그룹 모델 저장
+
+        Args:
+            key: 모델 키 (e.g., "small_001A", "mid_001")
+            model: 학습된 모델
+            metrics: 학습 지표
+
+        Returns:
+            저장 성공 여부
+        """
+        try:
+            import joblib
+        except ImportError:
+            return False
+
+        try:
+            model_path = self.model_dir / f"group_{key}.joblib"
+            joblib.dump(model, model_path)
+            self.group_models[key] = model
+
+            # 메타데이터 업데이트
+            meta = self._load_meta()
+            meta.setdefault("group_models", {})[key] = {
+                "trained_at": datetime.now().isoformat(),
+                "feature_hash": self._feature_hash(),
+                "metrics": metrics or {},
+            }
+            meta["last_updated"] = datetime.now().isoformat()
+            try:
+                self._get_meta_path().write_text(
+                    json.dumps(meta, ensure_ascii=False, indent=2, default=_json_default),
+                    encoding="utf-8",
+                )
+            except Exception:
+                logger.warning("그룹 모델 메타 저장 실패", exc_info=True)
+
+            return True
+        except Exception as e:
+            logger.warning(f"그룹 모델 저장 실패 ({key}): {e}")
+            return False
 
     def predict(self, features: np.ndarray, mid_cd: str) -> Optional[float]:
         """
