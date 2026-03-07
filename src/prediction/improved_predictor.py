@@ -321,6 +321,11 @@ class ImprovedPredictor:
         # 신제품 모니터링 캐시 (new-product-lifecycle)
         self._new_product_cache: Dict[str, Dict] = {}
 
+        # 날짜별 조회 캐시 — 같은 날짜 반복 DB 쿼리 제거 (ml-batch-cache)
+        self._holiday_ctx_memo: Dict[str, Dict] = {}
+        self._temperature_memo: Dict[str, Optional[float]] = {}
+        self._temp_delta_memo: Dict[str, Optional[float]] = {}
+
     def __getattr__(self, name):
         """Lazy 속성 생성 — __init__ 우회 테스트 호환 (god-class-decomposition)"""
         if name == '_base':
@@ -350,6 +355,9 @@ class ImprovedPredictor:
             cm = PredictionCacheManager(_data, self.__dict__.get('store_id'), self.__dict__.get('db_path'))
             self._cache = cm
             return cm
+        if name in ('_holiday_ctx_memo', '_temperature_memo', '_temp_delta_memo'):
+            self.__dict__[name] = {}
+            return {}
         raise AttributeError(f"'{type(self).__name__}' has no attribute '{name}'")
 
     # =========================================================================
@@ -462,7 +470,11 @@ class ImprovedPredictor:
         return ctx.get("is_holiday", False)
 
     def _get_holiday_context(self, date_str: str) -> Dict:
-        """연휴 맥락 정보 조회 (DB 우선 → calendar_collector fallback)"""
+        """연휴 맥락 정보 조회 (DB 우선 → calendar_collector fallback, 메모이제이션)"""
+        cached = self._holiday_ctx_memo.get(date_str)
+        if cached is not None:
+            return cached
+
         default = {
             "is_holiday": False, "in_period": False,
             "period_days": 0, "position": 0,
@@ -474,7 +486,7 @@ class ImprovedPredictor:
             if factors:
                 factor_map = {f['factor_key']: f['factor_value'] for f in factors}
                 is_hol_str = factor_map.get('is_holiday', 'false').lower()
-                return {
+                result = {
                     "is_holiday": is_hol_str in ('true', '1', 'yes'),
                     "in_period": int(factor_map.get('holiday_period_days', '0') or '0') > 0
                                  and int(factor_map.get('holiday_position', '0') or '0') > 0,
@@ -483,14 +495,21 @@ class ImprovedPredictor:
                     "is_pre_holiday": factor_map.get('is_pre_holiday', 'false').lower() in ('true', '1'),
                     "is_post_holiday": factor_map.get('is_post_holiday', 'false').lower() in ('true', '1'),
                 }
+                self._holiday_ctx_memo[date_str] = result
+                return result
             from src.collectors.calendar_collector import get_holiday_context
-            return get_holiday_context(date_str)
+            result = get_holiday_context(date_str)
+            self._holiday_ctx_memo[date_str] = result
+            return result
         except Exception as e:
             logger.debug(f"연휴 맥락 조회 실패 (날짜: {date_str}): {e}")
             try:
                 from src.collectors.calendar_collector import get_holiday_context
-                return get_holiday_context(date_str)
+                result = get_holiday_context(date_str)
+                self._holiday_ctx_memo[date_str] = result
+                return result
             except Exception:
+                self._holiday_ctx_memo[date_str] = default
                 return default
 
     def _get_holiday_coefficient(self, date_str: str, mid_cd: str) -> float:
@@ -547,7 +566,12 @@ class ImprovedPredictor:
         return round(final, 3)
 
     def _get_temperature_for_date(self, date_str: str) -> Optional[float]:
-        """날짜별 기온 조회 (예보 우선, 실측 폴백)"""
+        """날짜별 기온 조회 (예보 우선, 실측 폴백, 메모이제이션)"""
+        _sentinel = "@@MISS@@"
+        cached = self._temperature_memo.get(date_str, _sentinel)
+        if cached != _sentinel:
+            return cached
+
         try:
             repo = ExternalFactorRepository()
             factors = repo.get_factors(date_str, factor_type='weather')
@@ -566,24 +590,37 @@ class ImprovedPredictor:
                 elif key == 'temperature':
                     actual_temp = val
 
-            return forecast_temp if forecast_temp is not None else actual_temp
+            result = forecast_temp if forecast_temp is not None else actual_temp
+            self._temperature_memo[date_str] = result
+            return result
         except Exception as e:
             logger.debug(f"기온 조회 실패 (날짜: {date_str}): {e}")
+            self._temperature_memo[date_str] = None
             return None
 
     def _get_temperature_delta(self, date_str: str) -> Optional[float]:
-        """전일 대비 기온 변화량 계산"""
+        """전일 대비 기온 변화량 계산 (메모이제이션)"""
+        _sentinel = "@@MISS@@"
+        cached = self._temp_delta_memo.get(date_str, _sentinel)
+        if cached != _sentinel:
+            return cached
+
         try:
             target_temp = self._get_temperature_for_date(date_str)
             if target_temp is None:
+                self._temp_delta_memo[date_str] = None
                 return None
             prev_date = (datetime.strptime(date_str, "%Y-%m-%d") - timedelta(days=1)).strftime("%Y-%m-%d")
             prev_temp = self._get_temperature_for_date(prev_date)
             if prev_temp is None:
+                self._temp_delta_memo[date_str] = None
                 return None
-            return target_temp - prev_temp
+            result = target_temp - prev_temp
+            self._temp_delta_memo[date_str] = result
+            return result
         except Exception as e:
             logger.debug(f"기온 변화량 계산 실패 (날짜: {date_str}): {e}")
+            self._temp_delta_memo[date_str] = None
             return None
 
     def _get_weather_coefficient(self, date_str: str, mid_cd: str) -> float:
@@ -739,6 +776,10 @@ class ImprovedPredictor:
         Returns:
             PredictionResult 또는 None (상품 정보 없음)
         """
+        # 세션 ID (predict_batch 밖에서 단독 호출 시)
+        if not getattr(self, '_session_id', None):
+            self._session_id = datetime.now().strftime("%H%M%S")
+
         # 1. 상품 정보 및 기본 데이터 로드
         product = self.get_product_info(item_cd)
         if not product:
@@ -1499,11 +1540,17 @@ class ImprovedPredictor:
                 )
 
         # 행사 기반 발주 조정
+        ctx["_order_qty_before_promo"] = order_qty
         if self._use_promo_adjustment:
             order_qty = self._apply_promotion_adjustment(
                 item_cd, product, order_qty, weekday_coef,
-                safety_stock, effective_stock_for_need, pending_qty, daily_avg
+                safety_stock, effective_stock_for_need, pending_qty, daily_avg,
+                ctx=ctx
             )
+        else:
+            ctx["_promo_branch"] = "disabled"
+            ctx["_promo_result"] = "스킵"
+            ctx["_promo_daily_demand"] = 0.0
 
         # ML 앙상블 (유통기한 1일 이하는 effective_stock_for_need=0 전달)
         order_qty, model_type = self._apply_ml_ensemble(
@@ -1566,14 +1613,75 @@ class ImprovedPredictor:
                 effective_stock_for_need, pending_qty, safety_stock, adjusted_prediction,
                 ctx, new_cat_pattern, is_default_category
             )
+            ctx["_round_result"] = order_qty
+        else:
+            ctx["_round_branch"] = "none"
+            ctx["_round_floor"] = 0
+            ctx["_round_ceil"] = 0
+            ctx["_round_order_qty_before"] = order_qty
+            ctx["_round_result"] = order_qty
 
         ctx["safety_stock"] = safety_stock
         ctx["order_qty"] = order_qty
+
+        # ── 이상 발주 감지 (anomaly trace) ──
+        effective_stock = effective_stock_for_need + pending_qty
+        days_cover = effective_stock / daily_avg if daily_avg > 0 else 999
+        order_qty_before_promo = ctx.get("_order_qty_before_promo", order_qty)
+        promo_override = (order_qty_before_promo == 0
+                          and ctx.get("_promo_result", "").startswith("보정"))
+        round_before = ctx.get("_round_order_qty_before", order_qty)
+        round_result = ctx.get("_round_result", order_qty)
+        forced_ceil = (round_before > 0 and round_before < order_unit
+                       and round_result >= order_unit)
+
+        is_anomaly = (
+            (days_cover > 7 and order_qty > 0)
+            or forced_ceil
+            or promo_override
+        )
+
+        if is_anomaly:
+            trace_id = f"{self.store_id}:{item_cd}:{getattr(self, '_session_id', '?')}"
+            promo_branch = ctx.get("_promo_branch", "?")
+            promo_result = ctx.get("_promo_result", "?")
+            promo_demand = ctx.get("_promo_daily_demand", 0.0)
+            round_branch = ctx.get("_round_branch", "?")
+            floor_qty = ctx.get("_round_floor", 0)
+            ceil_qty = ctx.get("_round_ceil", 0)
+            multiplier = (order_qty // order_unit) if order_unit > 1 else order_qty
+            pyun_qty = multiplier
+
+            logger.warning(
+                f"[NEED][{trace_id}] "
+                f"adj={adjusted_prediction:.2f} lead={lead_time_demand:.2f} "
+                f"safe={safety_stock:.2f} stk={effective_stock_for_need} "
+                f"pnd={pending_qty} → need={need_qty:.2f}"
+            )
+            logger.warning(
+                f"[PROMO][{trace_id}] "
+                f"branch={promo_branch} stk={effective_stock_for_need} "
+                f"pnd={pending_qty} promo_demand={promo_demand:.2f} "
+                f"→ {promo_result}"
+            )
+            logger.warning(
+                f"[ROUND][{trace_id}] "
+                f"branch={round_branch} order_qty={round_before} "
+                f"unit={order_unit} floor={floor_qty} ceil={ceil_qty} "
+                f"→ result={round_result}"
+            )
+            logger.warning(
+                f"[SUBMIT][{trace_id}] "
+                f"final={order_qty} unit={order_unit} "
+                f"multiplier={multiplier} pyun={pyun_qty}"
+            )
+
         return ctx
 
     def _apply_promotion_adjustment(self, item_cd, product, order_qty,
                                     weekday_coef, safety_stock,
-                                    current_stock, pending_qty, daily_avg):
+                                    current_stock, pending_qty, daily_avg,
+                                    ctx=None):
         """행사 기반 발주 조정 (점진적 전환 + 최소 발주)
 
         Returns:
@@ -1583,6 +1691,10 @@ class ImprovedPredictor:
             promo_mgr = self._promo_adjuster.promo_manager
             promo_status = promo_mgr.get_promotion_status(item_cd)
             if not promo_status:
+                if ctx is not None:
+                    ctx["_promo_branch"] = "none"
+                    ctx["_promo_result"] = "스킵"
+                    ctx["_promo_daily_demand"] = 0.0
                 return order_qty
 
             # 행사/비행사 통계 미산출 시 on-demand 계산
@@ -1594,10 +1706,16 @@ class ImprovedPredictor:
                 except Exception as e:
                     logger.warning(f"행사 통계 계산 실패 ({item_cd}): {e}")
 
+            # trace용 초기값
+            _initial_qty = order_qty
+            _promo_branch = "E-no_match"
+            _promo_demand = 0.0
+
             # (A) 행사 종료 임박 (D-3 이내)
             if (promo_status.current_promo
                     and promo_status.days_until_end is not None
                     and promo_status.days_until_end <= 3):
+                _promo_branch = "A-ending"
                 adj_result = self._promo_adjuster.adjust_order_quantity(
                     item_cd=item_cd, base_qty=order_qty,
                     current_stock=current_stock, pending_qty=pending_qty
@@ -1614,6 +1732,7 @@ class ImprovedPredictor:
             elif (not promo_status.current_promo
                   and promo_status.next_promo
                   and promo_status.next_start_date):
+                _promo_branch = "B-starting"
                 try:
                     next_start = datetime.strptime(
                         promo_status.next_start_date, '%Y-%m-%d'
@@ -1640,8 +1759,10 @@ class ImprovedPredictor:
             elif (promo_status.current_promo
                   and promo_status.promo_avg > 0
                   and daily_avg < promo_status.promo_avg * 0.8):
+                _promo_branch = "C-promo_adjust"
                 # ★ Fix B: 재고가 행사 일수요를 이미 커버하면 보정 스킵
                 promo_daily_demand = promo_status.promo_avg * weekday_coef
+                _promo_demand = promo_daily_demand
                 if current_stock + pending_qty >= promo_daily_demand:
                     logger.info(
                         f"[행사중보정] {item_cd}: "
@@ -1666,6 +1787,8 @@ class ImprovedPredictor:
             elif (not promo_status.current_promo
                   and promo_status.normal_avg > 0
                   and daily_avg > promo_status.normal_avg * 1.3):
+                _promo_branch = "D-normal_adjust"
+                _promo_demand = promo_status.normal_avg * weekday_coef
                 normal_need = (promo_status.normal_avg * weekday_coef
                                + safety_stock - current_stock - pending_qty)
                 normal_order = int(max(0, normal_need))
@@ -1707,6 +1830,16 @@ class ImprovedPredictor:
 
         except Exception as e:
             logger.warning(f"행사 조정 실패 ({item_cd}), 기존 발주량 유지: {e}")
+            _promo_branch = "error"
+
+        # trace 저장
+        if ctx is not None:
+            ctx["_promo_branch"] = _promo_branch
+            ctx["_promo_daily_demand"] = _promo_demand
+            if order_qty == _initial_qty:
+                ctx["_promo_result"] = "스킵"
+            else:
+                ctx["_promo_result"] = f"보정 {_initial_qty}→{order_qty}"
 
         return order_qty
 
@@ -1727,8 +1860,11 @@ class ImprovedPredictor:
             from src.prediction.ml.feature_builder import MLFeatureBuilder
             from src.prediction.ml.data_pipeline import MLDataPipeline
 
-            pipeline = MLDataPipeline(self.db_path, store_id=self.store_id)
-            daily_sales = pipeline.get_item_daily_stats(item_cd, days=90)
+            # 배치 캐시 우선 사용, 미스 시 개별 조회 폴백
+            daily_sales = getattr(self, '_daily_stats_cache', {}).get(item_cd)
+            if daily_sales is None:
+                pipeline = MLDataPipeline(self.db_path, store_id=self.store_id)
+                daily_sales = pipeline.get_item_daily_stats(item_cd, days=90)
             target_date_str = target_date.strftime("%Y-%m-%d")
 
             # Lag Features
@@ -1914,6 +2050,11 @@ class ImprovedPredictor:
         ceil_qty = ((order_qty + order_unit - 1) // order_unit) * order_unit
         floor_qty = (order_qty // order_unit) * order_unit
 
+        # trace 기본값 저장
+        ctx["_round_floor"] = floor_qty
+        ctx["_round_ceil"] = ceil_qty
+        ctx["_round_order_qty_before"] = order_qty
+
         # 카테고리별 max_stock 결정 (기존 로직 유지)
         cat_max_stock = None
         if is_tobacco_category(mid_cd):
@@ -1940,6 +2081,7 @@ class ImprovedPredictor:
 
         # max_stock 제약이 있는 카테고리
         if cat_max_stock and cat_max_stock > 0:
+            ctx["_round_branch"] = "A-max_stock"
             if current_stock + pending_qty + ceil_qty > cat_max_stock and floor_qty > 0:
                 logger.info(
                     f"[발주단위] {product['item_nm']}: "
@@ -1975,6 +2117,7 @@ class ImprovedPredictor:
 
         # default 카테고리 (기존 로직 + 내림 우선)
         elif is_default_category:
+            ctx["_round_branch"] = "B-default"
             surplus = ceil_qty - order_qty
             if surplus >= safety_stock and current_stock + surplus >= adjusted_prediction + safety_stock:
                 return 0
@@ -1987,10 +2130,12 @@ class ImprovedPredictor:
 
         # 담배: 올림 유지 (99% 서비스 레벨 요구)
         elif is_tobacco_category(mid_cd):
+            ctx["_round_branch"] = "C-tobacco"
             return ceil_qty
 
         # 그 외 카테고리: ★ 내림 우선
         else:
+            ctx["_round_branch"] = "D-else"
             if needs_ceil:
                 return ceil_qty
             elif floor_qty > 0:
@@ -2118,6 +2263,14 @@ class ImprovedPredictor:
         results = []
         pending_quantities = pending_quantities or {}
 
+        # 배치 세션 ID (이상 발주 trace용)
+        self._session_id = datetime.now().strftime("%H%M%S")
+
+        # 날짜별 조회 메모 캐시 초기화 (ml-batch-cache)
+        self._holiday_ctx_memo = {}
+        self._temperature_memo = {}
+        self._temp_delta_memo = {}
+
         # 입고 패턴 배치 캐시 프리로드 (DB 쿼리 2회)
         self._load_receiving_stats_cache()
 
@@ -2144,11 +2297,45 @@ class ImprovedPredictor:
             except Exception as e:
                 logger.debug(f"SubstitutionDetector preload 실패: {e}")
 
-        for item_cd in item_codes:
-            pending = pending_quantities.get(item_cd, None)
-            result = self.predict(item_cd, target_date, pending)
-            if result:
-                results.append(result)
+        # ML 일별 통계 배치 캐시 프리로드 (1,967 쿼리 → 1 쿼리)
+        self._daily_stats_cache = {}
+        if self._ml_predictor:
+            try:
+                from src.prediction.ml.data_pipeline import MLDataPipeline
+                pipeline = MLDataPipeline(self.db_path, store_id=self.store_id)
+                self._daily_stats_cache = pipeline.get_batch_daily_stats(item_codes, days=90)
+                logger.debug(f"ML 일별 통계 배치 캐시: {len(self._daily_stats_cache)}건")
+            except Exception as e:
+                logger.warning(f"ML 배치 캐시 프리로드 실패 (개별 폴백): {e}")
+
+        # 커넥션 재사용 (connect+ATTACH 반복 → 1회)
+        if hasattr(self._data, 'open_persistent_connection'):
+            self._data.open_persistent_connection()
+        promo_mgr = getattr(self._promo_adjuster, 'promo_manager', None)
+        if promo_mgr and hasattr(promo_mgr, 'open_persistent_connection'):
+            promo_mgr.open_persistent_connection()
+        rolling_calc = getattr(self._feature_calculator, 'rolling_calculator', None)
+        if rolling_calc and hasattr(rolling_calc, 'open_persistent_connection'):
+            rolling_calc.open_persistent_connection()
+        lag_calc = getattr(self._feature_calculator, 'lag_calculator', None)
+        if lag_calc and hasattr(lag_calc, 'open_persistent_connection'):
+            lag_calc.open_persistent_connection()
+
+        try:
+            for item_cd in item_codes:
+                pending = pending_quantities.get(item_cd, None)
+                result = self.predict(item_cd, target_date, pending)
+                if result:
+                    results.append(result)
+        finally:
+            if hasattr(self._data, 'close_persistent_connection'):
+                self._data.close_persistent_connection()
+            if promo_mgr and hasattr(promo_mgr, 'close_persistent_connection'):
+                promo_mgr.close_persistent_connection()
+            if rolling_calc and hasattr(rolling_calc, 'close_persistent_connection'):
+                rolling_calc.close_persistent_connection()
+            if lag_calc and hasattr(lag_calc, 'close_persistent_connection'):
+                lag_calc.close_persistent_connection()
 
         return results
 

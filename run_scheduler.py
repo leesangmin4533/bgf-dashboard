@@ -25,6 +25,7 @@ Usage:
     python run_scheduler.py --waste-report   # 폐기 보고서 즉시 생성
     python run_scheduler.py --batch-expire   # 배치 만료 처리 즉시 실행
     python run_scheduler.py --collect-order-unit  # 전체 품목 발주단위 수집 즉시 실행
+    python run_scheduler.py --fetch-detail       # 상품 상세 정보 일괄 수집 즉시 실행
     python run_scheduler.py --sync-waste-backfill --days 20  # 폐기전표→daily_sales 동기화 백필
 """
 
@@ -34,6 +35,7 @@ import io
 import time
 import argparse
 import atexit
+import subprocess
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Dict
@@ -209,6 +211,9 @@ def job_wrapper_multi_store() -> None:
         task_name="daily_order",
     )
 
+    # PythonAnywhere DB 동기화 (멀티매장 완료 후)
+    _try_cloud_sync()
+
 
 def job_wrapper() -> None:
     """단일 매장 일일 수집+발주 (DailyCollectionJob.run_optimized 사용)
@@ -235,8 +240,26 @@ def job_wrapper() -> None:
         fail_reasons = result.get("fail_reasons")
         if fail_reasons:
             logger.info(f"  - Fail reasons: {fail_reasons.get('checked', 0)} collected")
+
+        # PythonAnywhere DB 동기화 (발주 성공 시)
+        _try_cloud_sync()
     else:
         logger.error(f"Job failed: {result.get('error', 'Unknown')}")
+
+
+def _try_cloud_sync() -> None:
+    """PythonAnywhere DB 동기화 시도 (실패해도 발주 결과에 영향 없음)."""
+    try:
+        from scripts.sync_to_cloud import run_cloud_sync
+        sync_result = run_cloud_sync()
+        if sync_result.get("skipped"):
+            logger.debug("[CloudSync] 설정 없음 - 건너뜀")
+        elif sync_result.get("success"):
+            logger.info("[CloudSync] PythonAnywhere DB 동기화 완료")
+        else:
+            logger.warning(f"[CloudSync] 동기화 실패 (발주 결과에 영향 없음)")
+    except Exception as e:
+        logger.warning(f"[CloudSync] 동기화 오류 (무시됨): {e}")
 
 
 def expiry_alert_wrapper(expiry_hour: int) -> Callable[[], None]:
@@ -589,17 +612,19 @@ def pre_alert_collection_wrapper(expiry_hour: int) -> Callable[[], None]:
             try:
                 from src.infrastructure.database.repos import InventoryBatchRepository
 
-                batch_repo = InventoryBatchRepository()
+                batch_repo = InventoryBatchRepository(store_id=ctx.store_id)
 
                 # 3-a) FIFO 재동기화 (stock 기반)
                 sync_result = batch_repo.sync_remaining_with_stock(
                     store_id=ctx.store_id
                 )
-                if sync_result.get("adjusted", 0) > 0:
+                adj = sync_result.get("adjusted", 0)
+                ghost = sync_result.get("ghost_cleared", 0)
+                if adj > 0 or ghost > 0:
                     logger.info(
                         f"[{ctx.store_id}] 배치 FIFO 재동기화: "
-                        f"보정 {sync_result['adjusted']}건, "
-                        f"consumed {sync_result['consumed']}건"
+                        f"보정 {adj}건, consumed {sync_result.get('consumed', 0)}건, "
+                        f"푸드 유령재고 {ghost}건 정리"
                     )
 
                 # 3-b) 만료 배치 처리 (재동기화 후 정확한 remaining_qty 기반)
@@ -713,16 +738,21 @@ def bulk_collect_wrapper() -> None:
     )
 
 
-def ml_train_wrapper() -> None:
-    """ML 모델 주간 재학습 (매주 월요일 03:00) -- 매장별 병렬"""
+def ml_train_wrapper(incremental: bool = False) -> None:
+    """ML 모델 학습 -- 매장별 병렬
+
+    Args:
+        incremental: True면 증분학습(30일), False면 전체학습(90일)
+    """
+    mode = "증분(30일)" if incremental else "전체(90일)"
     logger.info("=" * 60)
-    logger.info(f"ML model training at {datetime.now().isoformat()}")
+    logger.info(f"ML model training ({mode}) at {datetime.now().isoformat()}")
     logger.info("=" * 60)
 
     from src.application.use_cases.ml_training_flow import MLTrainingFlow
 
     _run_task(
-        task_fn=lambda ctx: MLTrainingFlow(store_ctx=ctx).run(),
+        task_fn=lambda ctx: MLTrainingFlow(store_ctx=ctx).run(incremental=incremental),
         task_name="MLTrain",
     )
 
@@ -771,12 +801,38 @@ def bayesian_optimize_wrapper() -> None:
     _run_task(task, "BayesianOptimize")
 
 
+def inventory_verify_wrapper() -> None:
+    """주간 재고 검증 (수요일 02:00)
+
+    전 매장 BGF 실재고 vs DB 비교 + 불일치 동기화 + 엑셀 리포트.
+    data/reports/inventory_verify_YYYYMMDD_HHMMSS.xlsx 저장.
+    """
+    logger.info("=" * 60)
+    logger.info(f"Weekly inventory verification at {datetime.now().isoformat()}")
+    logger.info("=" * 60)
+
+    try:
+        sys.path.insert(0, str(Path(__file__).parent / "scripts"))
+        from scripts.verify_inventory_direct_api import run_verification_all_stores
+
+        excel_path = run_verification_all_stores(
+            threshold=1,
+            sync_db=True,  # 불일치 → BGF 값으로 DB 동기화
+        )
+        logger.info(f"[InventoryVerify] 엑셀 리포트: {excel_path}")
+    except Exception as e:
+        logger.error(f"[InventoryVerify] 실패: {e}")
+        import traceback
+        traceback.print_exc()
+
+
 def order_unit_collect_wrapper() -> None:
     """전체 품목 발주단위 수집 (매일 00:00)
 
-    BGF 사이트 로그인 -> 홈 화면 바코드 검색 ->
-    CallItemDetailPopup에서 ORD_UNIT_QTY 수집 ->
-    common.db product_details 갱신 -> 로그아웃
+    STBJ070 발주현황조회 Direct API 우선 → 홈 바코드 폴백.
+
+    1단계: STBJ070 "전체" 라디오 → Direct API 1회 호출 (~30초)
+    2단계: (1단계 실패 시) 홈 화면 바코드 1개씩 검색 (기존 방식)
 
     BGF 계정은 매장별이 아닌 단일 계정이므로
     _run_task(매장별 병렬)가 아닌 직접 실행.
@@ -790,31 +846,12 @@ def order_unit_collect_wrapper() -> None:
         from src.collectors.order_status_collector import OrderStatusCollector
         from src.infrastructure.database.repos import ProductDetailRepository
         from src.settings.timing import SA_LOGIN_WAIT, SA_POPUP_CLOSE_WAIT
-
-        # 1. 수집 대상: 최근 30일 판매 실적이 있는 활성 상품만
-        from src.infrastructure.database.connection import DBRouter
+        from src.utils.nexacro_helpers import close_tab_by_frame_id
 
         repo = ProductDetailRepository()
         store_id = _DEFAULT_STORE["store_id"]
-        store_conn = DBRouter.get_store_connection(store_id)
-        try:
-            cursor = store_conn.cursor()
-            cursor.execute("""
-                SELECT DISTINCT item_cd FROM daily_sales
-                WHERE sales_date >= date('now', '-30 days')
-                ORDER BY item_cd
-            """)
-            item_codes = [row[0] for row in cursor.fetchall()]
-        finally:
-            store_conn.close()
 
-        if not item_codes:
-            logger.warning("수집 대상 상품이 없습니다")
-            return
-
-        logger.info(f"수집 대상: {len(item_codes)}개 상품")
-
-        # 2. BGF 사이트 로그인
+        # 1. BGF 사이트 로그인
         analyzer = SalesAnalyzer()
         try:
             analyzer.setup_driver()
@@ -829,19 +866,64 @@ def order_unit_collect_wrapper() -> None:
             analyzer.close_popup()
             time.sleep(SA_POPUP_CLOSE_WAIT)
 
-            # 3. 홈 화면 바코드 검색으로 발주단위 수집
             collector = OrderStatusCollector(
                 driver=analyzer.driver,
-                store_id=_DEFAULT_STORE["store_id"],
+                store_id=store_id,
             )
 
-            items = collector.collect_order_unit_via_home(item_codes)
+            items = None
+
+            # ★ 1단계: STBJ070 Direct API (전체 라디오 → 1회 조회)
+            try:
+                if collector.navigate_to_order_status_menu():
+                    items = collector.collect_all_order_unit_qty()
+                    if items:
+                        logger.info(
+                            f"[STBJ070] Direct API 발주단위 수집 성공: "
+                            f"{len(items)}개"
+                        )
+                    else:
+                        logger.warning("[STBJ070] 수집 결과 없음 - 홈 폴백")
+
+                    # STBJ070 탭 닫기
+                    close_tab_by_frame_id(
+                        analyzer.driver,
+                        OrderStatusCollector.FRAME_ID,
+                    )
+                    time.sleep(0.5)
+                else:
+                    logger.warning("[STBJ070] 메뉴 이동 실패 - 홈 폴백")
+            except Exception as e:
+                logger.warning(f"[STBJ070] 1단계 실패: {e} - 홈 폴백")
+
+            # ★ 2단계: 홈 바코드 폴백 (1단계 실패 시)
+            if not items:
+                from src.infrastructure.database.connection import DBRouter
+
+                store_conn = DBRouter.get_store_connection(store_id)
+                try:
+                    cursor = store_conn.cursor()
+                    cursor.execute("""
+                        SELECT DISTINCT item_cd FROM daily_sales
+                        WHERE sales_date >= date('now', '-30 days')
+                        ORDER BY item_cd
+                    """)
+                    item_codes = [row[0] for row in cursor.fetchall()]
+                finally:
+                    store_conn.close()
+
+                if not item_codes:
+                    logger.warning("수집 대상 상품이 없습니다")
+                    return
+
+                logger.info(f"[홈 폴백] 수집 대상: {len(item_codes)}개 상품")
+                items = collector.collect_order_unit_via_home(item_codes)
 
             if not items:
                 logger.warning("수집된 발주단위 데이터 없음")
                 return
 
-            # 4. common.db 저장
+            # 3. common.db 저장
             updated = repo.bulk_update_order_unit_qty(items)
 
             logger.info(
@@ -853,6 +935,155 @@ def order_unit_collect_wrapper() -> None:
         logger.error(f"Order unit collection error: {e}")
         import traceback
         traceback.print_exc()
+
+
+def dessert_decision_wrapper(target_categories: list) -> None:
+    """디저트 발주 유지/정지 판단
+
+    Args:
+        target_categories: 대상 카테고리 리스트 (["A"], ["B"], ["C","D"])
+    """
+    logger.info("=" * 60)
+    logger.info(f"Dessert decision ({target_categories}) at {datetime.now().isoformat()}")
+    logger.info("=" * 60)
+
+    from src.settings.constants import DESSERT_DECISION_ENABLED
+    if not DESSERT_DECISION_ENABLED:
+        logger.info("[DessertDecision] 비활성 (DESSERT_DECISION_ENABLED=False)")
+        return
+
+    from src.application.use_cases.dessert_decision_flow import DessertDecisionFlow
+
+    def task(ctx):
+        flow = DessertDecisionFlow(store_id=ctx.store_id)
+        return flow.run(target_categories=target_categories)
+
+    _run_task(task, f"DessertDecision({','.join(target_categories)})")
+
+
+def dessert_weekly_wrapper() -> None:
+    """디저트 카테고리 A 주간 판단 (매주 월요일 22:00)"""
+    dessert_decision_wrapper(["A"])
+
+
+def dessert_biweekly_wrapper() -> None:
+    """디저트 카테고리 B 격주 판단 (매주 월요일 22:15, ISO 짝수주만 실행)"""
+    iso_week = datetime.now().isocalendar()[1]
+    if iso_week % 2 != 0:
+        logger.info(f"[DessertDecision B] ISO 주차 {iso_week} (홀수) - 건너뜀")
+        return
+    dessert_decision_wrapper(["B"])
+
+
+def dessert_monthly_wrapper() -> None:
+    """디저트 카테고리 C/D 월간 판단 (매일 22:30, 매월 1일만 실행)"""
+    if datetime.now().day != 1:
+        return
+    dessert_decision_wrapper(["C", "D"])
+
+
+def beverage_decision_wrapper(target_categories: list) -> None:
+    """음료 발주 유지/정지 판단
+
+    Args:
+        target_categories: 대상 카테고리 리스트 (["A"], ["B"], ["C","D"])
+    """
+    from src.settings.constants import BEVERAGE_DECISION_ENABLED
+    if not BEVERAGE_DECISION_ENABLED:
+        logger.info("[BeverageDecision] 비활성 (BEVERAGE_DECISION_ENABLED=False)")
+        return
+
+    from src.application.use_cases.beverage_decision_flow import BeverageDecisionFlow
+
+    def task(ctx):
+        flow = BeverageDecisionFlow(store_id=ctx.store_id)
+        return flow.run(target_categories=target_categories)
+
+    _run_task(task, f"BeverageDecision({','.join(target_categories)})")
+
+
+def beverage_weekly_wrapper() -> None:
+    """음료 카테고리 A 주간 판단 (매주 월요일 22:30)"""
+    beverage_decision_wrapper(["A"])
+
+
+def beverage_biweekly_wrapper() -> None:
+    """음료 카테고리 B 격주 판단 (매주 월요일 22:45, ISO 짝수주만 실행)"""
+    iso_week = datetime.now().isocalendar()[1]
+    if iso_week % 2 != 0:
+        logger.info(f"[BeverageDecision B] ISO 주차 {iso_week} (홀수) - 건너뜀")
+        return
+    beverage_decision_wrapper(["B"])
+
+
+def beverage_monthly_wrapper() -> None:
+    """음료 카테고리 C/D 월간 판단 (매일 23:00, 매월 1일만 실행)"""
+    if datetime.now().day != 1:
+        return
+    beverage_decision_wrapper(["C", "D"])
+
+
+def detail_fetch_wrapper() -> None:
+    """상품 상세 정보 일괄 수집 (매일 01:00)
+
+    BGF 사이트 로그인 -> CallItemDetailPopup 일괄 조회 ->
+    common.db products + product_details 갱신 -> 로그아웃
+
+    order_unit_collect_wrapper()와 동일한 패턴:
+    BGF 계정 단일이므로 _run_task가 아닌 직접 실행.
+    """
+    logger.info("=" * 60)
+    logger.info(f"Product detail batch fetch at {datetime.now().isoformat()}")
+    logger.info("=" * 60)
+
+    try:
+        from src.sales_analyzer import SalesAnalyzer
+        from src.collectors.product_detail_batch_collector import (
+            ProductDetailBatchCollector,
+        )
+        from src.settings.timing import SA_LOGIN_WAIT, SA_POPUP_CLOSE_WAIT
+
+        # 1. BGF 사이트 로그인
+        analyzer = SalesAnalyzer()
+        try:
+            analyzer.setup_driver()
+            analyzer.connect()
+            time.sleep(SA_LOGIN_WAIT)
+
+            if not analyzer.do_login():
+                logger.error("[DetailFetch] BGF 로그인 실패")
+                return
+
+            time.sleep(SA_POPUP_CLOSE_WAIT * 2)
+            analyzer.close_popup()
+            time.sleep(SA_POPUP_CLOSE_WAIT)
+
+            # 2. 일괄 수집 (홈 화면에서 바로 edt_pluSearch 사용)
+            collector = ProductDetailBatchCollector(
+                driver=analyzer.driver,
+                store_id=None,  # common.db 대상
+            )
+
+            stats = collector.collect_all()
+
+            logger.info(f"[DetailFetch] 결과: {stats}")
+
+            # 3. 카카오 알림 (선택)
+            if stats["success"] > 0:
+                try:
+                    notifier = KakaoNotifier(rest_api_key=DEFAULT_REST_API_KEY)
+                    notifier.send_to_me(
+                        f"상품상세 수집 완료: "
+                        f"성공 {stats['success']}/{stats['total']}건"
+                    )
+                except Exception:
+                    pass
+
+        finally:
+            analyzer.close()
+
+    except Exception as e:
+        logger.error(f"[DetailFetch] 실패: {e}", exc_info=True)
 
 
 # ── 스케줄러 메인 ──
@@ -880,8 +1111,25 @@ def run_scheduler(schedule_time: str = "07:00", multi_store: bool = True) -> Non
     if multi_store:
         logger.info("[MULTI-STORE MODE] 모든 작업이 활성 매장별 병렬 실행됩니다")
     logger.info("=" * 60)
-    logger.info(f"[Scheduler] Started at: {datetime.now().isoformat()}")
-    logger.info(f"[Scheduler] PID: {os.getpid()}")
+    # BUILD 정보: git commit + branch + PID + 시작 시각
+    try:
+        _commit = subprocess.check_output(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=str(project_root), stderr=subprocess.DEVNULL, text=True
+        ).strip()
+    except Exception:
+        _commit = "unknown"
+    try:
+        _branch = subprocess.check_output(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            cwd=str(project_root), stderr=subprocess.DEVNULL, text=True
+        ).strip()
+    except Exception:
+        _branch = "unknown"
+    logger.info(
+        f"[BUILD] commit={_commit} branch={_branch} "
+        f"pid={os.getpid()} started_at={datetime.now().isoformat()}"
+    )
     logger.info("[Scheduler] Press Ctrl+C to stop")
     logger.info("=" * 60)
 
@@ -971,9 +1219,13 @@ def run_scheduler(schedule_time: str = "07:00", multi_store: bool = True) -> Non
     schedule.every().day.at("23:30").do(batch_expire_wrapper)
     logger.info("[Schedule] Batch expire check: 23:30")
 
-    # 8. ML 모델 재학습 (매주 월요일 03:00)
-    schedule.every().monday.at("03:00").do(ml_train_wrapper)
-    logger.info("[Schedule] ML model training: Monday 03:00")
+    # 8. ML 모델 학습
+    # 8-1. 매일 증분학습 (23:45) — 30일 윈도우, 성능 보호 게이트
+    schedule.every().day.at("23:45").do(ml_train_wrapper, incremental=True)
+    logger.info("[Schedule] ML incremental training: daily 23:45")
+    # 8-2. 주간 전체학습 (일요일 03:00) — 90일 윈도우, 기준선 갱신
+    schedule.every().sunday.at("03:00").do(ml_train_wrapper, incremental=False)
+    logger.info("[Schedule] ML full training: Sunday 03:00")
 
     # 9. 연관 규칙 채굴 (매일 05:00)
     schedule.every().day.at("05:00").do(association_mining_wrapper)
@@ -984,9 +1236,41 @@ def run_scheduler(schedule_time: str = "07:00", multi_store: bool = True) -> Non
     schedule.every().day.at("00:00").do(order_unit_collect_wrapper)
     logger.info("[Schedule] Order unit qty collection: 00:00")
 
-    # 11. 베이지안 파라미터 최적화 (매주 일요일 23:00)
+    # 11. 상품 상세 일괄 수집 (매일 01:00)
+    # CallItemDetailPopup 일괄 조회 -> common.db products + product_details 갱신
+    schedule.every().day.at("01:00").do(detail_fetch_wrapper)
+    logger.info("[Schedule] Product detail batch fetch: 01:00")
+
+    # 12. 베이지안 파라미터 최적화 (매주 일요일 23:00)
     schedule.every().sunday.at("23:00").do(bayesian_optimize_wrapper)
     logger.info("[Schedule] Bayesian parameter optimization: Sunday 23:00")
+
+    # 14. 디저트 발주 유지/정지 판단
+    # Cat A: 매주 월요일 22:00
+    schedule.every().monday.at("22:00").do(dessert_weekly_wrapper)
+    logger.info("[Schedule] Dessert decision (Cat A weekly): Monday 22:00")
+    # Cat B: 매주 월요일 22:15 (ISO 짝수주만 실행)
+    schedule.every().monday.at("22:15").do(dessert_biweekly_wrapper)
+    logger.info("[Schedule] Dessert decision (Cat B biweekly): Monday 22:15")
+    # Cat C/D: 매일 22:30 (매월 1일만 실행)
+    schedule.every().day.at("22:30").do(dessert_monthly_wrapper)
+    logger.info("[Schedule] Dessert decision (Cat C/D monthly): daily 22:30 (1st only)")
+
+    # 15. 음료 발주 유지/정지 판단
+    # Cat A: 매주 월요일 22:30
+    schedule.every().monday.at("22:30").do(beverage_weekly_wrapper)
+    logger.info("[Schedule] Beverage decision (Cat A weekly): Monday 22:30")
+    # Cat B: 매주 월요일 22:45 (ISO 짝수주만 실행)
+    schedule.every().monday.at("22:45").do(beverage_biweekly_wrapper)
+    logger.info("[Schedule] Beverage decision (Cat B biweekly): Monday 22:45")
+    # Cat C/D: 매일 23:00 (매월 1일만 실행)
+    schedule.every().day.at("23:00").do(beverage_monthly_wrapper)
+    logger.info("[Schedule] Beverage decision (Cat C/D monthly): daily 23:00 (1st only)")
+
+    # 13. 주간 재고 검증 (매주 수요일 02:00)
+    # 전 매장 BGF 실재고 vs DB 비교 + 불일치 동기화 + 엑셀 리포트
+    schedule.every().wednesday.at("02:00").do(inventory_verify_wrapper)
+    logger.info("[Schedule] Weekly inventory verification: Wednesday 02:00")
 
     logger.info("=" * 60)
 
@@ -1101,9 +1385,28 @@ if __name__ == "__main__":
         help="Collect order unit qty from BGF site immediately"
     )
     parser.add_argument(
+        "--fetch-detail",
+        action="store_true",
+        help="Batch fetch product detail info from CallItemDetailPopup immediately"
+    )
+    parser.add_argument(
         "--bayesian-optimize",
         action="store_true",
         help="Run Bayesian parameter optimization immediately"
+    )
+    parser.add_argument(
+        "--dessert-decision",
+        type=str,
+        nargs="*",
+        default=None,
+        help="Run dessert decision immediately (e.g., --dessert-decision A B or --dessert-decision for all)"
+    )
+    parser.add_argument(
+        "--beverage-decision",
+        type=str,
+        nargs="*",
+        default=None,
+        help="Run beverage decision immediately (e.g., --beverage-decision A B or --beverage-decision for all)"
     )
     parser.add_argument(
         "--multi-store",
@@ -1128,12 +1431,24 @@ if __name__ == "__main__":
         help="Number of days for backfill (default: 30, used with --sync-waste-backfill)"
     )
     parser.add_argument(
+        "--sync-cloud",
+        action="store_true",
+        help="Sync DB files to PythonAnywhere immediately"
+    )
+    parser.add_argument(
         "--store",
         type=str,
         default=None,
         help="Run for specific store ID only (e.g., --store 46513)"
     )
-
+    parser.add_argument(
+        "--order-date",
+        type=str,
+        action="append",
+        default=None,
+        help="Filter auto-order to specific date(s) only (YYYY-MM-DD). "
+             "Can be specified multiple times. (e.g., --order-date 2026-03-01)"
+    )
     args = parser.parse_args()
 
     # --single-store면 멀티 비활성, 아니면 기본 멀티
@@ -1162,9 +1477,29 @@ if __name__ == "__main__":
                     f"inserted={result['total_inserted']}, "
                     f"skipped={result['total_skipped']}"
                 )
+        elif args.sync_cloud:
+            from scripts.sync_to_cloud import run_cloud_sync
+            result = run_cloud_sync()
+            if result.get("success"):
+                logger.info("[CloudSync] DB 동기화 완료")
+            elif result.get("skipped"):
+                logger.warning(f"[CloudSync] 건너뜀: {result.get('reason')}")
+            else:
+                logger.error(f"[CloudSync] 실패: {result.get('error', result.get('failed', []))}")
         elif args.collect_order_unit:
             init_db()
             order_unit_collect_wrapper()
+        elif args.fetch_detail:
+            init_db()
+            detail_fetch_wrapper()
+        elif args.dessert_decision is not None:
+            init_db()
+            cats = args.dessert_decision if args.dessert_decision else ["A", "B", "C", "D"]
+            dessert_decision_wrapper(cats)
+        elif args.beverage_decision is not None:
+            init_db()
+            cats = args.beverage_decision if args.beverage_decision else ["A", "B", "C", "D"]
+            beverage_decision_wrapper(cats)
         elif args.bayesian_optimize:
             init_db()
             bayesian_optimize_wrapper()
@@ -1194,11 +1529,14 @@ if __name__ == "__main__":
         elif args.now:
             if args.store:
                 logger.info(f"Running job for store {args.store} immediately...")
+                if args.order_date:
+                    logger.info(f"Order date filter: {args.order_date}")
                 init_db()
                 from src.scheduler.daily_job import DailyCollectionJob
                 job = DailyCollectionJob(store_id=args.store)
                 result = job.run_optimized(
-                    run_auto_order=True, use_improved_predictor=True
+                    run_auto_order=True, use_improved_predictor=True,
+                    target_dates=args.order_date,
                 )
                 if result.get("success"):
                     logger.info("Job completed successfully")
@@ -1209,6 +1547,7 @@ if __name__ == "__main__":
                             f"  - Order: {order.get('success_count', 0)} success, "
                             f"{order.get('fail_count', 0)} fail"
                         )
+                    _try_cloud_sync()
                 else:
                     logger.error(f"Job failed: {result.get('error', 'Unknown')}")
             else:
