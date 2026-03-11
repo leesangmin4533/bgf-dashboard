@@ -70,7 +70,10 @@ def predictor_db(tmp_path):
             sell_price INTEGER,
             margin_rate REAL,
             lead_time_days INTEGER DEFAULT 1,
-            orderable_day TEXT DEFAULT '일월화수목금토'
+            orderable_day TEXT DEFAULT '일월화수목금토',
+            large_cd TEXT,
+            small_cd TEXT,
+            class_nm TEXT
         );
 
         CREATE TABLE promotions (
@@ -255,8 +258,12 @@ class TestStockSufficiency:
         assert result is not None
         # 담배 카테고리(072) 예측 결과 존재 확인
         assert result.mid_cd == "072"
-        # tobacco_max_stock 설정 확인
-        assert result.tobacco_max_stock == 30
+        # tobacco_max_stock 설정 확인 (낱개형=TOBACCO_DISPLAY_MAX=11)
+        assert result.tobacco_max_stock == 11
+        # 신규 분류 필드 확인
+        assert result.tobacco_type == "single"
+        assert result.tobacco_target_stock == 11
+        assert result.tobacco_suggested_decision == "SKIP"  # stock 16 >= target 11
 
 
 class TestCategoryRouting:
@@ -470,7 +477,7 @@ class TestForceOrderCap:
         """FORCE_MAX_DAYS 상수 존재 확인"""
         from src.settings.constants import FORCE_MAX_DAYS
         assert FORCE_MAX_DAYS > 0
-        assert FORCE_MAX_DAYS == 2  # 기본값
+        assert FORCE_MAX_DAYS == 1.5  # 2→1.5 하향 (need-qty-fix)
 
     def test_force_order_capped(self, predictor_db):
         """품절 상품의 발주량이 FORCE_MAX_DAYS로 상한됨"""

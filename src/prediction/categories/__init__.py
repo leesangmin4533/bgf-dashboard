@@ -24,6 +24,7 @@ from .tobacco import (
     analyze_tobacco_pattern,
     calculate_tobacco_dynamic_safety,
     get_safety_stock_with_tobacco_pattern,
+    classify_and_calculate_tobacco,
     TobaccoPatternResult,
     TOBACCO_DYNAMIC_SAFETY_CONFIG,
 )
@@ -50,6 +51,7 @@ from .food import (
     calculate_delivery_gap_consumption,
     get_food_weekday_coefficient,
     get_food_weather_cross_coefficient,
+    get_food_precipitation_cross_coefficient,
     FoodExpiryResult,
     FOOD_CATEGORIES,
     FOOD_EXPIRY_SAFETY_CONFIG,
@@ -59,6 +61,7 @@ from .food import (
     DELIVERY_GAP_CONFIG,
     DELIVERY_TIME_DEMAND_RATIO,
     FOOD_WEATHER_CROSS_COEFFICIENTS,
+    FOOD_PRECIPITATION_CROSS_COEFFICIENTS,
     FOOD_ANALYSIS_DAYS,
 )
 
@@ -217,6 +220,7 @@ __all__ = [
     'analyze_tobacco_pattern',
     'calculate_tobacco_dynamic_safety',
     'get_safety_stock_with_tobacco_pattern',
+    'classify_and_calculate_tobacco',
     'TobaccoPatternResult',
     'TOBACCO_DYNAMIC_SAFETY_CONFIG',
     # 라면
@@ -248,6 +252,8 @@ __all__ = [
     'FOOD_WEATHER_CROSS_COEFFICIENTS',
     'get_food_weekday_coefficient',
     'get_food_weather_cross_coefficient',
+    'get_food_precipitation_cross_coefficient',
+    'FOOD_PRECIPITATION_CROSS_COEFFICIENTS',
     'FOOD_ANALYSIS_DAYS',
     # (deprecated - use get_dynamic_disuse_coefficient instead)
     # 'get_food_disuse_coefficient',  -- still exported for backward compat

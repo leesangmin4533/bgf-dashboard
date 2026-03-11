@@ -2,21 +2,34 @@
 담배/전자담배 카테고리 예측 모듈
 
 담배(072), 전자담배(073)의 동적 안전재고 계산:
+- 3종 분류: LIL(전자담배 액상), 보루형(카톤 구매 이력), 낱개형
 - 보루 패턴: 10갑 단위 구매 빈도 분석
 - 전량 소진 패턴: 재고 소진 빈도 분석
-- 상한선: 30개 (진열 공간 제약)
-
-공식: (일평균 × 2일 + 보루버퍼) × 전량소진계수
+- 상한선: 낱개형 11, 보루형 41, LIL류 max(daily*3, 11)
 """
 
 import sqlite3
-from pathlib import Path
-from dataclasses import dataclass
-from typing import List, Optional, Tuple
+from dataclasses import dataclass, field
+from typing import Dict, List, Optional, Tuple
+
+from src.settings.constants import (
+    TOBACCO_DISPLAY_MAX,
+    TOBACCO_BOURU_UNIT,
+    TOBACCO_BOURU_THRESHOLD,
+    TOBACCO_BOURU_LOOKBACK_DAYS,
+    TOBACCO_BOURU_FREQ_MULTIPLIER,
+    TOBACCO_BOURU_DECAY_DAYS,
+    TOBACCO_BOURU_DECAY_RATIO,
+    TOBACCO_BOURU_MAX_STOCK,
+    TOBACCO_SINGLE_URGENT_THRESHOLD,
+    TOBACCO_BOURU_URGENT_THRESHOLD,
+    TOBACCO_FORCE_MIN_DAILY_AVG,
+    LIL_BOURU_THRESHOLD,
+)
 
 
 # =============================================================================
-# 담배 동적 안전재고 설정
+# 담배 동적 안전재고 설정 (기존 유지 — 후방 호환)
 # =============================================================================
 TOBACCO_DYNAMIC_SAFETY_CONFIG = {
     "enabled": True,              # 동적 안전재고 적용 여부
@@ -56,14 +69,15 @@ TOBACCO_DYNAMIC_SAFETY_CONFIG = {
 
     # === 최대 재고 상한선 설정 ===
     "max_stock_enabled": True,
-    "max_stock": 30,              # 담배 상품당 최대 보유 수량
+    "max_stock": 30,              # 담배 상품당 최대 보유 수량 (낱개형 기본)
     "min_order_unit": 10,         # 최소 발주 단위 (입수)
 }
 
 
-def _get_db_path() -> str:
+def _get_db_path(store_id: str = None) -> str:
     """DB 경로 반환"""
-    return str(Path(__file__).parent.parent.parent.parent / "data" / "bgf_sales.db")
+    from src.infrastructure.database.connection import resolve_db_path
+    return resolve_db_path(store_id=store_id)
 
 
 @dataclass
@@ -94,8 +108,8 @@ class TobaccoPatternResult:
 
     # 최대 재고 관련
     current_stock: int             # 현재 재고
-    max_stock: int                 # 최대 재고 상한선 (30개)
-    available_space: int           # 여유분 (30 - 현재재고 - 미입고)
+    max_stock: int                 # 최대 재고 상한선
+    available_space: int           # 여유분 (상한 - 현재고 - 미입고)
     skip_order: bool               # 발주 스킵 여부
     skip_reason: str               # 스킵 사유
 
@@ -103,6 +117,15 @@ class TobaccoPatternResult:
     final_buffer: int              # 최종 추가 안전재고 (보루 버퍼)
     final_multiplier: float        # 최종 승수 (전량 소진)
     final_safety_stock: float      # 최종 안전재고 (개수)
+
+    # ── 신규 분류 필드 (tobacco-strategy-improvement) ──
+    tobacco_type: str = ""                  # "lil" | "bouru" | "single"
+    target_stock: int = 0                   # 목표 재고
+    bouru_count_60d: int = 0                # 60일 보루 발생 횟수
+    bouru_count_30d: int = 0                # 30일 보루 발생 횟수
+    decay_applied: bool = False             # 감쇠 적용 여부
+    suggested_decision: str = ""            # FORCE / URGENT / NORMAL / SKIP
+    decision_reason: str = ""               # 판정 이유 (한글)
 
 
 def is_tobacco_category(mid_cd: str) -> bool:
@@ -117,6 +140,226 @@ def is_tobacco_category(mid_cd: str) -> bool:
     return mid_cd in TOBACCO_DYNAMIC_SAFETY_CONFIG["target_categories"]
 
 
+# =============================================================================
+# 보루 이력 조회 (DB)
+# =============================================================================
+def _query_bouru_history(
+    item_cd: str,
+    store_id: Optional[str] = None,
+    db_path: Optional[str] = None,
+) -> Tuple[int, int]:
+    """daily_sales에서 보루 구매 이력 조회
+
+    Args:
+        item_cd: 상품코드
+        store_id: 매장 ID
+        db_path: DB 경로 (테스트용)
+
+    Returns:
+        (bouru_count_60d, bouru_count_30d)
+    """
+    if db_path is None:
+        db_path = _get_db_path(store_id)
+
+    conn = sqlite3.connect(db_path, timeout=30)
+    try:
+        cursor = conn.cursor()
+        if store_id:
+            cursor.execute("""
+                SELECT
+                    SUM(CASE WHEN sale_qty >= ? THEN 1 ELSE 0 END) as cnt_60d,
+                    SUM(CASE WHEN sale_qty >= ?
+                         AND sales_date >= date('now', '-' || ? || ' days')
+                         THEN 1 ELSE 0 END) as cnt_30d
+                FROM daily_sales
+                WHERE item_cd = ?
+                AND store_id = ?
+                AND sales_date >= date('now', '-' || ? || ' days')
+            """, (TOBACCO_BOURU_THRESHOLD, TOBACCO_BOURU_THRESHOLD,
+                  TOBACCO_BOURU_DECAY_DAYS, item_cd, store_id,
+                  TOBACCO_BOURU_LOOKBACK_DAYS))
+        else:
+            cursor.execute("""
+                SELECT
+                    SUM(CASE WHEN sale_qty >= ? THEN 1 ELSE 0 END) as cnt_60d,
+                    SUM(CASE WHEN sale_qty >= ?
+                         AND sales_date >= date('now', '-' || ? || ' days')
+                         THEN 1 ELSE 0 END) as cnt_30d
+                FROM daily_sales
+                WHERE item_cd = ?
+                AND sales_date >= date('now', '-' || ? || ' days')
+            """, (TOBACCO_BOURU_THRESHOLD, TOBACCO_BOURU_THRESHOLD,
+                  TOBACCO_BOURU_DECAY_DAYS, item_cd,
+                  TOBACCO_BOURU_LOOKBACK_DAYS))
+
+        row = cursor.fetchone()
+        if row:
+            return (row[0] or 0, row[1] or 0)
+        return (0, 0)
+    finally:
+        conn.close()
+
+
+# =============================================================================
+# 신규: 보루/낱개/LIL 분류 기반 안전재고 계산
+# =============================================================================
+def classify_and_calculate_tobacco(
+    mid_cd: str,
+    item_cd: str,
+    daily_avg: float,
+    current_stock: int = 0,
+    pending_qty: int = 0,
+    store_id: Optional[str] = None,
+    bouru_count_60d: Optional[int] = None,
+    bouru_count_30d: Optional[int] = None,
+) -> TobaccoPatternResult:
+    """보루/낱개/LIL 3종 분류 + 목표재고 + 판정
+
+    Args:
+        mid_cd: 중분류 코드 ("072" 또는 "073")
+        item_cd: 상품코드
+        daily_avg: 일평균 판매량
+        current_stock: 현재 재고
+        pending_qty: 미입고 수량
+        store_id: 매장 ID
+        bouru_count_60d: 60일 보루 횟수 (None이면 DB 조회)
+        bouru_count_30d: 30일 보루 횟수 (None이면 DB 조회)
+
+    Returns:
+        TobaccoPatternResult (신규 필드 포함)
+    """
+    cs = current_stock or 0
+    pq = pending_qty or 0
+
+    # ── Step 1: 분류 ──────────────────────────────────────
+    if mid_cd == "073":
+        tobacco_type = "lil"
+        b60d, b30d = 0, 0
+    else:
+        # DB에서 보루 이력 조회 (외부에서 주입 가능)
+        if bouru_count_60d is not None and bouru_count_30d is not None:
+            b60d, b30d = bouru_count_60d, bouru_count_30d
+        else:
+            b60d, b30d = _query_bouru_history(item_cd, store_id)
+        tobacco_type = "bouru" if b60d > 0 else "single"
+
+    # ── Step 2: 목표 재고 계산 ────────────────────────────
+    decay_applied = False
+
+    if tobacco_type == "lil":
+        target_stock = max(round(daily_avg * 3), TOBACCO_DISPLAY_MAX)
+        max_stock = target_stock  # LIL은 자체 목표가 상한
+
+    elif tobacco_type == "bouru":
+        bouru_safety = round(b60d * TOBACCO_BOURU_FREQ_MULTIPLIER) * TOBACCO_BOURU_UNIT
+        # 최근 30일 이력 없으면 감쇠
+        if b30d == 0:
+            bouru_safety = int(bouru_safety * TOBACCO_BOURU_DECAY_RATIO)
+            decay_applied = True
+        target_stock = min(TOBACCO_DISPLAY_MAX + bouru_safety, TOBACCO_BOURU_MAX_STOCK)
+        max_stock = TOBACCO_BOURU_MAX_STOCK
+
+    else:  # single
+        target_stock = TOBACCO_DISPLAY_MAX
+        max_stock = TOBACCO_DISPLAY_MAX
+
+    # ── Step 3: 판정 ─────────────────────────────────────
+    if tobacco_type == "lil":
+        if cs == 0 and daily_avg >= TOBACCO_FORCE_MIN_DAILY_AVG:
+            decision = "FORCE"
+            reason = f"LIL 품절 + 일평균 {daily_avg:.1f}≥{TOBACCO_FORCE_MIN_DAILY_AVG}"
+        elif cs < target_stock * 0.3:
+            decision = "URGENT"
+            reason = f"LIL 재고 {cs} < 목표의 30%({target_stock * 0.3:.0f})"
+        elif cs < target_stock:
+            decision = "NORMAL"
+            reason = f"LIL 재고 {cs} < 목표 {target_stock}"
+        else:
+            decision = "SKIP"
+            reason = f"LIL 재고 {cs} ≥ 목표 {target_stock}"
+
+    elif tobacco_type == "bouru":
+        if cs == 0 and daily_avg >= TOBACCO_FORCE_MIN_DAILY_AVG:
+            decision = "FORCE"
+            reason = f"보루형 품절 + 일평균 {daily_avg:.1f}≥{TOBACCO_FORCE_MIN_DAILY_AVG}"
+        elif cs < TOBACCO_BOURU_URGENT_THRESHOLD:
+            decision = "URGENT"
+            reason = f"보루형 재고 {cs} < {TOBACCO_BOURU_URGENT_THRESHOLD} (보루 판매 불가)"
+        elif cs < target_stock:
+            decision = "NORMAL"
+            reason = f"보루형 재고 {cs} < 목표 {target_stock}"
+        else:
+            decision = "SKIP"
+            reason = f"보루형 재고 {cs} ≥ 목표 {target_stock}"
+
+    else:  # single
+        if cs == 0 and daily_avg >= TOBACCO_FORCE_MIN_DAILY_AVG:
+            decision = "FORCE"
+            reason = f"낱개형 품절 + 일평균 {daily_avg:.1f}≥{TOBACCO_FORCE_MIN_DAILY_AVG}"
+        elif cs < TOBACCO_SINGLE_URGENT_THRESHOLD:
+            decision = "URGENT"
+            reason = f"낱개형 재고 {cs} < {TOBACCO_SINGLE_URGENT_THRESHOLD}"
+        elif cs < target_stock:
+            decision = "NORMAL"
+            reason = f"낱개형 재고 {cs} < 목표 {target_stock}"
+        else:
+            decision = "SKIP"
+            reason = f"낱개형 재고 {cs} ≥ 목표 {target_stock}"
+
+    # ── Step 4: available_space & skip 계산 ──────────────
+    available_space = max(0, target_stock - cs - pq)
+    # 미입고 포함 시 공간 없으면 SKIP 전환
+    if available_space == 0 and decision not in ("FORCE",):
+        decision = "SKIP"
+        reason = f"재고({cs})+미입고({pq}) ≥ 목표({target_stock})"
+    skip_order = (decision == "SKIP")
+    skip_reason = reason if skip_order else ""
+
+    # ── 안전재고 값 (파이프라인 연동용) ──────────────────
+    # target_stock을 safety_stock으로 반환, 파이프라인에서 available_space로 cap
+    final_safety_stock = float(target_stock)
+
+    return TobaccoPatternResult(
+        item_cd=item_cd,
+        actual_data_days=0,    # 이 경로에서는 개별 row 분석 안 함
+        analysis_days=TOBACCO_BOURU_LOOKBACK_DAYS,
+        has_enough_data=True,
+        daily_avg=round(daily_avg, 2),
+        # 보루 패턴 (후방 호환)
+        carton_count_raw=b60d,
+        carton_count_scaled=float(b60d),
+        carton_level="high" if b60d >= 4 else ("medium" if b60d >= 2 else "low"),
+        carton_buffer=0,
+        carton_dates=[],
+        # 전량 소진 패턴 (후방 호환, 이 경로에서는 미분석)
+        sellout_count_raw=0,
+        sellout_count_scaled=0.0,
+        sellout_level="low",
+        sellout_multiplier=1.0,
+        # 재고 관련
+        current_stock=cs,
+        max_stock=max_stock,
+        available_space=available_space,
+        skip_order=skip_order,
+        skip_reason=skip_reason,
+        # 기존 최종 결과 (후방 호환)
+        final_buffer=0,
+        final_multiplier=1.0,
+        final_safety_stock=round(final_safety_stock, 2),
+        # ── 신규 분류 필드 ──
+        tobacco_type=tobacco_type,
+        target_stock=target_stock,
+        bouru_count_60d=b60d,
+        bouru_count_30d=b30d,
+        decay_applied=decay_applied,
+        suggested_decision=decision,
+        decision_reason=reason,
+    )
+
+
+# =============================================================================
+# 기존 분석 함수 (후방 호환 유지)
+# =============================================================================
 def analyze_tobacco_pattern(
     item_cd: str,
     db_path: Optional[str] = None,
@@ -125,7 +368,7 @@ def analyze_tobacco_pattern(
     store_id: Optional[str] = None
 ) -> TobaccoPatternResult:
     """
-    담배 상품의 보루 + 전량소진 패턴 종합 분석
+    담배 상품의 보루 + 전량소진 패턴 종합 분석 (기존 로직 유지)
 
     Args:
         item_cd: 상품코드
@@ -340,7 +583,12 @@ def get_safety_stock_with_tobacco_pattern(
     store_id: Optional[str] = None
 ) -> Tuple[float, Optional[TobaccoPatternResult]]:
     """
-    안전재고 계산 (담배 동적 패턴 포함)
+    안전재고 계산 — 보루/낱개/LIL 3종 분류 기반
+
+    신규 로직: classify_and_calculate_tobacco() 호출
+    - LIL(073): 일평균×3일 안전재고, 최소 진열대(11)
+    - 보루형: 진열대(11) + 보루안전재고, 상한 41, 30일 감쇠
+    - 낱개형: 진열대(11) 고정
 
     Args:
         mid_cd: 중분류 코드
@@ -352,7 +600,7 @@ def get_safety_stock_with_tobacco_pattern(
         store_id: 매장 ID (None이면 전체 매장)
 
     Returns:
-        (안전재고_개수, 담배_패턴_정보)
+        (안전재고_개수, TobaccoPatternResult)
         - 담배가 아니면 패턴_정보는 None
     """
     # 담배/전자담배가 아니면 기본값 반환
@@ -361,12 +609,17 @@ def get_safety_stock_with_tobacco_pattern(
         safety_days = get_safety_stock_days(mid_cd, daily_avg, expiration_days)
         return daily_avg * safety_days, None
 
-    # 담배: 동적 안전재고 계산
+    # 담배: 신규 3종 분류 기반 계산
     if item_cd and TOBACCO_DYNAMIC_SAFETY_CONFIG["enabled"]:
-        final_safety, pattern = calculate_tobacco_dynamic_safety(
-            item_cd, daily_avg, None, current_stock, pending_qty, store_id
+        pattern = classify_and_calculate_tobacco(
+            mid_cd=mid_cd,
+            item_cd=item_cd,
+            daily_avg=daily_avg,
+            current_stock=current_stock or 0,
+            pending_qty=pending_qty,
+            store_id=store_id,
         )
-        return final_safety, pattern
+        return pattern.final_safety_stock, pattern
 
     # 기본값 (상품코드 없거나 비활성화 시)
     default_days = TOBACCO_DYNAMIC_SAFETY_CONFIG["default_safety_days"]
