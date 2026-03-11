@@ -125,7 +125,7 @@ MAX_ORDER_MULTIPLIER = 99         # 최대 발주 배수 (BGF 시스템 제한)
 MAX_PENDING_ITEMS = 200           # 미입고 조회 최대 상품 수
 MAX_PREFETCH_ITEMS = 50           # 상품 상세 사전 수집 최대 건수
 MAX_DAILY_ORDER_ITEMS = 50        # 일일 자동 발주 기본 최대 상품 수
-TOBACCO_MAX_STOCK = 30            # 담배 최대 재고 상한선 (개)
+TOBACCO_MAX_STOCK = 41            # 담배 최대 재고 상한선 (보루형 상한, 패턴 실패 시 폴백)
 
 # ── 담배 보루/낱개/LIL 분류 (tobacco-strategy-improvement) ──
 TOBACCO_DISPLAY_MAX = 11            # 진열대 최대 용량 (낱개 기준)

@@ -25,7 +25,12 @@ from src.settings.constants import (
     FORCE_INTERMITTENT_SELL_RATIO,
     FORCE_INTERMITTENT_MAX_EXPIRY,
     FORCE_INTERMITTENT_COOLDOWN_DAYS,
+    FOOD_CATEGORIES,
 )
+
+# stale RI → stock=0 적용 대상 (유통기한 짧은 카테고리만)
+# 푸드(001~005,012) + 디저트(014)
+STALE_ZERO_CATEGORIES = set(FOOD_CATEGORIES + ["014"])
 
 logger = get_logger(__name__)
 
@@ -482,7 +487,10 @@ class PreOrderEvaluator(BaseRepository):
                     is_stale = True
 
                 if is_stale:
-                    stock_qty = 0  # stale 재고는 0 처리
+                    if mid_cd in STALE_ZERO_CATEGORIES:
+                        stock_qty = 0  # 푸드/디저트: stale → 0 (유통기한 짧아 유령재고 위험)
+                    else:
+                        continue  # 비식품: stale RI 건너뜀 → daily_sales fallback 사용
 
                 result[row["item_cd"]] = (stock_qty, pending_qty)
 
@@ -1028,6 +1036,13 @@ class PreOrderEvaluator(BaseRepository):
                 decision = upgrade_map[decision]
                 reason += f"+품절빈도{stockout_frequency:.0%}"
 
+        # 담배(072,073) SKIP 방지: 보루 전략이 독자적으로 URGENT/NORMAL 판정하므로
+        # PreOrderEvaluator가 SKIP하면 보루 재고 부족 시 발주 누락 발생
+        # → PASS로 전환하여 담배 안전재고 플로우에 위임
+        if decision == EvalDecision.SKIP and mid_cd in ("072", "073"):
+            decision = EvalDecision.PASS
+            reason += "→담배PASS(보루전략위임)"
+
         return decision, reason
 
     # =========================================================================
@@ -1149,23 +1164,64 @@ class PreOrderEvaluator(BaseRepository):
                     logger.info(f"CUT 미확인 의심 상품 {len(self._stale_cut_suspects)}개 (FORCE 가드 적용)")
             except Exception as e:
                 logger.warning(f"CUT 미확인 의심 상품 조회 실패: {e}")
+
+            # CUT 상품 수요 데이터 배치 조회 (대체 보충용)
+            cut_in_candidates = [cd for cd in item_codes if cd in cut_items] if cut_items else []
+            cut_demand_map = {}  # {item_cd: {"mid_cd", "daily_avg", "item_nm"}}
+            if cut_in_candidates:
+                try:
+                    days = int(self.config.daily_avg_days.value)
+                    store_filter_ds = "AND ds.store_id = ?" if self.store_id else ""
+                    store_params_ds = [self.store_id] if self.store_id else []
+                    for chunk in self._chunked(cut_in_candidates):
+                        placeholders = ",".join("?" * len(chunk))
+                        # daily_avg 조회
+                        cut_cursor.execute(f"""
+                            SELECT item_cd,
+                                   CAST(SUM(sale_qty) AS REAL) / ? as daily_avg
+                            FROM daily_sales ds
+                            WHERE ds.item_cd IN ({placeholders})
+                              AND ds.sales_date >= date('now', '-' || ? || ' days')
+                              {store_filter_ds}
+                            GROUP BY ds.item_cd
+                        """, [days] + list(chunk) + [days] + store_params_ds)
+                        for row in cut_cursor.fetchall():
+                            cut_demand_map[row[0]] = {"daily_avg": row[1] or 0}
+                        # mid_cd, item_nm 조회 (products via ATTACH)
+                        cut_cursor.execute(f"""
+                            SELECT item_cd, item_nm, mid_cd FROM products
+                            WHERE item_cd IN ({placeholders})
+                        """, list(chunk))
+                        for row in cut_cursor.fetchall():
+                            entry = cut_demand_map.get(row[0], {"daily_avg": 0})
+                            entry["mid_cd"] = row[2] or ""
+                            entry["item_nm"] = row[1] or ""
+                            cut_demand_map[row[0]] = entry
+                except Exception as e:
+                    logger.warning(f"CUT 수요 데이터 조회 실패 (무시): {e}")
         finally:
             cut_conn.close()
 
-        if cut_items:
-            cut_in_candidates = [cd for cd in item_codes if cd in cut_items]
-            if cut_in_candidates:
-                for cd in cut_in_candidates:
-                    results[cd] = PreOrderEvalResult(
-                        item_cd=cd, item_nm="", mid_cd="",
-                        decision=EvalDecision.SKIP,
-                        reason="CUT(발주중지) 상품",
-                        exposure_days=0, stockout_frequency=0,
-                        popularity_score=0, current_stock=0,
-                        pending_qty=0, daily_avg=0, trend_score=0,
-                    )
-                item_codes = [cd for cd in item_codes if cd not in cut_items]
-                logger.info(f"CUT 상품 {len(cut_in_candidates)}개 SKIP 처리")
+        if cut_in_candidates:
+            for cd in cut_in_candidates:
+                demand_info = cut_demand_map.get(cd, {})
+                results[cd] = PreOrderEvalResult(
+                    item_cd=cd,
+                    item_nm=demand_info.get("item_nm", ""),
+                    mid_cd=demand_info.get("mid_cd", ""),
+                    decision=EvalDecision.SKIP,
+                    reason="CUT(발주중지) 상품",
+                    exposure_days=0, stockout_frequency=0,
+                    popularity_score=0, current_stock=0,
+                    pending_qty=0,
+                    daily_avg=round(demand_info.get("daily_avg", 0), 2),
+                    trend_score=0,
+                )
+            item_codes = [cd for cd in item_codes if cd not in cut_items]
+            logger.info(
+                f"CUT 상품 {len(cut_in_candidates)}개 SKIP 처리"
+                f" (수요보존: {sum(1 for v in cut_demand_map.values() if v.get('daily_avg', 0) > 0)}건)"
+            )
 
         logger.info(f"사전 발주 평가 시작: {len(item_codes)}개 상품")
 

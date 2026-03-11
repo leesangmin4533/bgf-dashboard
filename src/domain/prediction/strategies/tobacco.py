@@ -39,4 +39,7 @@ class TobaccoStrategy(CategoryStrategy):
         self, mid_cd: str, daily_avg: float,
         expiration_days: int, **kwargs,
     ) -> Optional[int]:
-        return TOBACCO_DYNAMIC_SAFETY_CONFIG.get("max_stock", 30)
+        # 보루형 상한(41) 반환 — 실제 cap은 improved_predictor에서
+        # tobacco_pattern.max_stock (11/41/LIL target) 기준으로 적용됨
+        from src.settings.constants import TOBACCO_BOURU_MAX_STOCK
+        return TOBACCO_BOURU_MAX_STOCK
