@@ -1,7 +1,10 @@
 """
 신상품 3일발주 분산 발주 서비스
 
-기간 내 3회 발주를 균등 분산하며, 판매 없을 시 스킵 + D-3 강제 발주.
+기간 내 3회 발주를 판매/폐기 기반 동적 간격으로 분산.
+- 판매 or 폐기 발생 → 다음 날 즉시 재발주
+- 미판매+미폐기 → 3일 후 재발주
+- D-5 이내 미달성 → 강제 발주
 AI 예측 발주량과 합산하여 총량 발주.
 1/2차 상품은 base_name 기준으로 그룹핑하여 그룹당 1회 발주.
 """
@@ -14,6 +17,7 @@ from src.settings.constants import (
     NEW_PRODUCT_DS_MIN_ORDERS,
     NEW_PRODUCT_INTRO_ORDER_QTY,
     NEW_PRODUCT_DS_FORCE_REMAINING_DAYS,
+    NEW_PRODUCT_DS_NO_SALE_INTERVAL_DAYS,
 )
 from src.utils.logger import get_logger
 
@@ -101,7 +105,7 @@ def select_variant_to_order(group: Dict, sales_data: Optional[Dict] = None) -> O
 
 
 def calculate_interval_days(week_start: str, week_end: str) -> int:
-    """기간을 3등분한 발주 간격 (일수) 계산"""
+    """기간을 3등분한 발주 간격 (일수) 계산 — 레거시 호환용"""
     start = _parse_date(week_start)
     end = _parse_date(week_end)
     if not start or not end:
@@ -117,7 +121,7 @@ def calculate_next_order_date(
     our_order_count: int,
     interval_days: int,
 ) -> str:
-    """다음 발주 예정일 계산
+    """다음 발주 예정일 계산 — 레거시 호환용
 
     next_order_date = week_start + (our_order_count * interval_days)
     """
@@ -128,55 +132,83 @@ def calculate_next_order_date(
     return next_dt.strftime("%Y-%m-%d")
 
 
+def calculate_dynamic_next_order_date(
+    today: str,
+    sold_qty: int = 0,
+    wasted_qty: int = 0,
+) -> str:
+    """판매/폐기 기반 동적 다음 발주 예정일 계산
+
+    - 판매 or 폐기 발생 → 다음 날 즉시 재발주
+    - 판매도 폐기도 없음 → 3일 후 재발주
+
+    Args:
+        today: 오늘 날짜 (YYYY-MM-DD)
+        sold_qty: 마지막 발주 이후 판매량
+        wasted_qty: 마지막 발주 이후 폐기량
+
+    Returns:
+        다음 발주 예정일 (YYYY-MM-DD)
+    """
+    today_dt = _parse_date(today)
+    if not today_dt:
+        return ""
+
+    if sold_qty > 0 or wasted_qty > 0:
+        # 판매 있음 OR 폐기 있음 → 다음 날 즉시 재발주
+        next_dt = today_dt + timedelta(days=1)
+    else:
+        # 판매도 없고 폐기도 없음 → 3일 후
+        next_dt = today_dt + timedelta(days=NEW_PRODUCT_DS_NO_SALE_INTERVAL_DAYS)
+
+    return next_dt.strftime("%Y-%m-%d")
+
+
 def should_order_today(
     today: str,
     week_end: str,
     next_order_date: str,
     our_order_count: int,
-    last_sale_after_order: int,
-    current_stock: int = 0,
+    **kwargs,
 ) -> tuple:
-    """오늘 발주 여부 판단 (분산 발주 로직)
+    """오늘 발주 여부 판단 (동적 간격 로직)
 
     Args:
         today: 오늘 날짜 (YYYY-MM-DD)
         week_end: 주차 종료일
         next_order_date: 다음 발주 예정일
         our_order_count: 이미 발주한 횟수
-        last_sale_after_order: 마지막 발주 이후 판매량
-        current_stock: 현재 재고
+        **kwargs: 하위 호환용 (last_sale_after_order, current_stock 등 무시)
 
     Returns:
         (should_order: bool, reason: str, action: str)
-        action: "order" | "skip" | "force" | "none"
+        action: "order" | "force" | "none"
     """
     # 이미 3회 달성
     if our_order_count >= NEW_PRODUCT_DS_MIN_ORDERS:
         return False, "이미 3회 발주 완료", "none"
 
     today_dt = _parse_date(today)
-    next_dt = _parse_date(next_order_date)
     end_dt = _parse_date(week_end)
 
     if not today_dt or not end_dt:
         return False, "날짜 파싱 실패", "none"
 
-    # 날짜 도달 전: 절대 발주 안 함
-    if next_dt and today_dt < next_dt:
-        return False, f"발주 예정일({next_order_date}) 미도달", "none"
+    # 첫 발주 전 → 즉시 발주
+    if our_order_count == 0:
+        return True, "첫 발주 — 즉시 실행", "order"
 
-    # 날짜 도달 후
+    # D-5 이내 미달성 → 강제 발주 (보험)
     remaining_days = (end_dt - today_dt).days
-
-    # D-3 이내 미달성 → 강제 발주 (기간 놓치지 않기 위해)
     if remaining_days <= NEW_PRODUCT_DS_FORCE_REMAINING_DAYS:
         return True, f"기간 잔여 {remaining_days}일 — 강제 발주", "force"
 
-    # 이전 발주 존재 + 판매 없음 + 재고 있음 → 스킵
-    if our_order_count > 0 and last_sale_after_order == 0 and current_stock > 0:
-        return False, f"판매 없음(재고 {current_stock}) — 스킵 후 재체크", "skip"
+    # next_order_date 미도달 → 대기
+    next_dt = _parse_date(next_order_date)
+    if next_dt and today_dt < next_dt:
+        return False, f"발주 예정일({next_order_date}) 미도달", "none"
 
-    # 그 외: 발주 실행
+    # next_order_date 도달 → 발주
     return True, f"발주 예정일 도달 ({next_order_date})", "order"
 
 
@@ -250,8 +282,6 @@ def get_today_new_product_orders(
                 our_count = tracking.get("our_order_count", 0)
                 next_date = tracking.get("next_order_date", "")
                 week_end = tracking.get("week_end", "")
-                last_sale = tracking.get("last_sale_after_order", 0)
-                last_ordered_at = tracking.get("last_ordered_at", "")
             else:
                 # base_name 레코드 없으면 variants 중 첫 항목 기준
                 first_item = week_items[0]
@@ -262,43 +292,13 @@ def get_today_new_product_orders(
                 our_count = first_item.get("our_order_count", 0)
                 next_date = first_item.get("next_order_date", "")
                 week_end = first_item.get("week_end", "")
-                last_sale = first_item.get("last_sale_after_order", 0)
-                last_ordered_at = first_item.get("last_ordered_at", "")
-
-            # 판매량 업데이트 (그룹 내 모든 variant 합산)
-            if sales_fn and our_count > 0:
-                total_sale = 0
-                for v in variants:
-                    try:
-                        total_sale += sales_fn(v["product_code"], last_ordered_at)
-                    except Exception as e:
-                        logger.warning(f"판매량 조회 실패 {v['product_code']}: {e}")
-                last_sale = total_sale
-
-            # 재고 조회 (그룹 내 모든 variant 합산)
-            current_stock = 0
-            if stock_fn:
-                for v in variants:
-                    try:
-                        current_stock += stock_fn(v["product_code"])
-                    except Exception:
-                        pass
 
             should, reason, action = should_order_today(
                 today=today,
                 week_end=week_end,
                 next_order_date=next_date,
                 our_order_count=our_count,
-                last_sale_after_order=last_sale,
-                current_stock=current_stock,
             )
-
-            if action == "skip":
-                # 그룹의 모든 variant에 스킵 기록
-                for v in variants:
-                    repo.record_skip(store_id, week_label, v["product_code"])
-                logger.info(f"신상품3일 스킵: {base_name} ({reason})")
-                continue
 
             if should:
                 # 판매 데이터로 variant 선택
@@ -330,24 +330,28 @@ def record_order_completed(
     store_id: str,
     week_label: str,
     product_code: str,
-    week_start: str = "",
-    interval_days: int = 0,
     our_order_count_after: int = 0,
     base_name: str = "",
     selected_code: str = "",
+    sold_qty: int = 0,
+    wasted_qty: int = 0,
+    today: str = "",
+    # 레거시 호환 파라미터 (무시)
+    week_start: str = "",
+    interval_days: int = 0,
 ) -> None:
     """발주 완료 후 추적 업데이트
 
-    our_order_count 증가 + next_order_date 갱신 + 3회 달성 시 is_completed
+    our_order_count 증가 + 판매/폐기 기반 동적 next_order_date 갱신 + 3회 달성 시 is_completed
     """
     from src.infrastructure.database.repos import NP3DayTrackingRepo
 
     repo = NP3DayTrackingRepo(store_id=store_id)
 
-    # 다음 발주 예정일 계산
-    next_date = ""
-    if week_start and interval_days > 0:
-        next_date = calculate_next_order_date(week_start, our_order_count_after, interval_days)
+    # 다음 발주 예정일 계산 (동적 간격)
+    if not today:
+        today = datetime.now().strftime("%Y-%m-%d")
+    next_date = calculate_dynamic_next_order_date(today, sold_qty, wasted_qty)
 
     # base_name이 있으면 그룹 단위로 업데이트
     if base_name:

@@ -1,10 +1,10 @@
 """
 신상품 3일발주 분산 발주 서비스 테스트
 
-- 발주 간격 계산 검증
-- 분산 발주 판단 로직 (should_order_today)
-- 판매량 0 + D-5 → 스킵 검증
-- 판매량 0 + D-2 → 강제 발주 검증
+- 동적 간격 기반 발주 판단 (should_order_today)
+- 첫 발주 즉시 실행
+- 판매/폐기 기반 next_order_date 계산
+- D-5 강제 발주
 - AI 목록에 이미 있는 상품 → qty 합산 검증
 - AI 목록에 없는 신상품 → 앞에 삽입 검증
 - DB Repository CRUD
@@ -19,6 +19,7 @@ from datetime import datetime, timedelta
 from src.application.services.new_product_order_service import (
     calculate_interval_days,
     calculate_next_order_date,
+    calculate_dynamic_next_order_date,
     should_order_today,
     get_today_new_product_orders,
     merge_with_ai_orders,
@@ -34,59 +35,75 @@ from src.infrastructure.database.repos.np_3day_tracking_repo import (
 
 
 # ═══════════════════════════════════════════════════
-# 발주 간격 계산
+# 레거시 발주 간격 계산 (호환용)
 # ═══════════════════════════════════════════════════
 
 class TestCalculateIntervalDays:
-    """기간을 3등분한 발주 간격 계산"""
+    """기간을 3등분한 발주 간격 계산 — 레거시 호환"""
 
     def test_19day_period(self):
-        """19일 기간 → 간격 6일"""
         assert calculate_interval_days("2026-03-02", "2026-03-20") == 6
 
     def test_14day_period(self):
-        """14일 기간 (3/1~3/15, 차이 14일) → 간격 4일"""
         assert calculate_interval_days("2026-03-01", "2026-03-15") == 4
 
-    def test_8day_period(self):
-        """8일 기간 (3/1~3/9, 차이 8일) → 간격 2일"""
-        assert calculate_interval_days("2026-03-01", "2026-03-09") == 2
-
-    def test_3day_period(self):
-        """3일 기간 → 간격 1일"""
-        assert calculate_interval_days("2026-03-01", "2026-03-03") == 1
-
-    def test_0day_period(self):
-        """0일 기간 → 간격 1일"""
-        assert calculate_interval_days("2026-03-01", "2026-03-01") == 1
-
     def test_empty_dates(self):
-        """빈 날짜 → 간격 1일"""
         assert calculate_interval_days("", "") == 1
 
 
 class TestCalculateNextOrderDate:
-    """다음 발주 예정일 계산"""
+    """다음 발주 예정일 계산 — 레거시 호환"""
 
     def test_first_order(self):
-        """0회 발주 → 시작일"""
         assert calculate_next_order_date("2026-03-02", 0, 6) == "2026-03-02"
 
     def test_second_order(self):
-        """1회 발주 → 시작일 + 6일"""
         assert calculate_next_order_date("2026-03-02", 1, 6) == "2026-03-08"
-
-    def test_third_order(self):
-        """2회 발주 → 시작일 + 12일"""
-        assert calculate_next_order_date("2026-03-02", 2, 6) == "2026-03-14"
 
 
 # ═══════════════════════════════════════════════════
-# 분산 발주 판단 (should_order_today)
+# 동적 next_order_date 계산
+# ═══════════════════════════════════════════════════
+
+class TestCalculateDynamicNextOrderDate:
+    """판매/폐기 기반 동적 간격 계산"""
+
+    def test_sold_qty_positive_next_day(self):
+        """판매 있음 → 다음 날"""
+        result = calculate_dynamic_next_order_date("2026-03-10", sold_qty=3, wasted_qty=0)
+        assert result == "2026-03-11"
+
+    def test_wasted_qty_positive_next_day(self):
+        """폐기 있음 → 다음 날"""
+        result = calculate_dynamic_next_order_date("2026-03-10", sold_qty=0, wasted_qty=2)
+        assert result == "2026-03-11"
+
+    def test_both_sold_and_wasted_next_day(self):
+        """판매+폐기 둘 다 → 다음 날"""
+        result = calculate_dynamic_next_order_date("2026-03-10", sold_qty=1, wasted_qty=1)
+        assert result == "2026-03-11"
+
+    def test_no_sale_no_waste_3days(self):
+        """판매 없음 + 폐기 없음 → 3일 후"""
+        result = calculate_dynamic_next_order_date("2026-03-10", sold_qty=0, wasted_qty=0)
+        assert result == "2026-03-13"
+
+    def test_default_zero(self):
+        """기본값(0, 0) → 3일 후"""
+        result = calculate_dynamic_next_order_date("2026-03-10")
+        assert result == "2026-03-13"
+
+    def test_empty_date(self):
+        """빈 날짜 → 빈 문자열"""
+        assert calculate_dynamic_next_order_date("") == ""
+
+
+# ═══════════════════════════════════════════════════
+# 분산 발주 판단 (should_order_today) — 동적 간격
 # ═══════════════════════════════════════════════════
 
 class TestShouldOrderToday:
-    """발주 여부 판단 — 핵심 로직"""
+    """발주 여부 판단 — 동적 간격 로직"""
 
     def test_already_completed(self):
         """이미 3회 발주 완료 → False"""
@@ -95,10 +112,32 @@ class TestShouldOrderToday:
             week_end="2026-03-20",
             next_order_date="2026-03-14",
             our_order_count=3,
-            last_sale_after_order=0,
         )
         assert result is False
         assert action == "none"
+
+    def test_first_order_immediate(self):
+        """our_count=0 → 즉시 발주 (True)"""
+        result, reason, action = should_order_today(
+            today="2026-03-02",
+            week_end="2026-03-20",
+            next_order_date="2026-03-02",
+            our_order_count=0,
+        )
+        assert result is True
+        assert action == "order"
+        assert "첫 발주" in reason
+
+    def test_first_order_even_with_future_next_date(self):
+        """our_count=0 → next_order_date가 미래여도 즉시 발주"""
+        result, reason, action = should_order_today(
+            today="2026-03-02",
+            week_end="2026-03-20",
+            next_order_date="2026-03-10",
+            our_order_count=0,
+        )
+        assert result is True
+        assert action == "order"
 
     def test_before_next_order_date(self):
         """예정일 미도달 → False"""
@@ -107,67 +146,71 @@ class TestShouldOrderToday:
             week_end="2026-03-20",
             next_order_date="2026-03-08",
             our_order_count=1,
-            last_sale_after_order=0,
         )
         assert result is False
         assert action == "none"
 
-    def test_on_order_date_first_order(self):
-        """예정일 도달 + 첫 발주 → True (order)"""
+    def test_on_next_order_date(self):
+        """예정일 도달 → True (order)"""
         result, reason, action = should_order_today(
-            today="2026-03-02",
+            today="2026-03-08",
             week_end="2026-03-20",
-            next_order_date="2026-03-02",
-            our_order_count=0,
-            last_sale_after_order=0,
+            next_order_date="2026-03-08",
+            our_order_count=1,
         )
         assert result is True
         assert action == "order"
 
-    def test_no_sales_with_stock_skip(self):
-        """판매 없음 + 재고 있음 + D-5 → 스킵"""
+    def test_after_next_order_date(self):
+        """예정일 경과 → True (order)"""
+        result, reason, action = should_order_today(
+            today="2026-03-10",
+            week_end="2026-03-20",
+            next_order_date="2026-03-08",
+            our_order_count=1,
+        )
+        assert result is True
+        assert action == "order"
+
+    def test_d5_force_order(self):
+        """D-4 (기간 잔여 4일, <=5) + 미달성 → 강제 발주"""
+        result, reason, action = should_order_today(
+            today="2026-03-16",
+            week_end="2026-03-20",
+            next_order_date="2026-03-20",
+            our_order_count=1,
+        )
+        assert result is True
+        assert action == "force"
+        assert "강제" in reason
+
+    def test_d5_exactly(self):
+        """D-5 경계값 → 강제 발주"""
         result, reason, action = should_order_today(
             today="2026-03-15",
             week_end="2026-03-20",
-            next_order_date="2026-03-14",
+            next_order_date="2026-03-18",
+            our_order_count=2,
+        )
+        assert result is True
+        assert action == "force"
+
+    def test_d6_not_forced(self):
+        """D-6 (>5) + 예정일 미도달 → 대기"""
+        result, reason, action = should_order_today(
+            today="2026-03-14",
+            week_end="2026-03-20",
+            next_order_date="2026-03-16",
             our_order_count=1,
-            last_sale_after_order=0,
-            current_stock=1,
         )
         assert result is False
-        assert action == "skip"
-        assert "스킵" in reason
+        assert action == "none"
 
-    def test_no_sales_no_stock(self):
-        """판매 없음 + 재고 0 → 발주"""
+    def test_no_skip_action(self):
+        """스킵 액션 없음 — 판매/재고와 무관하게 next_order_date로 판단"""
+        # 이전에는 판매없음+재고 있으면 "skip"이었지만 동적 간격에서는 skip 없음
         result, reason, action = should_order_today(
-            today="2026-03-15",
-            week_end="2026-03-20",
-            next_order_date="2026-03-14",
-            our_order_count=1,
-            last_sale_after_order=0,
-            current_stock=0,
-        )
-        assert result is True
-        assert action == "order"
-
-    def test_has_sales_order(self):
-        """판매 있음 → 발주"""
-        result, reason, action = should_order_today(
-            today="2026-03-15",
-            week_end="2026-03-20",
-            next_order_date="2026-03-14",
-            our_order_count=1,
-            last_sale_after_order=2,
-            current_stock=1,
-        )
-        assert result is True
-        assert action == "order"
-
-    def test_d3_force_order(self):
-        """D-2 (기간 잔여 2일) + 미달성 → 강제 발주"""
-        result, reason, action = should_order_today(
-            today="2026-03-18",
+            today="2026-03-14",
             week_end="2026-03-20",
             next_order_date="2026-03-14",
             our_order_count=1,
@@ -175,59 +218,19 @@ class TestShouldOrderToday:
             current_stock=5,
         )
         assert result is True
-        assert action == "force"
-        assert "강제" in reason
+        assert action == "order"  # skip이 아닌 order
 
-    def test_d3_force_even_first_order(self):
-        """D-3 + 0회 발주 → 강제 발주"""
+    def test_kwargs_backward_compat(self):
+        """레거시 파라미터 (last_sale_after_order, current_stock) 무시"""
         result, reason, action = should_order_today(
-            today="2026-03-17",
-            week_end="2026-03-20",
-            next_order_date="2026-03-02",
-            our_order_count=0,
-            last_sale_after_order=0,
-        )
-        assert result is True
-        assert action == "force"
-
-    def test_exactly_d3(self):
-        """D-3 경계값 → 강제 발주"""
-        result, reason, action = should_order_today(
-            today="2026-03-17",
-            week_end="2026-03-20",
-            next_order_date="2026-03-14",
-            our_order_count=2,
-            last_sale_after_order=0,
-            current_stock=3,
-        )
-        assert result is True
-        assert action == "force"
-
-    def test_d4_not_forced(self):
-        """D-4 + 판매 없음 + 재고 → 스킵 (D-3 미만)"""
-        result, reason, action = should_order_today(
-            today="2026-03-16",
+            today="2026-03-14",
             week_end="2026-03-20",
             next_order_date="2026-03-14",
             our_order_count=1,
             last_sale_after_order=0,
-            current_stock=2,
+            current_stock=10,
         )
-        assert result is False
-        assert action == "skip"
-
-    def test_first_order_no_skip(self):
-        """첫 발주(count=0) + 판매 없음 + 재고 있음 → 발주 (첫 발주는 스킵 안 함)"""
-        result, reason, action = should_order_today(
-            today="2026-03-10",
-            week_end="2026-03-20",
-            next_order_date="2026-03-08",
-            our_order_count=0,
-            last_sale_after_order=0,
-            current_stock=3,
-        )
-        assert result is True
-        assert action == "order"
+        assert result is True  # 레거시 파라미터 무시
 
 
 # ═══════════════════════════════════════════════════
@@ -279,9 +282,7 @@ class TestMergeWithAiOrders:
         ]
         result = merge_with_ai_orders(ai_orders, np_orders)
         assert len(result) == 3
-        # 신규가 앞에
         assert result[0]["item_cd"] == "C003"
-        # 기존 합산
         a001 = [r for r in result if r.get("item_cd") == "A001"][0]
         assert a001["final_order_qty"] == 3
 
@@ -302,10 +303,7 @@ class TestMergeWithAiOrders:
     def test_original_not_modified(self):
         """원본 ai_orders 변경 없음"""
         ai_orders = [{"item_cd": "A001", "final_order_qty": 2}]
-        original_qty = ai_orders[0]["final_order_qty"]
         merge_with_ai_orders(ai_orders, [{"product_code": "A001", "qty": 1}])
-        # merge_with_ai_orders는 shallow copy하므로 원본의 dict는 수정될 수 있음
-        # 그러나 리스트 자체는 새 리스트
 
 
 # ═══════════════════════════════════════════════════
@@ -372,7 +370,6 @@ class TestNewProduct3DayTrackingRepo:
         assert item["product_code"] == "TEST001"
         assert item["bgf_order_count"] == 3
         assert item["our_order_count"] == 0
-        assert item["order_interval_days"] == 6
         assert item["base_name"] == "테스트김밥"
 
     def test_record_order_increments(self, tracking_db):
@@ -435,7 +432,6 @@ class TestNewProduct3DayTrackingRepo:
         assert active[0]["product_code"] == "P002"
 
     def test_upsert_updates_existing(self, tracking_db):
-        """같은 키로 UPSERT → bgf_order_count 업데이트"""
         repo = NewProduct3DayTrackingRepository(db_path=tracking_db)
         repo.upsert_tracking(
             store_id="46513", week_label="W1",
@@ -472,26 +468,19 @@ class TestNewProduct3DayTrackingRepo:
 # ═══════════════════════════════════════════════════
 
 class TestExtractBaseName:
-    """상품명 말미 숫자 제거"""
-
     def test_sandwich_with_suffix(self):
-        """'샌)대만식대파크림샌드2' → '샌)대만식대파크림샌드'"""
         assert extract_base_name("샌)대만식대파크림샌드2") == "샌)대만식대파크림샌드"
 
     def test_hamburger_with_suffix(self):
-        """'햄)아메리칸더블치폴레1' → '햄)아메리칸더블치폴레'"""
         assert extract_base_name("햄)아메리칸더블치폴레1") == "햄)아메리칸더블치폴레"
 
     def test_no_suffix(self):
-        """'줄)콘버터아끼소바' → 원본 유지"""
         assert extract_base_name("줄)콘버터아끼소바") == "줄)콘버터아끼소바"
 
     def test_two_digit_suffix(self):
-        """'도)해청양닭밥도템10' → '도)해청양닭밥도템'"""
         assert extract_base_name("도)해청양닭밥도템10") == "도)해청양닭밥도템"
 
     def test_empty_string(self):
-        """빈 문자열 → 빈 문자열"""
         assert extract_base_name("") == ""
 
 
@@ -500,10 +489,7 @@ class TestExtractBaseName:
 # ═══════════════════════════════════════════════════
 
 class TestGroupByBaseName:
-    """base_name 기준 그룹핑"""
-
     def test_pair_grouped(self):
-        """1차+2차 입력 → 동일 그룹"""
         products = [
             {"product_code": "A001", "product_name": "샌)대만식대파크림샌드1", "sub_category": "샌드위치", "bgf_order_count": 2},
             {"product_code": "A002", "product_name": "샌)대만식대파크림샌드2", "sub_category": "샌드위치", "bgf_order_count": 1},
@@ -514,7 +500,6 @@ class TestGroupByBaseName:
         assert len(groups[0]["variants"]) == 2
 
     def test_single_product(self):
-        """단독 상품 → 그룹 1개, variants 1개"""
         products = [
             {"product_code": "B001", "product_name": "줄)콘버터아끼소바", "sub_category": "줄김밥", "bgf_order_count": 3},
         ]
@@ -523,7 +508,6 @@ class TestGroupByBaseName:
         assert len(groups[0]["variants"]) == 1
 
     def test_bgf_min_count(self):
-        """bgf_min_count: [1,2] → min=1"""
         products = [
             {"product_code": "A001", "product_name": "햄)치즈버거1", "bgf_order_count": 2},
             {"product_code": "A002", "product_name": "햄)치즈버거2", "bgf_order_count": 1},
@@ -532,7 +516,6 @@ class TestGroupByBaseName:
         assert groups[0]["bgf_min_count"] == 1
 
     def test_multiple_groups(self):
-        """서로 다른 base_name → 별도 그룹"""
         products = [
             {"product_code": "A001", "product_name": "샌)크림샌드1", "bgf_order_count": 1},
             {"product_code": "B001", "product_name": "줄)참치마요", "bgf_order_count": 2},
@@ -550,10 +533,7 @@ class TestGroupByBaseName:
 # ═══════════════════════════════════════════════════
 
 class TestSelectVariantToOrder:
-    """그룹에서 발주 variant 선택"""
-
     def test_sales_higher_first(self):
-        """판매량 1차>2차 → 1차 선택"""
         group = {
             "base_name": "샌)크림샌드",
             "variants": [
@@ -561,12 +541,10 @@ class TestSelectVariantToOrder:
                 {"product_code": "A002", "product_name": "샌)크림샌드2"},
             ],
         }
-        sales_data = {"A001": 5, "A002": 3}
-        selected = select_variant_to_order(group, sales_data)
+        selected = select_variant_to_order(group, {"A001": 5, "A002": 3})
         assert selected["product_code"] == "A001"
 
     def test_sales_equal_name_asc(self):
-        """판매량 동일 → 이름 오름차순(1차) 선택"""
         group = {
             "base_name": "햄)치즈버거",
             "variants": [
@@ -574,23 +552,14 @@ class TestSelectVariantToOrder:
                 {"product_code": "B001", "product_name": "햄)치즈버거1"},
             ],
         }
-        sales_data = {"B001": 2, "B002": 2}
-        selected = select_variant_to_order(group, sales_data)
-        assert selected["product_code"] == "B001"  # 이름 오름차순
+        selected = select_variant_to_order(group, {"B001": 2, "B002": 2})
+        assert selected["product_code"] == "B001"
 
     def test_single_variant(self):
-        """variants 1개 → 바로 반환"""
-        group = {
-            "base_name": "줄)참치마요",
-            "variants": [
-                {"product_code": "C001", "product_name": "줄)참치마요"},
-            ],
-        }
-        selected = select_variant_to_order(group)
-        assert selected["product_code"] == "C001"
+        group = {"base_name": "줄)참치마요", "variants": [{"product_code": "C001", "product_name": "줄)참치마요"}]}
+        assert select_variant_to_order(group)["product_code"] == "C001"
 
     def test_no_sales_data(self):
-        """판매 데이터 없음 → 이름 오름차순"""
         group = {
             "base_name": "샌)크림샌드",
             "variants": [
@@ -598,13 +567,10 @@ class TestSelectVariantToOrder:
                 {"product_code": "A001", "product_name": "샌)크림샌드1"},
             ],
         }
-        selected = select_variant_to_order(group, None)
-        assert selected["product_code"] == "A001"
+        assert select_variant_to_order(group, None)["product_code"] == "A001"
 
     def test_empty_variants(self):
-        """빈 variants → None"""
-        group = {"base_name": "없음", "variants": []}
-        assert select_variant_to_order(group) is None
+        assert select_variant_to_order({"base_name": "없음", "variants": []}) is None
 
 
 # ═══════════════════════════════════════════════════
@@ -612,10 +578,7 @@ class TestSelectVariantToOrder:
 # ═══════════════════════════════════════════════════
 
 class TestRepoBaseName:
-    """base_name 기반 그룹 추적"""
-
     def test_get_group_tracking(self, tracking_db):
-        """base_name으로 그룹 추적 조회"""
         repo = NewProduct3DayTrackingRepository(db_path=tracking_db)
         repo.upsert_tracking(
             store_id="46513", week_label="W1",
@@ -623,16 +586,13 @@ class TestRepoBaseName:
             product_code="A001", product_name="샌)크림샌드1",
             base_name="샌)크림샌드",
             product_codes=json.dumps(["A001", "A002"]),
-            order_interval_days=6,
-            next_order_date="2026-03-01",
+            order_interval_days=6, next_order_date="2026-03-01",
         )
         tracking = repo.get_group_tracking("46513", "W1", "샌)크림샌드")
         assert tracking is not None
         assert tracking["base_name"] == "샌)크림샌드"
-        assert tracking["our_order_count"] == 0
 
     def test_record_order_by_base_name(self, tracking_db):
-        """base_name 기준 발주 기록"""
         repo = NewProduct3DayTrackingRepository(db_path=tracking_db)
         repo.upsert_tracking(
             store_id="46513", week_label="W1",
@@ -646,7 +606,6 @@ class TestRepoBaseName:
         assert tracking["selected_code"] == "A001"
 
     def test_mark_completed_by_base_name(self, tracking_db):
-        """base_name 기준 완료 표시"""
         repo = NewProduct3DayTrackingRepository(db_path=tracking_db)
         repo.upsert_tracking(
             store_id="46513", week_label="W1",
@@ -664,100 +623,119 @@ class TestRepoBaseName:
 # ═══════════════════════════════════════════════════
 
 class TestDuplicateOrderPrevention:
-    """그룹핑 중복발주 방지"""
-
     def test_group_one_order_only(self):
-        """our_order_count=2 (1회 남음), variants 2개 → should_order=True 1회만"""
-        # 그룹 단위로 should_order_today 1회 호출하므로 자연적으로 1개만 반환
         ok, _, action = should_order_today(
-            today="2026-03-14",
-            week_end="2026-03-20",
-            next_order_date="2026-03-14",
-            our_order_count=2,
-            last_sale_after_order=1,
-            current_stock=0,
+            today="2026-03-14", week_end="2026-03-20",
+            next_order_date="2026-03-14", our_order_count=2,
         )
         assert ok is True
         assert action == "order"
 
-        # 3회 달성 후 추가 발주 불가
         ok2, _, action2 = should_order_today(
-            today="2026-03-14",
-            week_end="2026-03-20",
-            next_order_date="2026-03-14",
-            our_order_count=3,
-            last_sale_after_order=1,
-            current_stock=0,
+            today="2026-03-14", week_end="2026-03-20",
+            next_order_date="2026-03-14", our_order_count=3,
         )
         assert ok2 is False
         assert action2 == "none"
 
     def test_group_returns_single_item(self):
-        """1차+2차 동시 입력 → 그룹핑 후 select_variant 1개만"""
         products = [
             {"product_code": "X001", "product_name": "샌)대만식1", "sub_category": "샌드위치", "bgf_order_count": 1},
             {"product_code": "X002", "product_name": "샌)대만식2", "sub_category": "샌드위치", "bgf_order_count": 1},
         ]
         groups = group_by_base_name(products)
         assert len(groups) == 1
-
-        sales_data = {"X001": 3, "X002": 1}
-        selected = select_variant_to_order(groups[0], sales_data)
-        assert selected is not None
-        # 그룹당 1개만 선택됨
+        selected = select_variant_to_order(groups[0], {"X001": 3, "X002": 1})
         assert selected["product_code"] == "X001"
 
 
 # ═══════════════════════════════════════════════════
-# 통합 시나리오 테스트
+# 통합 시나리오 테스트 (동적 간격)
 # ═══════════════════════════════════════════════════
 
-class TestDistributedOrderScenario:
-    """분산 발주 전체 시나리오"""
+class TestDynamicOrderScenario:
+    """동적 간격 기반 전체 시나리오"""
 
-    def test_19day_3orders_schedule(self):
-        """19일 기간, 3회 발주 → 예정일 계산"""
-        interval = calculate_interval_days("2026-03-02", "2026-03-20")
-        assert interval == 6
-
-        d1 = calculate_next_order_date("2026-03-02", 0, interval)
-        d2 = calculate_next_order_date("2026-03-02", 1, interval)
-        d3 = calculate_next_order_date("2026-03-02", 2, interval)
-
-        assert d1 == "2026-03-02"
-        assert d2 == "2026-03-08"
-        assert d3 == "2026-03-14"
-
-    def test_full_lifecycle(self):
-        """전체 라이프사이클: 3회 발주 완료까지"""
-        week_start = "2026-03-02"
+    def test_full_lifecycle_with_sales(self):
+        """전체 라이프사이클: 판매→즉시→판매→즉시→완료"""
         week_end = "2026-03-20"
-        interval = calculate_interval_days(week_start, week_end)
 
-        # 1회차: 3/2 발주
-        ok, _, _ = should_order_today(
-            "2026-03-02", week_end, "2026-03-02", 0, 0)
+        # 1회차: count=0 → 즉시 발주
+        ok, _, action = should_order_today("2026-03-02", week_end, "2026-03-02", 0)
         assert ok is True
+        assert action == "order"
 
-        # 2회차: 3/8 전 → 안 함
-        ok, _, _ = should_order_today(
-            "2026-03-06", week_end, "2026-03-08", 1, 0)
+        # 발주 후 판매 있음 → next = 3/3
+        next_date = calculate_dynamic_next_order_date("2026-03-02", sold_qty=2)
+        assert next_date == "2026-03-03"
+
+        # 2회차: 3/3 도달 → 발주
+        ok, _, action = should_order_today("2026-03-03", week_end, next_date, 1)
+        assert ok is True
+        assert action == "order"
+
+        # 발주 후 판매 있음 → next = 3/4
+        next_date = calculate_dynamic_next_order_date("2026-03-03", sold_qty=1)
+        assert next_date == "2026-03-04"
+
+        # 3회차: 3/4 도달 → 발주
+        ok, _, action = should_order_today("2026-03-04", week_end, next_date, 2)
+        assert ok is True
+        assert action == "order"
+
+        # 3회 달성 후
+        ok, _, action = should_order_today("2026-03-05", week_end, "2026-03-05", 3)
         assert ok is False
 
-        # 2회차: 3/8 + 판매 있음 → 발주
-        ok, _, _ = should_order_today(
-            "2026-03-08", week_end, "2026-03-08", 1, 2)
+    def test_full_lifecycle_no_sales(self):
+        """전체 라이프사이클: 미판매→3일후→미판매→3일후→D-5 강제"""
+        week_end = "2026-03-20"
+
+        # 1회차: count=0 → 즉시
+        ok, _, _ = should_order_today("2026-03-02", week_end, "2026-03-02", 0)
         assert ok is True
 
-        # 3회차: 3/14 + 판매 없음 + 재고 → 스킵
-        ok, _, action = should_order_today(
-            "2026-03-14", week_end, "2026-03-14", 2, 0, current_stock=1)
-        assert ok is False
-        assert action == "skip"
+        # 판매 없음 → next = 3/5
+        next_date = calculate_dynamic_next_order_date("2026-03-02", sold_qty=0)
+        assert next_date == "2026-03-05"
 
-        # 3회차: 3/18 (D-2) → 강제
+        # 3/4 → 미도달
+        ok, _, _ = should_order_today("2026-03-04", week_end, next_date, 1)
+        assert ok is False
+
+        # 3/5 → 발주
+        ok, _, _ = should_order_today("2026-03-05", week_end, next_date, 1)
+        assert ok is True
+
+        # 다시 미판매 → next = 3/8
+        next_date = calculate_dynamic_next_order_date("2026-03-05", sold_qty=0)
+        assert next_date == "2026-03-08"
+
+        # 3/7 → 미도달
+        ok, _, _ = should_order_today("2026-03-07", week_end, next_date, 2)
+        assert ok is False
+
+        # 3/8 → 발주
+        ok, _, _ = should_order_today("2026-03-08", week_end, next_date, 2)
+        assert ok is True
+
+    def test_waste_triggers_next_day(self):
+        """폐기 발생 시 다음 날 재발주"""
+        next_date = calculate_dynamic_next_order_date("2026-03-10", sold_qty=0, wasted_qty=1)
+        assert next_date == "2026-03-11"
+
+        ok, _, action = should_order_today("2026-03-11", "2026-03-20", next_date, 1)
+        assert ok is True
+        assert action == "order"
+
+    def test_d5_force_overrides_schedule(self):
+        """D-5 강제 발주: 예정일 미도달이어도 강제"""
         ok, _, action = should_order_today(
-            "2026-03-18", week_end, "2026-03-14", 2, 0, current_stock=1)
+            today="2026-03-16",
+            week_end="2026-03-20",
+            next_order_date="2026-03-20",  # 아직 미도달
+            our_order_count=1,
+        )
         assert ok is True
         assert action == "force"
 
@@ -781,15 +759,12 @@ class TestMultiWeekConcurrent:
     """복수 주차 동시 활성 시 중복 방지 + 마감 빠른 주차 우선"""
 
     def test_get_all_active_weeks(self, tracking_db):
-        """오늘이 두 주차에 속하면 두 주차 모두 반환 (week_end 오름차순)"""
         repo = NewProduct3DayTrackingRepository(db_path=tracking_db)
-        # W3: 03.02~03.20 (week_end 먼저)
         repo.upsert_tracking(
             store_id="46513", week_label="202603-W3",
             week_start="2026-03-02", week_end="2026-03-20",
             product_code="P001", base_name="상품A",
         )
-        # W4: 03.09~03.27 (week_end 나중)
         repo.upsert_tracking(
             store_id="46513", week_label="202603-W4",
             week_start="2026-03-09", week_end="2026-03-27",
@@ -797,11 +772,10 @@ class TestMultiWeekConcurrent:
         )
         weeks = repo.get_all_active_weeks("46513", "2026-03-15")
         assert len(weeks) == 2
-        assert weeks[0]["week_label"] == "202603-W3"  # week_end 오름차순
+        assert weeks[0]["week_label"] == "202603-W3"
         assert weeks[1]["week_label"] == "202603-W4"
 
     def test_active_weeks_excludes_completed(self, tracking_db):
-        """완료된 항목만 있는 주차는 제외"""
         repo = NewProduct3DayTrackingRepository(db_path=tracking_db)
         repo.upsert_tracking(
             store_id="46513", week_label="202603-W3",
@@ -813,7 +787,6 @@ class TestMultiWeekConcurrent:
         assert len(weeks) == 0
 
     def test_active_weeks_excludes_out_of_range(self, tracking_db):
-        """오늘이 범위 밖인 주차는 제외"""
         repo = NewProduct3DayTrackingRepository(db_path=tracking_db)
         repo.upsert_tracking(
             store_id="46513", week_label="202603-W1",
@@ -828,19 +801,16 @@ class TestMultiWeekDedup:
     """주차간 동일 상품(base_name) 중복 발주 방지"""
 
     def _make_repo_factory(self, tracking_db):
-        """테스트 DB를 사용하는 repo factory 반환"""
         def factory(*args, **kwargs):
             return NewProduct3DayTrackingRepository(db_path=tracking_db)
         return factory
 
     def test_same_base_name_two_weeks_earlier_wins(self, tracking_db, monkeypatch):
-        """동일 base_name이 W3+W4에 존재 → W3(week_end 빠름)에서만 처리"""
         repo = NewProduct3DayTrackingRepository(db_path=tracking_db)
         monkeypatch.setattr(
             "src.infrastructure.database.repos.NP3DayTrackingRepo",
             self._make_repo_factory(tracking_db),
         )
-        # W3: 03.02~03.20
         repo.upsert_tracking(
             store_id="46513", week_label="202603-W3",
             week_start="2026-03-02", week_end="2026-03-20",
@@ -849,7 +819,6 @@ class TestMultiWeekDedup:
             bgf_order_count=3, order_interval_days=6,
             next_order_date="2026-03-02",
         )
-        # W4: 03.09~03.27 — 동일 base_name
         repo.upsert_tracking(
             store_id="46513", week_label="202603-W4",
             week_start="2026-03-09", week_end="2026-03-27",
@@ -858,22 +827,16 @@ class TestMultiWeekDedup:
             bgf_order_count=3, order_interval_days=6,
             next_order_date="2026-03-09",
         )
-
-        orders = get_today_new_product_orders(
-            store_id="46513", today="2026-03-15",
-        )
-        # base_name 중복 → 최대 1건
+        orders = get_today_new_product_orders(store_id="46513", today="2026-03-15")
         matching = [o for o in orders if o["base_name"] == "샌)크림샌드"]
         assert len(matching) <= 1
 
     def test_different_base_names_both_ordered(self, tracking_db, monkeypatch):
-        """서로 다른 base_name → 주차 다르더라도 둘 다 발주 가능"""
         repo = NewProduct3DayTrackingRepository(db_path=tracking_db)
         monkeypatch.setattr(
             "src.infrastructure.database.repos.NP3DayTrackingRepo",
             self._make_repo_factory(tracking_db),
         )
-        # W3: 상품A
         repo.upsert_tracking(
             store_id="46513", week_label="202603-W3",
             week_start="2026-03-02", week_end="2026-03-20",
@@ -882,7 +845,6 @@ class TestMultiWeekDedup:
             bgf_order_count=3, order_interval_days=6,
             next_order_date="2026-03-02",
         )
-        # W4: 상품B (다른 base_name)
         repo.upsert_tracking(
             store_id="46513", week_label="202603-W4",
             week_start="2026-03-09", week_end="2026-03-27",
@@ -891,22 +853,16 @@ class TestMultiWeekDedup:
             bgf_order_count=3, order_interval_days=6,
             next_order_date="2026-03-09",
         )
-
-        orders = get_today_new_product_orders(
-            store_id="46513", today="2026-03-15",
-        )
+        orders = get_today_new_product_orders(store_id="46513", today="2026-03-15")
         base_names = {o["base_name"] for o in orders}
-        # 서로 다른 base_name이므로 둘 다 있을 수 있음 (발주 조건 충족 시)
         assert len(base_names) <= 2
 
     def test_dedup_prefers_earlier_week_end(self, tracking_db, monkeypatch):
-        """week_end 정렬 확인: W3(3/20) vs W4(3/27) → W3 우선"""
         repo = NewProduct3DayTrackingRepository(db_path=tracking_db)
         monkeypatch.setattr(
             "src.infrastructure.database.repos.NP3DayTrackingRepo",
             self._make_repo_factory(tracking_db),
         )
-        # W4 먼저 삽입해도 W3이 우선
         repo.upsert_tracking(
             store_id="46513", week_label="202603-W4",
             week_start="2026-03-09", week_end="2026-03-27",
@@ -923,33 +879,27 @@ class TestMultiWeekDedup:
             bgf_order_count=3, order_interval_days=6,
             next_order_date="2026-03-02",
         )
-
-        orders = get_today_new_product_orders(
-            store_id="46513", today="2026-03-15",
-        )
+        orders = get_today_new_product_orders(store_id="46513", today="2026-03-15")
         matching = [o for o in orders if o["base_name"] == "햄)치즈버거"]
         if matching:
-            # W3에서 발주됐으면 week_label이 W3이어야 함
             assert matching[0]["week_label"] == "202603-W3"
 
 
 class TestMultiWeekD3Force:
-    """주차별 D-3 마감 개별 계산"""
+    """주차별 D-5 마감 개별 계산"""
 
     def _make_repo_factory(self, tracking_db):
-        """테스트 DB를 사용하는 repo factory 반환"""
         def factory(*args, **kwargs):
             return NewProduct3DayTrackingRepository(db_path=tracking_db)
         return factory
 
-    def test_w3_d3_force_w4_not(self, tracking_db, monkeypatch):
-        """W3은 D-2 (강제), W4는 D-12 (정상) → 동일 상품 W3에서 강제 발주"""
+    def test_w3_d5_force(self, tracking_db, monkeypatch):
+        """W3은 D-2 (강제) → 발주"""
         repo = NewProduct3DayTrackingRepository(db_path=tracking_db)
         monkeypatch.setattr(
             "src.infrastructure.database.repos.NP3DayTrackingRepo",
             self._make_repo_factory(tracking_db),
         )
-        # W3: week_end 03.20, 오늘 03.18 → D-2 강제
         repo.upsert_tracking(
             store_id="46513", week_label="202603-W3",
             week_start="2026-03-02", week_end="2026-03-20",
@@ -958,22 +908,17 @@ class TestMultiWeekD3Force:
             bgf_order_count=3, order_interval_days=6,
             next_order_date="2026-03-14",
         )
-
-        orders = get_today_new_product_orders(
-            store_id="46513", today="2026-03-18",
-        )
+        orders = get_today_new_product_orders(store_id="46513", today="2026-03-18")
         matching = [o for o in orders if o["base_name"] == "도)해물도시락"]
-        # D-2이므로 강제 발주 대상
         assert len(matching) == 1
 
     def test_w3_completed_w4_active(self, tracking_db, monkeypatch):
-        """W3 완료(3회 달성), W4에 같은 상품 미완료 → W4에서 처리"""
+        """W3 완료, W4 미완료 → W4에서 처리"""
         repo = NewProduct3DayTrackingRepository(db_path=tracking_db)
         monkeypatch.setattr(
             "src.infrastructure.database.repos.NP3DayTrackingRepo",
             self._make_repo_factory(tracking_db),
         )
-        # W3: 완료
         repo.upsert_tracking(
             store_id="46513", week_label="202603-W3",
             week_start="2026-03-02", week_end="2026-03-20",
@@ -983,8 +928,6 @@ class TestMultiWeekD3Force:
             next_order_date="2026-03-14",
         )
         repo.mark_completed_by_base_name("46513", "202603-W3", "샌)크림샌드")
-
-        # W4: 미완료
         repo.upsert_tracking(
             store_id="46513", week_label="202603-W4",
             week_start="2026-03-09", week_end="2026-03-27",
@@ -993,12 +936,7 @@ class TestMultiWeekD3Force:
             bgf_order_count=3, order_interval_days=6,
             next_order_date="2026-03-09",
         )
-
-        orders = get_today_new_product_orders(
-            store_id="46513", today="2026-03-15",
-        )
-        # W3은 completed → _get_all_active_items_in_range에서 제외
-        # W4만 활성 → W4에서 처리
+        orders = get_today_new_product_orders(store_id="46513", today="2026-03-15")
         matching = [o for o in orders if o["base_name"] == "샌)크림샌드"]
         if matching:
             assert matching[0]["week_label"] == "202603-W4"

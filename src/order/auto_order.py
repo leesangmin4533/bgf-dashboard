@@ -514,6 +514,22 @@ class AutoOrderSystem:
         except Exception:
             return 0
 
+    def _get_waste_after_date(self, item_cd: str, after_date: str) -> int:
+        """특정 날짜 이후 폐기량 합계 조회"""
+        try:
+            sales_repo = SalesRepository(store_id=self.store_id)
+            sales = sales_repo.get_sales_history(item_cd, days=30, store_id=self.store_id)
+            if not sales:
+                return 0
+            total = 0
+            for record in sales:
+                sale_date = record.get("sales_date", "")
+                if after_date and sale_date > after_date[:10]:
+                    total += record.get("disuse_count", record.get("disuse_qty", 0))
+            return total
+        except Exception:
+            return 0
+
     def _update_np3day_tracking_after_order(self) -> None:
         """발주 성공 후 new_product_3day_tracking 업데이트"""
         if not hasattr(self, '_pending_np3day_orders') or not self._pending_np3day_orders:
@@ -539,15 +555,23 @@ class AutoOrderSystem:
                     continue
 
                 our_count_after = tracking.get("our_order_count", 0) + 1
+
+                # 판매/폐기 조회 → 동적 next_order_date 결정
+                last_ordered = tracking.get("last_ordered_at", "")
+                sold_qty = self._get_sales_after_date(code, last_ordered)
+                wasted_qty = self._get_waste_after_date(code, last_ordered)
+                today_str = datetime.now().strftime("%Y-%m-%d")
+
                 record_order_completed(
                     store_id=self.store_id,
                     week_label=week_label,
                     product_code=code,
-                    week_start=tracking.get("week_start", ""),
-                    interval_days=tracking.get("order_interval_days", 0),
                     our_order_count_after=our_count_after,
                     base_name=base_name,
                     selected_code=code,
+                    sold_qty=sold_qty,
+                    wasted_qty=wasted_qty,
+                    today=today_str,
                 )
             self._pending_np3day_orders = []
         except Exception as e:
