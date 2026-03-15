@@ -1119,14 +1119,17 @@ class AutoOrderSystem:
             order_list = self._exclude_filtered_items(order_list)
             self._warn_stale_cut_items(order_list)
 
-            # ★ 신상품 도입 현황
-            from src.settings.constants import NEW_PRODUCT_AUTO_INTRO_ENABLED, NEW_PRODUCT_MODULE_ENABLED
-            # 미도입 자동 발주 [보류: 유통기한 매핑 미구현]
-            if NEW_PRODUCT_AUTO_INTRO_ENABLED:
-                order_list = self._add_new_product_items(order_list)
-            # 3일발주 후속 관리 (사용자 수동 발주 상품 → 3회 달성까지 자동 후속)
-            if NEW_PRODUCT_MODULE_ENABLED:
-                order_list = self._process_3day_follow_orders(order_list)
+            # ★ 신상품 도입 현황 (실패해도 기존 발주 플로우 중단 금지)
+            try:
+                from src.settings.constants import NEW_PRODUCT_AUTO_INTRO_ENABLED, NEW_PRODUCT_MODULE_ENABLED
+                # 미도입 자동 발주 [보류: 유통기한 매핑 미구현]
+                if NEW_PRODUCT_AUTO_INTRO_ENABLED:
+                    order_list = self._add_new_product_items(order_list)
+                # 3일발주 후속 관리 (사용자 수동 발주 상품 → 3회 달성까지 자동 후속)
+                if NEW_PRODUCT_MODULE_ENABLED:
+                    order_list = self._process_3day_follow_orders(order_list)
+            except Exception as e:
+                logger.warning(f"신상품 3일발주 수집/합산 실패 — skip: {e}")
 
             # ★ 스마트발주 오버라이드: 예측 기반으로 스마트→수동 전환
             order_list = self._inject_smart_order_items(order_list, target_date)
@@ -1543,8 +1546,11 @@ class AutoOrderSystem:
         # 발주 성공한 상품들을 order_tracking에 저장 (폐기 관리용)
         if not dry_run and result.get('results'):
             self._save_to_order_tracking(order_list, result['results'])
-            # 신상품 3일발주 분산 추적 업데이트
-            self._update_np3day_tracking_after_order()
+            # 신상품 3일발주 분산 추적 업데이트 (실패해도 발주 결과에 영향 없음)
+            try:
+                self._update_np3day_tracking_after_order()
+            except Exception as e:
+                logger.error(f"신상품 발주 추적 업데이트 실패 — 수동 확인 필요: {e}")
 
         # eval_outcomes에 predicted_qty, actual_order_qty, order_status 업데이트
         if result.get('results'):
