@@ -304,9 +304,13 @@ class TestMergeWithAiOrders:
         assert result[0]["item_cd"] == "N001"
 
     def test_original_not_modified(self):
-        """원본 ai_orders 변경 없음"""
+        """원본 ai_orders 변경 없음 (shallow copy 방지)"""
         ai_orders = [{"item_cd": "A001", "final_order_qty": 2}]
+        original_qty = ai_orders[0]["final_order_qty"]
         merge_with_ai_orders(ai_orders, [{"product_code": "A001", "qty": 1}])
+        # 원본 dict가 변경되지 않았는지 검증
+        assert ai_orders[0]["final_order_qty"] == original_qty
+        assert "np_3day_tracking" not in ai_orders[0]
 
 
 # ═══════════════════════════════════════════════════

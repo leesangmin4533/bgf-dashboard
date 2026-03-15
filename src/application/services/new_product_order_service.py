@@ -386,7 +386,7 @@ def merge_with_ai_orders(
     Returns:
         통합된 발주 목록 (ai_orders 원본을 수정하지 않고 새 리스트 반환)
     """
-    result = list(ai_orders)
+    result = [dict(item) for item in ai_orders]
     ai_code_map = {}
     for i, item in enumerate(result):
         code = item.get("item_cd", "")
