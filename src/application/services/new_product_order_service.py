@@ -186,29 +186,44 @@ def should_order_today(
     """
     # 이미 3회 달성
     if our_order_count >= NEW_PRODUCT_DS_MIN_ORDERS:
+        logger.info(f"[신상품3일발주] 판단: 이미 3회 완료 (count={our_order_count})")
         return False, "이미 3회 발주 완료", "none"
 
     today_dt = _parse_date(today)
     end_dt = _parse_date(week_end)
 
     if not today_dt or not end_dt:
+        logger.warning(f"[신상품3일발주] 판단: 날짜 파싱 실패 (today={today}, week_end={week_end})")
         return False, "날짜 파싱 실패", "none"
 
     # 첫 발주 전 → 즉시 발주
     if our_order_count == 0:
+        logger.info(f"[신상품3일발주] 판단: 첫 발주 즉시 실행 (today={today})")
         return True, "첫 발주 — 즉시 실행", "order"
 
     # D-5 이내 미달성 → 강제 발주 (보험)
     remaining_days = (end_dt - today_dt).days
     if remaining_days <= NEW_PRODUCT_DS_FORCE_REMAINING_DAYS:
+        logger.info(
+            f"[신상품3일발주] 판단: D-{remaining_days} 강제 발주 "
+            f"(count={our_order_count}, week_end={week_end})"
+        )
         return True, f"기간 잔여 {remaining_days}일 — 강제 발주", "force"
 
     # next_order_date 미도달 → 대기
     next_dt = _parse_date(next_order_date)
     if next_dt and today_dt < next_dt:
+        logger.info(
+            f"[신상품3일발주] 판단: 대기 — 예정일 {next_order_date} 미도달 "
+            f"(count={our_order_count})"
+        )
         return False, f"발주 예정일({next_order_date}) 미도달", "none"
 
     # next_order_date 도달 → 발주
+    logger.info(
+        f"[신상품3일발주] 판단: 예정일 도달 ({next_order_date}) → 발주 실행 "
+        f"(count={our_order_count})"
+    )
     return True, f"발주 예정일 도달 ({next_order_date})", "order"
 
 
@@ -241,11 +256,18 @@ def get_today_new_product_orders(
     if not today_dt:
         return []
 
+    logger.info(f"[신상품3일발주] 발주대상 조회 시작 (store={store_id}, today={today})")
+
     repo = NP3DayTrackingRepo(store_id=store_id)
     orders_to_place = []
 
     # 모든 활성 주차에서 미완료 항목 조회
     active_items = _get_all_active_items_in_range(repo, store_id, today)
+
+    if not active_items:
+        logger.info("[신상품3일발주] 활성 항목 없음 — 스킵")
+        return []
+    logger.info(f"[신상품3일발주] 활성 항목 {len(active_items)}건 조회 완료")
 
     # week_label별로 그룹핑 후 base_name 그룹 처리
     items_by_week = {}
@@ -272,7 +294,7 @@ def get_today_new_product_orders(
 
             # 주차간 중복 방지: 마감 빠른 주차가 이미 이 base_name을 점유
             if base_name in seen_base_names:
-                logger.info(f"신상품3일 주차간 중복 스킵: {base_name} (week={week_label})")
+                logger.info(f"[신상품3일발주] 주차간 중복 스킵: {base_name} (week={week_label})")
                 continue
             seen_base_names.add(base_name)
 
@@ -321,8 +343,15 @@ def get_today_new_product_orders(
                         "week_label": week_label,
                         "source": "new_product_3day_distributed",
                     })
-                    logger.info(f"신상품3일 발주대상: {selected['product_code']} (그룹={base_name}, {reason})")
+                    logger.info(
+                        f"[신상품3일발주] 발주대상: {selected['product_code']} "
+                        f"({selected['product_name']}) 그룹={base_name}, {reason}"
+                    )
 
+    logger.info(
+        f"[신상품3일발주] 발주대상 조회 완료: {len(orders_to_place)}건 "
+        f"(활성주차 {len(sorted_weeks)}개)"
+    )
     return orders_to_place
 
 
@@ -353,6 +382,20 @@ def record_order_completed(
         today = datetime.now().strftime("%Y-%m-%d")
     next_date = calculate_dynamic_next_order_date(today, sold_qty, wasted_qty)
 
+    # 동적 간격 사유 결정
+    if sold_qty > 0:
+        interval_reason = f"판매감지(sold={sold_qty})"
+    elif wasted_qty > 0:
+        interval_reason = f"폐기감지(wasted={wasted_qty})"
+    else:
+        interval_reason = "미판매+미폐기"
+
+    item_label = base_name or product_code
+    logger.info(
+        f"[신상품3일발주] 추적: {item_label} count={our_order_count_after} "
+        f"next={next_date} 사유={interval_reason}"
+    )
+
     # base_name이 있으면 그룹 단위로 업데이트
     if base_name:
         repo.record_order_by_base_name(store_id, week_label, base_name, next_date, selected_code)
@@ -365,7 +408,7 @@ def record_order_completed(
             repo.mark_completed_by_base_name(store_id, week_label, base_name)
         else:
             repo.mark_completed(store_id, week_label, product_code)
-        logger.info(f"신상품3일 완료: {base_name or product_code} (3회 달성)")
+        logger.info(f"[신상품3일발주] 완료: {item_label} — 3회 달성 (week={week_label})")
 
 
 def merge_with_ai_orders(
@@ -405,8 +448,9 @@ def merge_with_ai_orders(
             result[idx]["np_3day_tracking"] = True
             result[idx]["new_product_3day"] = True
             logger.info(
-                f"신상품3일 AI중복: {code} AI수량={result[idx].get('final_order_qty', 0)} "
-                f"유지 (횟수만 인정)"
+                f"[신상품3일발주] AI중복: {code} "
+                f"({result[idx].get('item_nm', '')}) "
+                f"AI수량={result[idx].get('final_order_qty', 0)} 유지 (횟수만 인정)"
             )
         else:
             # AI 목록에 없는 신상품 → 앞에 삽입
@@ -423,7 +467,10 @@ def merge_with_ai_orders(
                 "orderable_day": "일월화수목금토",
                 "week_label": np_item.get("week_label", ""),
             })
-            logger.info(f"신상품3일 신규삽입: {code} qty={qty}")
+            logger.info(
+                f"[신상품3일발주] AI미등록 강제삽입: {code} "
+                f"({np_item.get('product_name', '')}) qty={qty}"
+            )
 
     return inserted + result
 

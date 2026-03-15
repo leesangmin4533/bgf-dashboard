@@ -538,12 +538,19 @@ class AutoOrderSystem:
             from src.application.services.new_product_order_service import record_order_completed
             from src.infrastructure.database.repos import NP3DayTrackingRepo
 
+            logger.info(
+                f"[신상품3일발주] 추적 업데이트 시작: {len(self._pending_np3day_orders)}건"
+            )
             repo = NP3DayTrackingRepo(store_id=self.store_id)
+            updated_count = 0
             for np_item in self._pending_np3day_orders:
                 code = np_item.get("product_code", "")
                 week_label = np_item.get("week_label", "")
                 base_name = np_item.get("base_name", "")
                 if not code or not week_label:
+                    logger.warning(
+                        f"[신상품3일발주] 추적 스킵: code={code} week={week_label} 비어있음"
+                    )
                     continue
 
                 # base_name이 있으면 그룹 단위 조회, 없으면 product_code 단위
@@ -552,6 +559,9 @@ class AutoOrderSystem:
                 else:
                     tracking = repo.get_tracking(self.store_id, week_label, code)
                 if not tracking:
+                    logger.warning(
+                        f"[신상품3일발주] 추적 레코드 없음: {base_name or code} (week={week_label})"
+                    )
                     continue
 
                 our_count_after = tracking.get("our_order_count", 0) + 1
@@ -561,6 +571,12 @@ class AutoOrderSystem:
                 sold_qty = self._get_sales_after_date(code, last_ordered)
                 wasted_qty = self._get_waste_after_date(code, last_ordered)
                 today_str = datetime.now().strftime("%Y-%m-%d")
+
+                logger.info(
+                    f"[신상품3일발주] 발주완료: {base_name or code} "
+                    f"count={our_count_after}/{NEW_PRODUCT_DS_MIN_ORDERS} "
+                    f"sold={sold_qty} wasted={wasted_qty}"
+                )
 
                 record_order_completed(
                     store_id=self.store_id,
@@ -573,9 +589,11 @@ class AutoOrderSystem:
                     wasted_qty=wasted_qty,
                     today=today_str,
                 )
+                updated_count += 1
             self._pending_np3day_orders = []
+            logger.info(f"[신상품3일발주] 추적 업데이트 완료: {updated_count}건 처리")
         except Exception as e:
-            logger.warning(f"신상품3일 추적 업데이트 실패: {e}")
+            logger.error(f"[신상품3일발주] 추적 업데이트 실패 — 수동 확인 필요: {e}")
 
     # ------------------------------------------------------------------
     # 스마트발주 오버라이드: 단품별발주로 제출하여 수동 전환
