@@ -40,6 +40,8 @@ COMMON_SCHEMA = [
     """CREATE TABLE IF NOT EXISTS mid_categories (
         mid_cd TEXT PRIMARY KEY,
         mid_nm TEXT NOT NULL,
+        large_cd TEXT,
+        large_nm TEXT,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
     )""",
@@ -66,6 +68,10 @@ COMMON_SCHEMA = [
         sell_price INTEGER,
         margin_rate REAL,
         store_id TEXT,
+        large_cd TEXT,
+        small_cd TEXT,
+        small_nm TEXT,
+        class_nm TEXT,
         FOREIGN KEY (item_cd) REFERENCES products(item_cd)
     )""",
 
@@ -76,8 +82,9 @@ COMMON_SCHEMA = [
         factor_type TEXT NOT NULL,
         factor_key TEXT NOT NULL,
         factor_value TEXT,
+        store_id TEXT NOT NULL DEFAULT '',
         created_at TEXT NOT NULL,
-        UNIQUE(factor_date, factor_type, factor_key)
+        UNIQUE(factor_date, factor_type, factor_key, store_id)
     )""",
 
     # app_settings
@@ -168,6 +175,10 @@ COMMON_INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_dashboard_users_store ON dashboard_users(store_id)",
     "CREATE INDEX IF NOT EXISTS idx_signup_requests_status ON signup_requests(status)",
     "CREATE INDEX IF NOT EXISTS idx_signup_requests_store ON signup_requests(store_id)",
+    "CREATE INDEX IF NOT EXISTS idx_external_factors_store ON external_factors(store_id)",
+    "CREATE INDEX IF NOT EXISTS idx_mid_categories_large ON mid_categories(large_cd)",
+    "CREATE INDEX IF NOT EXISTS idx_product_details_large ON product_details(large_cd)",
+    "CREATE INDEX IF NOT EXISTS idx_product_details_small ON product_details(small_cd)",
 ]
 
 
@@ -262,6 +273,8 @@ STORE_SCHEMA = [
         order_unit_qty INTEGER DEFAULT 1,
         is_available INTEGER DEFAULT 1,
         is_cut_item INTEGER DEFAULT 0,
+        query_fail_count INTEGER DEFAULT 0,
+        unavail_reason TEXT,
         queried_at TEXT NOT NULL,
         created_at TEXT NOT NULL,
         UNIQUE(store_id, item_cd)
@@ -287,7 +300,10 @@ STORE_SCHEMA = [
         store_id TEXT,
         stock_source TEXT,
         pending_source TEXT,
-        is_stock_stale INTEGER DEFAULT 0
+        is_stock_stale INTEGER DEFAULT 0,
+        rule_order_qty INTEGER,
+        ml_order_qty INTEGER,
+        ml_weight_used REAL
     )""",
 
     # eval_outcomes
@@ -336,7 +352,7 @@ STORE_SCHEMA = [
         is_active INTEGER DEFAULT 1,
         collected_at TEXT NOT NULL,
         updated_at TEXT,
-        UNIQUE(item_cd, promo_type, start_date)
+        UNIQUE(store_id, item_cd, promo_type, start_date)
     )""",
 
     # promotion_stats
@@ -370,7 +386,7 @@ STORE_SCHEMA = [
         is_processed INTEGER DEFAULT 0,
         processed_at TEXT,
         detected_at TEXT NOT NULL,
-        UNIQUE(item_cd, change_date, change_type)
+        UNIQUE(store_id, item_cd, change_date, change_type)
     )""",
 
     # receiving_history
@@ -413,6 +429,24 @@ STORE_SCHEMA = [
         detected_at TEXT,
         updated_at TEXT,
         PRIMARY KEY(item_cd)
+    )""",
+
+    # manual_order_items (수동 발주 상품)
+    """CREATE TABLE IF NOT EXISTS manual_order_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        store_id TEXT,
+        item_cd TEXT NOT NULL,
+        item_nm TEXT,
+        mid_cd TEXT,
+        mid_nm TEXT,
+        order_qty INTEGER NOT NULL DEFAULT 0,
+        ord_cnt INTEGER DEFAULT 0,
+        ord_unit_qty INTEGER DEFAULT 1,
+        ord_input_id TEXT,
+        ord_amt INTEGER DEFAULT 0,
+        order_date TEXT NOT NULL,
+        collected_at TEXT DEFAULT (datetime('now', 'localtime')),
+        UNIQUE(item_cd, order_date)
     )""",
 
     # collection_logs
@@ -503,6 +537,32 @@ STORE_SCHEMA = [
         week_cont TEXT,
         collected_at TEXT NOT NULL,
         UNIQUE(store_id, month_ym, week_no)
+    )""",
+
+    # new_product_3day_tracking (신상품 3일발주 분산 추적, v60 그룹핑)
+    """CREATE TABLE IF NOT EXISTS new_product_3day_tracking (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        store_id TEXT NOT NULL,
+        week_label TEXT NOT NULL,
+        week_start DATE NOT NULL,
+        week_end DATE NOT NULL,
+        product_code TEXT NOT NULL,
+        product_name TEXT,
+        sub_category TEXT,
+        base_name TEXT DEFAULT '',
+        product_codes TEXT DEFAULT '',
+        selected_code TEXT DEFAULT '',
+        bgf_order_count INTEGER DEFAULT 0,
+        our_order_count INTEGER DEFAULT 0,
+        order_interval_days INTEGER,
+        next_order_date DATE,
+        skip_count INTEGER DEFAULT 0,
+        last_sale_after_order INTEGER DEFAULT 0,
+        last_checked_at DATETIME,
+        last_ordered_at DATETIME,
+        is_completed INTEGER DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(store_id, week_label, base_name)
     )""",
 
     # new_product_items (미도입/미달성 개별 상품)
@@ -627,6 +687,219 @@ STORE_SCHEMA = [
         created_at TEXT DEFAULT (datetime('now', 'localtime')),
         UNIQUE(store_id, optimization_date)
     )""",
+
+    # detected_new_products (입고 시 감지된 신제품 이력 — v45, lifecycle 확장 v46)
+    """CREATE TABLE IF NOT EXISTS detected_new_products (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        item_cd TEXT NOT NULL,
+        item_nm TEXT,
+        mid_cd TEXT,
+        mid_cd_source TEXT DEFAULT 'fallback',
+        first_receiving_date TEXT NOT NULL,
+        receiving_qty INTEGER DEFAULT 0,
+        order_unit_qty INTEGER DEFAULT 1,
+        center_cd TEXT,
+        center_nm TEXT,
+        cust_nm TEXT,
+        registered_to_products INTEGER DEFAULT 0,
+        registered_to_details INTEGER DEFAULT 0,
+        registered_to_inventory INTEGER DEFAULT 0,
+        detected_at TEXT NOT NULL,
+        store_id TEXT,
+        lifecycle_status TEXT DEFAULT 'detected',
+        monitoring_start_date TEXT,
+        monitoring_end_date TEXT,
+        total_sold_qty INTEGER DEFAULT 0,
+        sold_days INTEGER DEFAULT 0,
+        similar_item_avg REAL,
+        status_changed_at TEXT,
+        analysis_window_days INTEGER,
+        extension_count INTEGER DEFAULT 0,
+        settlement_score REAL,
+        settlement_verdict TEXT,
+        settlement_date TEXT,
+        settlement_checked_at TEXT,
+        UNIQUE(item_cd, first_receiving_date)
+    )""",
+
+    # new_product_daily_tracking (신제품 일별 판매/재고/발주 추적 — v46)
+    """CREATE TABLE IF NOT EXISTS new_product_daily_tracking (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        item_cd TEXT NOT NULL,
+        tracking_date TEXT NOT NULL,
+        sales_qty INTEGER DEFAULT 0,
+        stock_qty INTEGER DEFAULT 0,
+        order_qty INTEGER DEFAULT 0,
+        store_id TEXT,
+        created_at TEXT NOT NULL,
+        UNIQUE(item_cd, tracking_date, store_id)
+    )""",
+
+    # substitution_events (소분류 내 잠식 감지 — v49)
+    """CREATE TABLE IF NOT EXISTS substitution_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        store_id TEXT NOT NULL,
+        detection_date TEXT NOT NULL,
+        small_cd TEXT NOT NULL,
+        small_nm TEXT,
+        gainer_item_cd TEXT NOT NULL,
+        gainer_item_nm TEXT,
+        gainer_prior_avg REAL,
+        gainer_recent_avg REAL,
+        gainer_growth_rate REAL,
+        loser_item_cd TEXT NOT NULL,
+        loser_item_nm TEXT,
+        loser_prior_avg REAL,
+        loser_recent_avg REAL,
+        loser_decline_rate REAL,
+        adjustment_coefficient REAL NOT NULL DEFAULT 1.0,
+        total_change_rate REAL,
+        confidence REAL DEFAULT 0.0,
+        is_active INTEGER DEFAULT 1,
+        expires_at TEXT,
+        created_at TEXT NOT NULL,
+        UNIQUE(store_id, detection_date, loser_item_cd, gainer_item_cd)
+    )""",
+
+    # food_waste_calibration (폐기율 자동 보정 — v32, small_cd v48)
+    """CREATE TABLE IF NOT EXISTS food_waste_calibration (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        store_id TEXT NOT NULL,
+        mid_cd TEXT NOT NULL,
+        calibration_date TEXT NOT NULL,
+        actual_waste_rate REAL NOT NULL,
+        target_waste_rate REAL NOT NULL,
+        error REAL NOT NULL,
+        sample_days INTEGER NOT NULL,
+        total_order_qty INTEGER,
+        total_waste_qty INTEGER,
+        total_sold_qty INTEGER,
+        param_name TEXT,
+        old_value REAL,
+        new_value REAL,
+        current_params TEXT,
+        created_at TEXT NOT NULL,
+        small_cd TEXT DEFAULT '',
+        UNIQUE(store_id, mid_cd, small_cd, calibration_date)
+    )""",
+
+    # dessert_decisions (디저트 발주 유지/정지 판단 — v52)
+    """CREATE TABLE IF NOT EXISTS dessert_decisions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        store_id TEXT NOT NULL,
+        item_cd TEXT NOT NULL,
+        item_nm TEXT,
+        mid_cd TEXT DEFAULT '014',
+        dessert_category TEXT NOT NULL,
+        expiration_days INTEGER,
+        small_nm TEXT,
+        lifecycle_phase TEXT NOT NULL,
+        first_receiving_date TEXT,
+        first_receiving_source TEXT,
+        weeks_since_intro INTEGER DEFAULT 0,
+        judgment_period_start TEXT NOT NULL,
+        judgment_period_end TEXT NOT NULL,
+        total_order_qty INTEGER DEFAULT 0,
+        total_sale_qty INTEGER DEFAULT 0,
+        total_disuse_qty INTEGER DEFAULT 0,
+        sale_amount INTEGER DEFAULT 0,
+        disuse_amount INTEGER DEFAULT 0,
+        sell_price INTEGER DEFAULT 0,
+        sale_rate REAL DEFAULT 0.0,
+        category_avg_sale_qty REAL DEFAULT 0.0,
+        prev_period_sale_qty INTEGER DEFAULT 0,
+        sale_trend_pct REAL DEFAULT 0.0,
+        consecutive_low_weeks INTEGER DEFAULT 0,
+        consecutive_zero_months INTEGER DEFAULT 0,
+        decision TEXT NOT NULL,
+        decision_reason TEXT,
+        is_rapid_decline_warning INTEGER DEFAULT 0,
+        operator_action TEXT,
+        operator_note TEXT,
+        action_taken_at TEXT,
+        judgment_cycle TEXT NOT NULL,
+        category_type TEXT DEFAULT 'dessert',
+        created_at TEXT NOT NULL,
+        UNIQUE(store_id, item_cd, judgment_period_end)
+    )""",
+
+    # waste_slips (폐기 전표 — v33)
+    """CREATE TABLE IF NOT EXISTS waste_slips (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        store_id TEXT NOT NULL,
+        chit_date TEXT NOT NULL,
+        chit_no TEXT NOT NULL,
+        chit_flag TEXT,
+        chit_id TEXT,
+        chit_id_nm TEXT,
+        item_cnt INTEGER DEFAULT 0,
+        center_cd TEXT,
+        center_nm TEXT,
+        wonga_amt REAL DEFAULT 0,
+        maega_amt REAL DEFAULT 0,
+        nap_plan_ymd TEXT,
+        conf_id TEXT,
+        cre_ymdhms TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT,
+        UNIQUE(store_id, chit_date, chit_no)
+    )""",
+
+    # waste_slip_items (폐기 전표 상세 품목 — v34)
+    """CREATE TABLE IF NOT EXISTS waste_slip_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        store_id TEXT NOT NULL,
+        chit_date TEXT NOT NULL,
+        chit_no TEXT NOT NULL,
+        chit_seq INTEGER,
+        item_cd TEXT NOT NULL,
+        item_nm TEXT,
+        large_cd TEXT,
+        large_nm TEXT,
+        qty INTEGER DEFAULT 0,
+        wonga_price REAL DEFAULT 0,
+        wonga_amt REAL DEFAULT 0,
+        maega_price REAL DEFAULT 0,
+        maega_amt REAL DEFAULT 0,
+        cust_nm TEXT,
+        center_nm TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT,
+        UNIQUE(store_id, chit_date, chit_no, item_cd)
+    )""",
+
+    # waste_verification_log (폐기 전표 검증 — v33)
+    """CREATE TABLE IF NOT EXISTS waste_verification_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        store_id TEXT NOT NULL,
+        verification_date TEXT NOT NULL,
+        slip_count INTEGER DEFAULT 0,
+        slip_item_count INTEGER DEFAULT 0,
+        daily_sales_disuse_count INTEGER DEFAULT 0,
+        gap INTEGER DEFAULT 0,
+        gap_percentage REAL DEFAULT 0,
+        status TEXT NOT NULL DEFAULT 'UNKNOWN',
+        details TEXT,
+        created_at TEXT NOT NULL,
+        UNIQUE(store_id, verification_date)
+    )""",
+
+    # order_exclusions (발주 제외 사유 추적 — v43)
+    """CREATE TABLE IF NOT EXISTS order_exclusions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        store_id TEXT NOT NULL,
+        eval_date TEXT NOT NULL,
+        item_cd TEXT NOT NULL,
+        item_nm TEXT,
+        mid_cd TEXT,
+        exclusion_type TEXT NOT NULL,
+        predicted_qty INTEGER DEFAULT 0,
+        current_stock INTEGER DEFAULT 0,
+        pending_qty INTEGER DEFAULT 0,
+        detail TEXT,
+        created_at TEXT NOT NULL,
+        UNIQUE(store_id, eval_date, item_cd)
+    )""",
 ]
 
 STORE_INDEXES = [
@@ -680,6 +953,11 @@ STORE_INDEXES = [
     # validation_log
     "CREATE INDEX IF NOT EXISTS idx_validation_log_date ON validation_log(sales_date)",
     "CREATE INDEX IF NOT EXISTS idx_validation_log_type_passed ON validation_log(validation_type, is_passed)",
+    # new_product_3day_tracking
+    "CREATE INDEX IF NOT EXISTS idx_np3day_store_week ON new_product_3day_tracking(store_id, week_label)",
+    "CREATE INDEX IF NOT EXISTS idx_np3day_product ON new_product_3day_tracking(product_code)",
+    "CREATE INDEX IF NOT EXISTS idx_np3day_completed ON new_product_3day_tracking(is_completed)",
+    "CREATE INDEX IF NOT EXISTS idx_np3day_base_name ON new_product_3day_tracking(base_name)",
     # new_product_status
     "CREATE INDEX IF NOT EXISTS idx_new_product_status_month ON new_product_status(store_id, month_ym)",
     # new_product_items
@@ -698,6 +976,35 @@ STORE_INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_waste_cause_feedback ON waste_cause_analysis(is_applied, feedback_expiry_date)",
     # bayesian_optimization_log
     "CREATE INDEX IF NOT EXISTS idx_bayesian_log_store_date ON bayesian_optimization_log(store_id, optimization_date)",
+    # detected_new_products
+    "CREATE INDEX IF NOT EXISTS idx_detected_new_products_date ON detected_new_products(first_receiving_date)",
+    "CREATE INDEX IF NOT EXISTS idx_detected_new_products_item ON detected_new_products(item_cd)",
+    "CREATE INDEX IF NOT EXISTS idx_detected_new_products_lifecycle ON detected_new_products(lifecycle_status)",
+    # new_product_daily_tracking
+    "CREATE INDEX IF NOT EXISTS idx_np_tracking_item ON new_product_daily_tracking(item_cd)",
+    "CREATE INDEX IF NOT EXISTS idx_np_tracking_date ON new_product_daily_tracking(tracking_date)",
+    # substitution_events
+    "CREATE INDEX IF NOT EXISTS idx_substitution_store_date ON substitution_events(store_id, detection_date)",
+    "CREATE INDEX IF NOT EXISTS idx_substitution_loser ON substitution_events(loser_item_cd, is_active)",
+    "CREATE INDEX IF NOT EXISTS idx_substitution_small_cd ON substitution_events(small_cd)",
+    # food_waste_calibration
+    "CREATE INDEX IF NOT EXISTS idx_food_waste_cal_store_mid ON food_waste_calibration(store_id, mid_cd, calibration_date)",
+    "CREATE INDEX IF NOT EXISTS idx_food_waste_cal_small_cd ON food_waste_calibration(store_id, mid_cd, small_cd, calibration_date)",
+    # waste_slips
+    "CREATE INDEX IF NOT EXISTS idx_waste_slips_store_date ON waste_slips(store_id, chit_date)",
+    # waste_slip_items
+    "CREATE INDEX IF NOT EXISTS idx_wsi_store_date ON waste_slip_items(store_id, chit_date)",
+    "CREATE INDEX IF NOT EXISTS idx_wsi_item ON waste_slip_items(item_cd)",
+    # waste_verification_log
+    "CREATE INDEX IF NOT EXISTS idx_waste_verify_store_date ON waste_verification_log(store_id, verification_date)",
+    # dessert_decisions
+    "CREATE INDEX IF NOT EXISTS idx_dessert_dec_store_date ON dessert_decisions(store_id, judgment_period_end)",
+    "CREATE INDEX IF NOT EXISTS idx_dessert_dec_item ON dessert_decisions(item_cd)",
+    "CREATE INDEX IF NOT EXISTS idx_dessert_dec_category ON dessert_decisions(dessert_category, decision)",
+    "CREATE INDEX IF NOT EXISTS idx_dessert_dec_decision ON dessert_decisions(decision, created_at)",
+    # order_exclusions
+    "CREATE INDEX IF NOT EXISTS idx_oe_date ON order_exclusions(eval_date)",
+    "CREATE INDEX IF NOT EXISTS idx_oe_type ON order_exclusions(exclusion_type)",
 ]
 
 
@@ -737,14 +1044,178 @@ def init_store_db(store_id: str, db_path: Optional[Path] = None) -> None:
     conn = sqlite3.connect(str(db_path))
     try:
         cursor = conn.cursor()
+        # 1) 테이블 생성 (이미 있으면 스킵)
         for sql in STORE_SCHEMA:
             cursor.execute(sql)
+        # 2) 기존 테이블에 누락된 컬럼 보정 (인덱스보다 먼저!)
+        _apply_store_column_patches(cursor)
+        # 3) 인덱스 생성 (컬럼 보정 후 실행해야 에러 방지)
         for sql in STORE_INDEXES:
             cursor.execute(sql)
         conn.commit()
         logger.info(f"매장 DB 초기화 완료: {store_id} → {db_path}")
     finally:
         conn.close()
+
+
+# 매장 DB 컬럼 보정 (기존 테이블에 누락된 컬럼 추가)
+_STORE_COLUMN_PATCHES = [
+    # v48: food_waste_calibration small_cd 세분화
+    "ALTER TABLE food_waste_calibration ADD COLUMN small_cd TEXT DEFAULT ''",
+    # v51: 조회 실패 내성
+    "ALTER TABLE realtime_inventory ADD COLUMN query_fail_count INTEGER DEFAULT 0",
+    "ALTER TABLE realtime_inventory ADD COLUMN unavail_reason TEXT",
+    # v53: 디저트/음료 판단 category_type
+    "ALTER TABLE dessert_decisions ADD COLUMN category_type TEXT DEFAULT 'dessert'",
+    # waste_slips 누락 컬럼 보정 (v33 스키마 불완전한 매장)
+    "ALTER TABLE waste_slips ADD COLUMN nap_plan_ymd TEXT",
+    "ALTER TABLE waste_slips ADD COLUMN conf_id TEXT",
+    "ALTER TABLE waste_slips ADD COLUMN cre_ymdhms TEXT",
+    "ALTER TABLE waste_slips ADD COLUMN updated_at TEXT",
+    # waste_slips 타입 보정 (INTEGER → REAL)
+    # Note: SQLite는 ALTER COLUMN 미지원이므로 새 DB에서만 REAL 적용됨
+    # v55: ML 가중치 개선 인프라 — Rule vs ML 분리 추적
+    "ALTER TABLE prediction_logs ADD COLUMN rule_order_qty INTEGER",
+    "ALTER TABLE prediction_logs ADD COLUMN ml_order_qty INTEGER",
+    "ALTER TABLE prediction_logs ADD COLUMN ml_weight_used REAL",
+    # v56: 신제품 안착 판정 컬럼
+    "ALTER TABLE detected_new_products ADD COLUMN analysis_window_days INTEGER",
+    "ALTER TABLE detected_new_products ADD COLUMN extension_count INTEGER DEFAULT 0",
+    "ALTER TABLE detected_new_products ADD COLUMN settlement_score REAL",
+    "ALTER TABLE detected_new_products ADD COLUMN settlement_verdict TEXT",
+    "ALTER TABLE detected_new_products ADD COLUMN settlement_date TEXT",
+    "ALTER TABLE detected_new_products ADD COLUMN settlement_checked_at TEXT",
+]
+
+
+def _fix_promotions_unique(cursor) -> None:
+    """promotions 테이블 UNIQUE 제약을 (store_id, item_cd, promo_type, start_date)로 보정.
+
+    기존 UNIQUE가 3컬럼(item_cd, promo_type, start_date)인 경우에만 재생성한다.
+    """
+    try:
+        row = cursor.execute(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='promotions'"
+        ).fetchone()
+        if not row:
+            return
+        create_sql = row[0]
+        # 이미 store_id가 UNIQUE에 포함되어 있으면 스킵
+        if "store_id, item_cd, promo_type, start_date" in create_sql:
+            return
+        # 3컬럼 UNIQUE → 4컬럼 UNIQUE로 재생성
+        logger.info("promotions 테이블 UNIQUE 보정: 3컬럼 → 4컬럼")
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS promotions_fixed (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                store_id TEXT,
+                item_cd TEXT NOT NULL,
+                item_nm TEXT,
+                promo_type TEXT NOT NULL,
+                start_date TEXT NOT NULL,
+                end_date TEXT NOT NULL,
+                is_active INTEGER DEFAULT 1,
+                collected_at TEXT NOT NULL,
+                updated_at TEXT,
+                UNIQUE(store_id, item_cd, promo_type, start_date)
+            )
+        """)
+        cursor.execute("""
+            INSERT OR IGNORE INTO promotions_fixed
+                (id, store_id, item_cd, item_nm, promo_type,
+                 start_date, end_date, is_active, collected_at, updated_at)
+            SELECT id, store_id, item_cd, item_nm, promo_type,
+                   start_date, end_date, is_active, collected_at, updated_at
+            FROM promotions
+        """)
+        cursor.execute("DROP TABLE promotions")
+        cursor.execute("ALTER TABLE promotions_fixed RENAME TO promotions")
+        logger.info("promotions 테이블 UNIQUE 보정 완료")
+    except Exception as e:
+        logger.warning(f"promotions UNIQUE 보정 실패 (무시): {e}")
+
+
+def _fix_calibration_unique(cursor) -> None:
+    """food_waste_calibration UNIQUE 제약을
+    (store_id, mid_cd, calibration_date) → (store_id, mid_cd, small_cd, calibration_date)로 보정.
+
+    기존 UNIQUE에 small_cd가 없는 경우에만 재생성한다.
+    오염 데이터(Phase2가 Phase1을 덮어쓴 행)도 함께 정리한다.
+    """
+    try:
+        row = cursor.execute(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='food_waste_calibration'"
+        ).fetchone()
+        if not row:
+            return
+        create_sql = row[0]
+        # 이미 small_cd가 UNIQUE에 포함되어 있으면 스킵
+        if "store_id, mid_cd, small_cd, calibration_date" in create_sql:
+            return
+        logger.info("food_waste_calibration 테이블 UNIQUE 보정: small_cd 추가")
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS food_waste_calibration_fixed (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                store_id TEXT NOT NULL,
+                mid_cd TEXT NOT NULL,
+                calibration_date TEXT NOT NULL,
+                actual_waste_rate REAL NOT NULL,
+                target_waste_rate REAL NOT NULL,
+                error REAL NOT NULL,
+                sample_days INTEGER NOT NULL,
+                total_order_qty INTEGER,
+                total_waste_qty INTEGER,
+                total_sold_qty INTEGER,
+                param_name TEXT,
+                old_value REAL,
+                new_value REAL,
+                current_params TEXT,
+                created_at TEXT NOT NULL,
+                small_cd TEXT DEFAULT '',
+                UNIQUE(store_id, mid_cd, small_cd, calibration_date)
+            )
+        """)
+        # 오염 행 제외하면서 복사 (Phase2가 Phase1을 덮어쓴 무의미한 행)
+        cursor.execute("""
+            INSERT OR IGNORE INTO food_waste_calibration_fixed
+                (store_id, mid_cd, calibration_date,
+                 actual_waste_rate, target_waste_rate, error,
+                 sample_days, total_order_qty, total_waste_qty, total_sold_qty,
+                 param_name, old_value, new_value,
+                 current_params, created_at, small_cd)
+            SELECT store_id, mid_cd, calibration_date,
+                   actual_waste_rate, target_waste_rate, error,
+                   sample_days, total_order_qty, total_waste_qty, total_sold_qty,
+                   param_name, old_value, new_value,
+                   current_params, created_at, COALESCE(small_cd, '')
+            FROM food_waste_calibration
+            WHERE NOT (small_cd != '' AND sample_days = 0 AND actual_waste_rate = 0)
+        """)
+        cursor.execute("DROP TABLE food_waste_calibration")
+        cursor.execute("ALTER TABLE food_waste_calibration_fixed RENAME TO food_waste_calibration")
+        logger.info("food_waste_calibration 테이블 UNIQUE 보정 완료")
+    except Exception as e:
+        logger.warning(f"food_waste_calibration UNIQUE 보정 실패 (무시): {e}")
+
+
+def _apply_store_column_patches(cursor) -> None:
+    """기존 매장 DB 테이블에 누락된 컬럼을 안전하게 추가.
+
+    이미 존재하는 컬럼은 'duplicate column name' 에러를 무시한다.
+    """
+    for stmt in _STORE_COLUMN_PATCHES:
+        try:
+            cursor.execute(stmt)
+        except sqlite3.OperationalError as e:
+            if "duplicate column name" in str(e):
+                pass  # 이미 존재 → 무시
+            elif "no such table" in str(e):
+                pass  # 테이블 자체가 없으면 CREATE TABLE에서 이미 포함됨
+            else:
+                logger.warning(f"Store DB 컬럼 보정 실패 (무시): {stmt} → {e}")
+    # UNIQUE 제약 보정
+    _fix_promotions_unique(cursor)
+    _fix_calibration_unique(cursor)
 
 
 def init_db(db_path: Optional[Path] = None) -> None:

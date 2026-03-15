@@ -7,9 +7,10 @@
 
 import csv
 import json
+import math
 import time
 from datetime import datetime, timedelta
-from typing import Dict, Any, List, Optional, Set
+from typing import Dict, Any, List, Optional, Set, Tuple
 from pathlib import Path
 
 import sys
@@ -34,6 +35,8 @@ from src.settings.constants import (
     FOOD_CATEGORIES,
     FOOD_SHORT_EXPIRY_PENDING_DISCOUNT,
     CATEGORY_EXPIRY_DAYS,
+    CATEGORY_SITE_BUDGET_ENABLED,
+    MAX_ORDER_MULTIPLIER,
 )
 
 from src.infrastructure.database.repos import (
@@ -46,7 +49,9 @@ from src.infrastructure.database.repos import (
     SmartOrderItemRepository,
     AppSettingsRepository,
     InventoryBatchRepository,
+    OrderExclusionRepository,
 )
+from src.infrastructure.database.repos.order_exclusion_repo import ExclusionType
 from src.prediction.predictor import OrderPredictor
 from src.prediction.improved_predictor import ImprovedPredictor, PredictionResult, PredictionLogger
 from src.prediction.pre_order_evaluator import PreOrderEvaluator, EvalDecision
@@ -60,6 +65,8 @@ from src.alert.delivery_utils import (
     calculate_shelf_life_after_arrival
 )
 from src.prediction.categories.food_daily_cap import apply_food_daily_cap
+from src.prediction.category_demand_forecaster import CategoryDemandForecaster
+from src.prediction.large_category_forecaster import LargeCategoryForecaster
 
 # OrderUnitConverter가 없을 수 있으므로 안전하게 import
 try:
@@ -119,16 +126,26 @@ class AutoOrderSystem:
         # 발주중지(CUT) 상품 목록
         self._cut_items: set = set()
 
+        # 발주 제외 사유 기록 (배치 저장용)
+        self._exclusion_records: List[Dict[str, Any]] = []
+        self._exclusion_repo = OrderExclusionRepository(store_id=self.store_id)
+
         # 자동발주 상품 목록 (BGF 본부 관리 - 중복 발주 방지)
         self._auto_order_items: set = set()
 
         # 스마트발주 상품 목록 (BGF 본부 관리 - 중복 발주 방지)
         self._smart_order_items: set = set()
 
+        # 카테고리 총량 예측기 (신선식품 floor 보충)
+        self._category_forecaster = CategoryDemandForecaster(store_id=self.store_id)
+
+        # 대분류 기반 카테고리 총량 예측기 (large_cd level floor 보충)
+        self._large_category_forecaster = LargeCategoryForecaster(store_id=self.store_id)
+
         # 드라이버가 있으면 발주 실행기 및 미입고 수집기 초기화
         if driver:
             from .order_executor import OrderExecutor
-            self.executor = OrderExecutor(driver)
+            self.executor = OrderExecutor(driver, store_id=self.store_id)
             self.pending_collector = OrderPrepCollector(driver, save_to_db=True, store_id=self.store_id)
 
         # DB 인벤토리 Repository
@@ -138,158 +155,134 @@ class AutoOrderSystem:
         self._auto_order_repo = AutoOrderItemRepository(store_id=self.store_id)
         self._smart_order_repo = SmartOrderItemRepository(store_id=self.store_id)
 
-    def load_unavailable_from_db(self) -> None:
-        """
-        DB에서 미취급 상품 목록 로드
+        # 추출된 클래스 인스턴스 (god-class-decomposition)
+        from .order_data_loader import OrderDataLoader
+        from .order_filter import OrderFilter
+        from .order_adjuster import OrderAdjuster
+        from .order_tracker import OrderTracker
+        self._loader = OrderDataLoader(store_id=self.store_id)
+        self._filter = OrderFilter(store_id=self.store_id)
+        self._adjuster = OrderAdjuster()
+        self._tracker = OrderTracker(self.tracking_repo, self._product_repo, self.store_id)
 
-        발주 시작 전 호출하여 이전에 조회 실패한 상품을 미리 제외
+    def __getattr__(self, name: str):
+        """추출된 클래스 인스턴스 lazy 생성 (테스트 호환용)
+
+        테스트에서 object.__new__(AutoOrderSystem) 으로 __init__ 우회 시
+        _adjuster, _loader, _filter, _tracker 및 공유 상태가 없으므로 여기서 생성.
         """
-        unavailable = self._inventory_repo.get_unavailable_items(store_id=self.store_id)
-        self._unavailable_items.update(unavailable)
-        if unavailable:
-            logger.info(f"DB에서 미취급 상품 {len(unavailable)}개 로드됨")
+        # 추출된 클래스 인스턴스
+        if name == '_adjuster':
+            from .order_adjuster import OrderAdjuster
+            obj = OrderAdjuster()
+            self.__dict__['_adjuster'] = obj
+            return obj
+        if name == '_loader':
+            from .order_data_loader import OrderDataLoader
+            store_id = self.__dict__.get('store_id', DEFAULT_STORE_ID)
+            obj = OrderDataLoader(store_id=store_id)
+            self.__dict__['_loader'] = obj
+            return obj
+        if name == '_filter':
+            from .order_filter import OrderFilter
+            store_id = self.__dict__.get('store_id', DEFAULT_STORE_ID)
+            obj = OrderFilter(store_id=store_id)
+            self.__dict__['_filter'] = obj
+            return obj
+        if name == '_tracker':
+            from .order_tracker import OrderTracker as OT
+            tracking_repo = self.__dict__.get('tracking_repo')
+            product_repo = self.__dict__.get('_product_repo')
+            store_id = self.__dict__.get('store_id', DEFAULT_STORE_ID)
+            obj = OT(tracking_repo, product_repo, store_id)
+            self.__dict__['_tracker'] = obj
+            return obj
+        # 공유 mutable 상태 (테스트에서 __init__ 우회 시 기본값)
+        _defaults = {
+            '_exclusion_records': list,
+            '_cut_items': set,
+            '_unavailable_items': set,
+            '_last_eval_results': dict,
+            '_last_stock_discrepancies': list,
+            '_auto_order_items': set,
+            '_smart_order_items': set,
+            '_cut_lost_items': list,
+        }
+        if name in _defaults:
+            obj = _defaults[name]()
+            self.__dict__[name] = obj
+            return obj
+        raise AttributeError(
+            f"'{type(self).__name__}' object has no attribute '{name}'"
+        )
+
+    def _refilter_cut_items(
+        self, order_list: List[Dict[str, Any]]
+    ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+        """CUT 상품을 order_list에서 제거하고 탈락 정보를 반환.
+
+        Returns:
+            (filtered_list, cut_lost_items)
+            cut_lost_items: 푸드 카테고리이며 predicted_sales > 0인 CUT 탈락 상품
+        """
+        if not self._cut_items:
+            return order_list, []
+
+        cut_lost_items = [
+            item for item in order_list
+            if item.get("item_cd") in self._cut_items
+            and item.get("mid_cd", "") in FOOD_CATEGORIES
+            and (item.get("predicted_sales", 0) or item.get("final_order_qty", 0)) > 0
+        ]
+        filtered = [
+            item for item in order_list
+            if item.get("item_cd") not in self._cut_items
+        ]
+        cut_removed = len(order_list) - len(filtered)
+        if cut_removed > 0:
+            logger.info(f"[CUT 재필터] prefetch 실시간 감지 포함 {cut_removed}개 CUT 상품 제외")
+        return filtered, cut_lost_items
+
+    def load_unavailable_from_db(self) -> None:
+        """DB에서 미취급 상품 목록 로드"""
+        try:
+            self._unavailable_items.update(
+                self._loader.load_unavailable(self._inventory_repo)
+            )
+        except Exception as e:
+            logger.warning(f"미취급 상품 목록 DB 로드 실패 (빈 목록으로 계속): {e}")
 
     def load_cut_items_from_db(self) -> None:
-        """
-        DB에서 발주중지(CUT) 상품 목록 로드
-
-        발주 시작 전 호출하여 이전에 발주중지로 확인된 상품을 미리 제외
-        """
-        cut_items = self._inventory_repo.get_cut_items(store_id=self.store_id)
-        self._cut_items.update(cut_items)
-        if cut_items:
-            logger.info(f"DB에서 발주중지 상품 {len(cut_items)}개 로드됨")
+        """DB에서 발주중지(CUT) 상품 목록 로드"""
+        try:
+            self._cut_items.update(
+                self._loader.load_cut_items(self._inventory_repo)
+            )
+        except Exception as e:
+            logger.warning(f"발주중지(CUT) 상품 목록 DB 로드 실패 (빈 목록으로 계속): {e}")
 
     def load_auto_order_items(self, skip_site_fetch: bool = False) -> None:
-        """
-        자동발주 + 스마트발주 상품 목록 조회 (사이트 우선 + DB 캐시 fallback)
-
-        발주현황 조회 메뉴를 한 번만 열고, 자동/스마트 탭 순서로 수집한 뒤 닫는다.
-
-        Args:
-            skip_site_fetch: True면 사이트 조회 건너뛰고 DB 캐시만 사용
-                (daily_job Phase 1.2에서 이미 DB 캐시를 갱신한 경우)
-        """
-        auto_site_ok = False
-        smart_site_ok = False
-
-        # --- 사이트 조회 시도 ---
-        if skip_site_fetch:
-            logger.info("사이트 조회 건너뜀 (Phase 1.2에서 DB 캐시 갱신 완료)")
-        elif self.driver:
-            try:
-                from src.collectors.order_status_collector import OrderStatusCollector
-
-                collector = OrderStatusCollector(self.driver, store_id=self.store_id)
-
-                if not collector.navigate_to_order_status_menu():
-                    logger.warning("발주 현황 조회 메뉴 이동 실패")
-                else:
-                    # (1) 자동발주 수집
-                    auto_detail = collector.collect_auto_order_items_detail()
-                    if auto_detail is not None:  # None이 아니면 성공 (0건 포함)
-                        self._auto_order_items = {
-                            item["item_cd"] for item in auto_detail
-                        }
-                        saved = self._auto_order_repo.refresh(auto_detail, store_id=self.store_id)
-                        logger.info(
-                            f"자동발주 상품 {len(self._auto_order_items)}개 "
-                            f"사이트 조회 완료 (DB 캐시 {saved}건 갱신)"
-                        )
-                        auto_site_ok = True
-                    else:
-                        logger.warning("자동발주 상품 사이트 조회 실패")
-                        # auto_site_ok = False (기본값) → DB fallback으로 진행
-
-                    # (2) 스마트발주 수집 (같은 화면, 라디오만 전환)
-                    smart_detail = collector.collect_smart_order_items_detail()
-                    if smart_detail is not None:  # None이 아니면 성공 (0건 포함)
-                        self._smart_order_items = {
-                            item["item_cd"] for item in smart_detail
-                        }
-                        saved = self._smart_order_repo.refresh(smart_detail, store_id=self.store_id)
-                        logger.info(
-                            f"스마트발주 상품 {len(self._smart_order_items)}개 "
-                            f"사이트 조회 완료 (DB 캐시 {saved}건 갱신)"
-                        )
-                        smart_site_ok = True
-                    else:
-                        logger.warning("스마트발주 상품 사이트 조회 실패")
-                        # smart_site_ok = False (기본값) → DB fallback으로 진행
-
-                    # 발주현황조회(STBJ070_M0) 탭을 반드시 닫아야 함
-                    # 열려있으면 단품별발주가 이 탭 컨텍스트에서 실행되어 오류 발생
-                    if not collector.close_menu():
-                        logger.warning("collector.close_menu() 실패 - 직접 탭 닫기 시도")
-                        from src.utils.nexacro_helpers import close_tab_by_frame_id
-                        from src.settings.ui_config import FRAME_IDS
-                        close_tab_by_frame_id(self.driver, FRAME_IDS["ORDER_STATUS"])
-                        time.sleep(0.5)
-
-            except Exception as e:
-                logger.warning(f"발주 제외 상품 사이트 조회 실패: {e}")
-                # 예외 발생 시에도 탭이 열려있을 수 있으므로 닫기 시도
-                try:
-                    from src.utils.nexacro_helpers import close_tab_by_frame_id
-                    from src.settings.ui_config import FRAME_IDS
-                    close_tab_by_frame_id(self.driver, FRAME_IDS["ORDER_STATUS"])
-                    time.sleep(0.5)
-                except Exception as e:
-                    logger.warning(f"발주 현황 탭 닫기 실패: {e}")
-
-        # --- DB 캐시 fallback (자동) ---
-        if not auto_site_ok:
-            cached = self._auto_order_repo.get_all_item_codes(store_id=self.store_id)
-            if cached:
-                self._auto_order_items = set(cached)
-                logger.info(
-                    f"자동발주 상품 DB 캐시 {len(cached)}개 사용 "
-                    f"(마지막 갱신: {self._auto_order_repo.get_last_updated(store_id=self.store_id)})"
-                )
-            else:
-                logger.info("자동발주 상품: 사이트 조회 실패 + DB 캐시 없음 - 제외 없이 진행")
-
-        # --- DB 캐시 fallback (스마트) ---
-        if not smart_site_ok:
-            cached = self._smart_order_repo.get_all_item_codes(store_id=self.store_id)
-            if cached:
-                self._smart_order_items = set(cached)
-                logger.info(
-                    f"스마트발주 상품 DB 캐시 {len(cached)}개 사용 "
-                    f"(마지막 갱신: {self._smart_order_repo.get_last_updated(store_id=self.store_id)})"
-                )
-            else:
-                logger.info("스마트발주 상품: 사이트 조회 실패 + DB 캐시 없음 - 제외 없이 진행")
+        """자동발주 + 스마트발주 상품 목록 조회 (사이트 우선 + DB 캐시 fallback)"""
+        try:
+            auto_items, smart_items = self._loader.load_auto_order_items(
+                driver=self.driver,
+                auto_order_repo=self._auto_order_repo,
+                smart_order_repo=self._smart_order_repo,
+                skip_site_fetch=skip_site_fetch,
+            )
+            self._auto_order_items = auto_items
+            self._smart_order_items = smart_items
+        except Exception as e:
+            logger.warning(f"자동/스마트발주 상품 목록 로드 실패 (빈 목록으로 계속): {e}")
 
     def load_inventory_cache_from_db(self) -> None:
-        """
-        DB에서 재고/미입고 데이터를 예측기 캐시에 로드
-
-        발주 전 조회된 데이터가 DB에 있으면 이를 활용하여
-        불필요한 재조회를 방지
-        """
-        all_data = self._inventory_repo.get_all(available_only=True, store_id=self.store_id)
-        if not all_data:
-            logger.info("DB에 인벤토리 데이터 없음")
-            return
-
-        stock_cache = {}
-        pending_cache = {}
-
-        for item in all_data:
-            item_cd = item.get('item_cd')
-            if item_cd:
-                stock_cache[item_cd] = item.get('stock_qty', 0)
-                pending_cache[item_cd] = item.get('pending_qty', 0)
-
-        # 예측기에 캐시 설정
-        if self.use_improved_predictor and self.improved_predictor:
-            self.improved_predictor.set_stock_cache(stock_cache)
-            self.improved_predictor.set_pending_cache(pending_cache)
-        else:
-            self.predictor.set_pending_qty_cache(pending_cache)
-
-        logger.info(f"DB에서 인벤토리 캐시 로드: {len(stock_cache)}개 상품")
+        """DB에서 재고/미입고 데이터를 예측기 캐시에 로드"""
+        self._loader.load_inventory_cache(
+            inventory_repo=self._inventory_repo,
+            predictor=self.predictor,
+            improved_predictor=self.improved_predictor,
+            use_improved=self.use_improved_predictor,
+        )
 
     def get_inventory_summary(self) -> Dict[str, Any]:
         """
@@ -301,105 +294,31 @@ class AutoOrderSystem:
         return self._inventory_repo.get_summary(store_id=self.store_id)
 
     def _exclude_filtered_items(self, order_list: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """발주 목록에서 미취급/발주중지/자동발주/스마트발주 상품 제외
+        """발주 목록에서 전역제외/미취급/CUT/자동발주/스마트발주/발주정지 상품 제외"""
+        return self._filter.exclude_filtered_items(
+            order_list=order_list,
+            unavailable_items=self._unavailable_items,
+            cut_items=self._cut_items,
+            auto_order_items=self._auto_order_items,
+            smart_order_items=self._smart_order_items,
+            exclusion_records=self._exclusion_records,
+        )
 
-        Args:
-            order_list: 원본 발주 목록
-
-        Returns:
-            필터링된 발주 목록
-        """
-        # 점포 미취급 상품 제외
-        if self._unavailable_items:
-            before_count = len(order_list)
-            order_list = [item for item in order_list if item.get("item_cd") not in self._unavailable_items]
-            excluded = before_count - len(order_list)
-            if excluded > 0:
-                logger.info(f"점포 미취급 {excluded}개 상품 제외")
-
-        # 발주중지(CUT) 상품 제외
-        if self._cut_items:
-            before_count = len(order_list)
-            order_list = [item for item in order_list if item.get("item_cd") not in self._cut_items]
-            excluded = before_count - len(order_list)
-            if excluded > 0:
-                logger.info(f"발주중지(CUT) {excluded}개 상품 제외")
-
-        # 자동발주 상품 제외 (대시보드 토글 설정 반영, 매장별)
-        settings_repo = AppSettingsRepository(store_id=self.store_id)
-        if settings_repo.get("EXCLUDE_AUTO_ORDER", True) and self._auto_order_items:
-            before_count = len(order_list)
-            order_list = [item for item in order_list if item.get("item_cd") not in self._auto_order_items]
-            excluded = before_count - len(order_list)
-            if excluded > 0:
-                logger.info(f"자동발주(본부관리) {excluded}개 상품 제외")
-        elif not settings_repo.get("EXCLUDE_AUTO_ORDER", True):
-            logger.info("자동발주 상품 제외 OFF (대시보드 설정) - 제외 안 함")
-
-        # 스마트발주 상품 제외 (대시보드 토글 설정 반영)
-        if settings_repo.get("EXCLUDE_SMART_ORDER", True) and self._smart_order_items:
-            before_count = len(order_list)
-            order_list = [item for item in order_list if item.get("item_cd") not in self._smart_order_items]
-            excluded = before_count - len(order_list)
-            if excluded > 0:
-                logger.info(f"스마트발주(본부관리) {excluded}개 상품 제외")
-        elif not settings_repo.get("EXCLUDE_SMART_ORDER", True):
-            logger.info("스마트발주 상품 제외 OFF (대시보드 설정) - 제외 안 함")
-
-        # 발주정지 상품 제외 (common.db stopped_items)
-        try:
-            from src.infrastructure.database.repos import StoppedItemRepository
-            stopped_repo = StoppedItemRepository()
-            stopped_items = stopped_repo.get_active_item_codes()
-            if stopped_items:
-                before_count = len(order_list)
-                order_list = [item for item in order_list
-                              if item.get("item_cd") not in stopped_items]
-                excluded = before_count - len(order_list)
-                if excluded > 0:
-                    logger.info(f"발주정지 {excluded}개 상품 제외")
-        except Exception as e:
-            logger.warning(f"발주정지 상품 조회 실패: {e}")
-
-        return order_list
+    def _deduct_manual_food_orders(
+        self,
+        order_list: List[Dict[str, Any]],
+        min_order_qty: int = 1,
+    ) -> List[Dict[str, Any]]:
+        """푸드 카테고리 수동 발주분 차감"""
+        return self._filter.deduct_manual_food_orders(
+            order_list=order_list,
+            min_order_qty=min_order_qty,
+            exclusion_records=self._exclusion_records,
+        )
 
     def _warn_stale_cut_items(self, order_list: List[Dict[str, Any]]) -> None:
-        """발주 목록 내 CUT 상태 미검증(stale) 상품 경고
-
-        queried_at이 CUT_STATUS_STALE_DAYS 이상 갱신되지 않은 상품을 경고 로그로 출력.
-        실제 발주를 차단하지는 않으나 운영자에게 위험 알림.
-        """
-        try:
-            from src.settings.constants import CUT_STATUS_STALE_DAYS
-            from datetime import datetime, timedelta
-
-            threshold = datetime.now() - timedelta(days=CUT_STATUS_STALE_DAYS)
-            stale_items = []
-
-            for item in order_list:
-                item_cd = item.get("item_cd")
-                if not item_cd:
-                    continue
-                inv = self._inventory_repo.get_by_item(item_cd)
-                if not inv or not inv.get("queried_at"):
-                    stale_items.append((item_cd, "never"))
-                    continue
-                try:
-                    queried_dt = datetime.fromisoformat(inv["queried_at"])
-                    if queried_dt < threshold:
-                        days_old = (datetime.now() - queried_dt).days
-                        stale_items.append((item_cd, f"{days_old}d"))
-                except (ValueError, TypeError):
-                    stale_items.append((item_cd, "parse_err"))
-
-            if stale_items:
-                logger.warning(
-                    f"[CUT 미검증 경고] {len(stale_items)}개 상품의 CUT 상태가 "
-                    f"{CUT_STATUS_STALE_DAYS}일 이상 미갱신: "
-                    f"{stale_items[:10]}"
-                )
-        except Exception as e:
-            logger.debug(f"stale CUT 경고 실패 (무시): {e}")
+        """발주 목록 내 CUT 상태 미검증(stale) 상품 경고"""
+        self._filter.warn_stale_cut_items(order_list, self._inventory_repo)
 
     def _add_new_product_items(self, order_list: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """신상품 도입 현황: 미도입 상품을 발주 목록에 추가
@@ -452,11 +371,58 @@ class AutoOrderSystem:
     # ------------------------------------------------------------------
 
     def _process_3day_follow_orders(self, order_list: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """3일발주 미달성 상품 후속 발주 (자동발주 목록과 분리)
+        """3일발주 미달성 상품 후속 발주 (분산 발주 + AI 총량 합산)
 
-        사용자가 수동 발주한 상품만 대상. mids 항목의 DS_YN에서
-        발주 횟수를 확인하고, 입고/판매 상태에 따라 후속 발주 판단.
+        Phase A: 기존 mids 항목 기반 후속 발주 (BGF 수집 데이터)
+        Phase B: new_product_3day_tracking 기반 분산 발주 (our_order_count 추적)
+        Phase C: AI 예측 목록과 총량 합산 (중복 방지)
         """
+        try:
+            # Phase A: 기존 mids 후속 발주 (레거시 호환 — placed>0만 대상)
+            order_list = self._process_3day_follow_legacy(order_list)
+
+            # Phase B: 분산 발주 추적 기반 (new_product_3day_tracking)
+            from src.application.services.new_product_order_service import (
+                get_today_new_product_orders,
+                merge_with_ai_orders,
+                record_order_completed,
+            )
+
+            def _sales_fn(item_cd, last_ordered_at):
+                """마지막 발주 이후 판매량 조회"""
+                return self._get_sales_after_date(item_cd, last_ordered_at)
+
+            def _stock_fn(item_cd):
+                """현재 재고 조회"""
+                inv = self._inventory_repo.get(item_cd, store_id=self.store_id)
+                return inv.get("stock_qty", 0) if inv else 0
+
+            np_orders = get_today_new_product_orders(
+                store_id=self.store_id,
+                sales_fn=_sales_fn,
+                stock_fn=_stock_fn,
+            )
+
+            if np_orders:
+                # CUT 상품 제외
+                np_orders = [o for o in np_orders if o.get("product_code") not in self._cut_items]
+
+                # Phase C: AI 예측 목록과 합산
+                order_list = merge_with_ai_orders(order_list, np_orders)
+
+                # 발주 완료 후 추적 업데이트는 execute() 성공 후 호출
+                self._pending_np3day_orders = np_orders
+                logger.info(f"신상품3일 분산발주 {len(np_orders)}개 합산 완료")
+            else:
+                self._pending_np3day_orders = []
+
+        except Exception as e:
+            logger.warning(f"3일발주 후속 처리 실패 (발주 플로우 계속): {e}")
+
+        return order_list
+
+    def _process_3day_follow_legacy(self, order_list: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """레거시 3일발주 후속: mids 항목 기반 (placed>0, BGF DS_YN 파싱)"""
         try:
             from src.infrastructure.database.repos import NewProductStatusRepository
             from src.settings.constants import NEW_PRODUCT_INTRO_ORDER_QTY, NEW_PRODUCT_DS_MIN_ORDERS
@@ -484,9 +450,9 @@ class AutoOrderSystem:
 
                 placed, required = self._parse_ds_yn(item.get("ds_yn", ""))
                 if placed >= required:
-                    continue  # 이미 달성
+                    continue
                 if placed == 0:
-                    continue  # 사용자가 아직 발주하지 않음 → 후속 대상 아님
+                    continue
 
                 week_no = item.get("week_no")
                 period = week_periods.get(week_no, ("", ""))
@@ -522,13 +488,276 @@ class AutoOrderSystem:
                     })
                     existing_codes.add(item_cd)
                     added += 1
-                    logger.info(f"3일발주 후속: {item_cd} ({reason})")
+                    logger.info(f"3일발주 후속(레거시): {item_cd} ({reason})")
 
             if added:
-                logger.info(f"3일발주 후속 {added}개 발주 목록에 추가")
+                logger.info(f"3일발주 후속(레거시) {added}개 발주 목록에 추가")
 
         except Exception as e:
-            logger.warning(f"3일발주 후속 처리 실패 (발주 플로우 계속): {e}")
+            logger.warning(f"3일발주 레거시 처리 실패: {e}")
+
+        return order_list
+
+    def _get_sales_after_date(self, item_cd: str, after_date: str) -> int:
+        """특정 날짜 이후 판매량 합계 조회"""
+        try:
+            sales_repo = SalesRepository(store_id=self.store_id)
+            sales = sales_repo.get_sales_history(item_cd, days=30, store_id=self.store_id)
+            if not sales:
+                return 0
+            total = 0
+            for record in sales:
+                sale_date = record.get("sales_date", "")
+                if after_date and sale_date > after_date[:10]:
+                    total += record.get("sale_qty", 0)
+            return total
+        except Exception:
+            return 0
+
+    def _update_np3day_tracking_after_order(self) -> None:
+        """발주 성공 후 new_product_3day_tracking 업데이트"""
+        if not hasattr(self, '_pending_np3day_orders') or not self._pending_np3day_orders:
+            return
+        try:
+            from src.application.services.new_product_order_service import record_order_completed
+            from src.infrastructure.database.repos import NP3DayTrackingRepo
+
+            repo = NP3DayTrackingRepo(store_id=self.store_id)
+            for np_item in self._pending_np3day_orders:
+                code = np_item.get("product_code", "")
+                week_label = np_item.get("week_label", "")
+                base_name = np_item.get("base_name", "")
+                if not code or not week_label:
+                    continue
+
+                # base_name이 있으면 그룹 단위 조회, 없으면 product_code 단위
+                if base_name:
+                    tracking = repo.get_group_tracking(self.store_id, week_label, base_name)
+                else:
+                    tracking = repo.get_tracking(self.store_id, week_label, code)
+                if not tracking:
+                    continue
+
+                our_count_after = tracking.get("our_order_count", 0) + 1
+                record_order_completed(
+                    store_id=self.store_id,
+                    week_label=week_label,
+                    product_code=code,
+                    week_start=tracking.get("week_start", ""),
+                    interval_days=tracking.get("order_interval_days", 0),
+                    our_order_count_after=our_count_after,
+                    base_name=base_name,
+                    selected_code=code,
+                )
+            self._pending_np3day_orders = []
+        except Exception as e:
+            logger.warning(f"신상품3일 추적 업데이트 실패: {e}")
+
+    # ------------------------------------------------------------------
+    # 스마트발주 오버라이드: 단품별발주로 제출하여 수동 전환
+    # ------------------------------------------------------------------
+
+    def _inject_smart_order_items(
+        self,
+        order_list: List[Dict[str, Any]],
+        target_date: Optional[datetime] = None,
+    ) -> List[Dict[str, Any]]:
+        """스마트발주 상품을 예측 기반으로 발주 목록에 주입
+
+        스마트발주 상품 전체를 우리 예측 파이프라인으로 관리:
+        - 이미 목록에 있는 상품 → smart_override 플래그만 추가
+        - 목록에 없는 상품 → predict_batch()로 예측 후 추가
+        - 예측 qty=0인 상품도 추가 (단품별발주 제출 → 스마트→수동 전환)
+
+        Returns:
+            주입된 order_list
+        """
+        try:
+            from src.infrastructure.database.repos import AppSettingsRepository
+            from src.settings.constants import SMART_OVERRIDE_MIN_QTY
+
+            settings_repo = AppSettingsRepository(store_id=self.store_id)
+            if not settings_repo.get("SMART_ORDER_OVERRIDE", False):
+                return order_list
+
+            smart_details = self._smart_order_repo.get_all_detail(
+                store_id=self.store_id
+            )
+            if not smart_details:
+                logger.info("[SmartOverride] 스마트발주 상품 없음")
+                return order_list
+
+            smart_set = {s["item_cd"] for s in smart_details}
+            existing_codes = {item.get("item_cd") for item in order_list}
+
+            # 이미 목록에 있는 스마트 상품 → 플래그만 추가
+            for item in order_list:
+                if item.get("item_cd") in smart_set:
+                    item["smart_override"] = True
+
+            # 목록에 없는 스마트 상품 → 예측 수행
+            # [C-1 Fix] 미취급(is_available=0) 상품도 제외 (BGF Alert 방지)
+            unavailable = self._unavailable_items or set()
+            unavail_filtered = [
+                s for s in smart_details
+                if s["item_cd"] in unavailable
+                and s["item_cd"] not in existing_codes
+            ]
+            if unavail_filtered:
+                logger.info(
+                    f"[SmartOverride] is_available=0 제외: {len(unavail_filtered)}건"
+                )
+
+            # [C-3 Fix] 영구제외/발주정지 등 _exclusion_records 상품도 제외
+            excluded_cds = {
+                r.get("item_cd") for r in (self._exclusion_records or [])
+                if r.get("item_cd")
+            }
+            excl_filtered = [
+                s for s in smart_details
+                if s["item_cd"] in excluded_cds
+                and s["item_cd"] not in existing_codes
+            ]
+            if excl_filtered:
+                logger.info(
+                    f"[SmartOverride] exclusion_records 제외: {len(excl_filtered)}건 "
+                    f"(사유: {', '.join(set(r.get('exclusion_type','?') for r in self._exclusion_records if r.get('item_cd') in {e['item_cd'] for e in excl_filtered}))})"
+                )
+
+            missing = [
+                s for s in smart_details
+                if s["item_cd"] not in existing_codes
+                and s["item_cd"] not in self._cut_items
+                and s["item_cd"] not in unavailable
+                and s["item_cd"] not in excluded_cds
+            ]
+
+            if not missing:
+                in_list = len(smart_set & existing_codes)
+                logger.info(
+                    f"[SmartOverride] {len(smart_set)}개 전부 "
+                    f"발주 목록 포함({in_list}개) 또는 CUT"
+                )
+                return order_list
+
+            # predict_batch로 예측 (FORCE_ORDER 보충과 동일 패턴)
+            missing_codes = [s["item_cd"] for s in missing]
+            missing_info = {s["item_cd"]: s for s in missing}
+            # [C-4 Fix] predict_batch 실패 시 pred_map={} 폴백 (기존 로직에서 qty=0 처리됨)
+            # → 과발주 위험 없이 SMART_OVERRIDE_MIN_QTY로 사용자가 최소 수량 제어 가능
+            try:
+                predictions = self.improved_predictor.predict_batch(
+                    missing_codes, target_date
+                )
+                pred_map = {r.item_cd: r for r in predictions}
+            except Exception as e:
+                logger.warning(
+                    f"[SmartOverride] predict_batch 실패 ({len(missing_codes)}건): {e} "
+                    f"→ 전체 qty=0 폴백 (SMART_OVERRIDE_MIN_QTY={SMART_OVERRIDE_MIN_QTY})"
+                )
+                pred_map = {}
+
+            added_positive = 0
+            skipped_zero = 0
+
+            for item_cd in missing_codes:
+                pred = pred_map.get(item_cd)
+                info = missing_info.get(item_cd, {})
+                qty = pred.order_qty if pred and pred.order_qty > 0 else 0
+
+                # SMART_OVERRIDE_MIN_QTY 적용 (0이면 0발주, 1이면 최소 1개)
+                if qty == 0 and SMART_OVERRIDE_MIN_QTY > 0:
+                    qty = SMART_OVERRIDE_MIN_QTY
+
+                # qty=0 스마트발주 취소: BGF 단품별(채택)으로 전환하여 스마트 자동발주 차단
+                # 라이브 검증 (2026-03-14): PYUN_QTY=0 → BGF 수락, "단품별(채택)" 전환 확인
+                if qty <= 0:
+                    skipped_zero += 1
+                    # cancel_smart=True → 발주 목록에 포함 (qty=0으로 BGF 제출)
+                    cancel_entry = {
+                        "item_cd": item_cd,
+                        "item_nm": info.get("item_nm", ""),
+                        "mid_cd": info.get("mid_cd", ""),
+                        "final_order_qty": 0,
+                        "order_unit_qty": 1,
+                        "orderable_day": DEFAULT_ORDERABLE_DAYS,
+                        "smart_override": True,
+                        "cancel_smart": True,
+                        "source": "smart_cancel",
+                    }
+                    order_list.append(cancel_entry)
+                    existing_codes.add(item_cd)
+                    logger.info(f"[SmartOverride] qty=0 취소 주입: {item_cd} ({info.get('item_nm', '')})")
+                    continue
+
+                # [C-2 Fix] order_unit_qty 조회 (캐시 활용 — _convert 패턴과 동일)
+                # finalize_order_unit_qty가 최종 보정하지만, Floor/Cap 단계 정확도를 위해 여기서도 설정
+                unit = 1
+                try:
+                    if item_cd not in self._product_detail_cache:
+                        self._product_detail_cache[item_cd] = self._product_repo.get(item_cd)
+                    _pd = self._product_detail_cache.get(item_cd)
+                    unit = max(1, int(_pd.get("order_unit_qty") or 1)) if _pd else 1
+                except Exception:
+                    logger.debug(f"[SmartOverride] {item_cd} order_unit_qty 조회 실패, unit=1 폴백")
+
+                order_entry = {
+                    "item_cd": item_cd,
+                    "item_nm": info.get("item_nm", ""),
+                    "mid_cd": info.get("mid_cd", ""),
+                    "final_order_qty": qty,
+                    "order_unit_qty": unit,
+                    "orderable_day": DEFAULT_ORDERABLE_DAYS,
+                    "smart_override": True,
+                    "source": "smart_override",
+                }
+
+                if pred:
+                    order_entry.update({
+                        "predicted_sales": round(getattr(pred, "adjusted_qty", 0), 2),
+                        "current_stock": getattr(pred, "current_stock", 0),
+                        "pending_receiving_qty": getattr(pred, "pending_qty", 0),
+                        "safety_stock": getattr(pred, "safety_stock", 0),
+                        # dryrun Excel 호환: 예측 상세 필드 추가
+                        "demand_pattern": getattr(pred, "demand_pattern", ""),
+                        "data_days": getattr(pred, "data_days", 0),
+                        "sell_day_ratio": getattr(pred, "sell_day_ratio", 1.0),
+                        "model_type": getattr(pred, "model_type", "rule"),
+                        "daily_avg": getattr(pred, "predicted_qty", 0),
+                        "weekday_coef": getattr(pred, "weekday_coef", 1.0),
+                        "confidence": getattr(pred, "confidence", 0),
+                        "rule_order_qty": getattr(pred, "rule_order_qty", None),
+                        "ml_order_qty": getattr(pred, "ml_order_qty", None),
+                        "ml_weight_used": getattr(pred, "ml_weight_used", None),
+                        "wma_raw": getattr(pred, "wma_raw", 0.0),
+                        "need_qty": getattr(pred, "need_qty", 0.0),
+                        "proposal_summary": getattr(pred, "proposal_summary", ""),
+                        "round_floor": getattr(pred, "round_floor", 0),
+                        "round_ceil": getattr(pred, "round_ceil", 0),
+                    })
+
+                order_list.append(order_entry)
+                existing_codes.add(item_cd)
+                added_positive += 1
+
+            # [B-1 Fix] OVERRIDE 모드 명시 — exclude filter에서 "스마트 제외 OFF" 로그와 구분
+            # EXCLUDE_SMART=False(기본) + OVERRIDE=True 조합 시 의도적 이중 처리임을 명확화
+            cut_cnt = len([s for s in smart_details if s["item_cd"] in self._cut_items])
+            unavail_cnt = len(unavail_filtered) if unavail_filtered else 0
+            excl_cnt = len(excl_filtered) if excl_filtered else 0
+            cancel_cnt = len([o for o in order_list if o.get("cancel_smart")])
+            logger.info(
+                f"[SmartOverride:OVERRIDE모드] 스마트발주 {len(smart_set)}개 처리: "
+                f"기존목록={len(smart_set) - len(missing) - cut_cnt - unavail_cnt - excl_cnt}개, "
+                f"예측추가={added_positive}개, "
+                f"취소(qty=0)={cancel_cnt}개"
+                f"{f', CUT={cut_cnt}개' if cut_cnt else ''}"
+                f"{f', 미취급={unavail_cnt}개' if unavail_cnt else ''}"
+                f"{f', 제외={excl_cnt}개' if excl_cnt else ''}"
+            )
+
+        except Exception as e:
+            logger.warning(f"[SmartOverride] 스마트발주 오버라이드 실패: {e}")
 
         return order_list
 
@@ -564,16 +793,8 @@ class AutoOrderSystem:
     @staticmethod
     def _parse_ds_yn(ds_yn: str):
         """DS_YN 파싱: '1/3(미달성)' -> (placed=1, required=3)"""
-        from src.settings.constants import NEW_PRODUCT_DS_MIN_ORDERS
-        if not ds_yn:
-            return 0, NEW_PRODUCT_DS_MIN_ORDERS
-        try:
-            parts = ds_yn.split("(")[0].split("/")
-            placed = int(parts[0])
-            required = int(parts[1]) if len(parts) > 1 else NEW_PRODUCT_DS_MIN_ORDERS
-            return placed, required
-        except (ValueError, IndexError):
-            return 0, NEW_PRODUCT_DS_MIN_ORDERS
+        from .order_data_loader import OrderDataLoader
+        return OrderDataLoader.parse_ds_yn(ds_yn)
 
     def close(self) -> None:
         """예측기 및 수집기 리소스 정리"""
@@ -584,99 +805,29 @@ class AutoOrderSystem:
     def prefetch_pending_quantities(
         self,
         item_codes: List[str],
-        max_items: int = 50
+        max_items: int = 500
     ) -> Dict[str, int]:
-        """
-        미입고 수량 및 실시간 재고 사전 조회 (중복 발주 방지용)
-
-        단품별 발주 화면에서 상품별 발주/입고 이력을 조회하여
-        미입고 수량(발주 - 입고)과 실시간 재고를 조회합니다.
-
-        Args:
-            item_codes: 조회할 상품코드 목록
-            max_items: 최대 조회 건수
-
-        Returns:
-            {상품코드: 미입고수량, ...}
-            (실시간 재고는 self._last_stock_data에 저장됨)
-        """
-        if not self.pending_collector:
-            logger.warning("드라이버 없음 - 미입고 수량 조회 건너뜀")
+        """미입고 수량 및 실시간 재고 사전 조회 (중복 발주 방지용)"""
+        try:
+            pending_data, stock_data, new_cut_items, new_unavailable, new_exclusions = \
+                self._loader.prefetch_pending(
+                    self.pending_collector, item_codes, max_items
+                )
+        except Exception as e:
+            logger.warning(f"미입고/재고 사전 조회 실패 (빈 데이터로 계속): {e}")
             return {}
 
-        # 제한된 수만 조회
-        if len(item_codes) > max_items:
-            logger.info(f"{len(item_codes)}개 중 {max_items}개만 조회")
-            item_codes = item_codes[:max_items]
+        # CUT 해제: 성공 조회되었으나 CUT 아닌 상품은 _cut_items에서 제거
+        queried_ok = set(pending_data.keys())
+        for item_cd in list(self._cut_items):
+            if item_cd in queried_ok and item_cd not in new_cut_items:
+                self._cut_items.discard(item_cd)
+                logger.info(f"[CUT 해제] {item_cd}: 발주 가능 확인")
 
-        logger.info(f"미입고 수량 및 실시간 재고 조회: {len(item_codes)}개 상품...")
-
-        # 메뉴 이동 및 날짜 선택
-        if not self.pending_collector._menu_navigated:
-            if not self.pending_collector.navigate_to_menu():
-                logger.error("단품별 발주 메뉴 이동 실패")
-                return {}
-
-        if not self.pending_collector._date_selected:
-            if not self.pending_collector.select_order_date():
-                logger.error("발주일 선택 실패")
-                return {}
-
-        # 상품별 미입고 수량 및 실시간 재고 조회
-        pending_data = {}
-        stock_data = {}  # 실시간 재고
-        success_count = 0
-        unavailable_count = 0
-        cut_count = 0
-
-        for i, item_cd in enumerate(item_codes):
-            result = self.pending_collector.query_item_order_history(item_cd)
-            if result:
-                pending_data[item_cd] = result.get('pending_qty', 0)
-                # 실시간 재고도 저장 (BGF 시스템에서 조회한 값)
-                # order_prep_collector는 'current_stock' 키로 반환
-                if 'current_stock' in result and result['current_stock'] is not None:
-                    stock_data[item_cd] = result['current_stock']
-                # 발주중지(CUT) 상품 감지
-                if result.get('is_cut_item'):
-                    self._cut_items.add(item_cd)
-                    cut_count += 1
-                elif item_cd in self._cut_items:
-                    # CUT 해제된 상품 (본부에서 복원)
-                    self._cut_items.discard(item_cd)
-                    logger.info(f"[CUT 해제] {item_cd}: 발주 가능 확인")
-                success_count += 1
-            else:
-                # 조회 실패 = 점포 미취급 상품
-                self._unavailable_items.add(item_cd)
-                unavailable_count += 1
-
-            # 진행 상황 출력 (10개마다)
-            if (i + 1) % PROGRESS_LOG_INTERVAL == 0:
-                logger.info(f"  [{i+1}/{len(item_codes)}] 조회 완료...")
-
-            time.sleep(AFTER_ACTION_WAIT)  # 요청 간 간격
-
-        logger.info(f"조회 완료: {success_count}/{len(item_codes)}건")
-        logger.info(f"  - 미입고 수량: {len(pending_data)}개 상품")
-        logger.info(f"  - 실시간 재고: {len(stock_data)}개 상품")
-        if unavailable_count > 0:
-            logger.info(f"  - 점포 미취급: {unavailable_count}개 상품 (발주 제외됨)")
-        if cut_count > 0:
-            logger.info(f"  - 발주중지(CUT): {cut_count}개 상품 (발주 제외됨)")
-
-        # 미입고 있는 상품 출력
-        pending_items = {k: v for k, v in pending_data.items() if v > 0}
-        if pending_items:
-            logger.info(f"미입고 상품: {len(pending_items)}개")
-            for item_cd, qty in list(pending_items.items())[:10]:
-                stock = stock_data.get(item_cd, '?')
-                logger.info(f"  - {item_cd}: 미입고 {qty}개, 재고 {stock}개")
-
-        # 메뉴 탭 닫기 (발주 실행을 위해)
-        self.pending_collector.close_menu()
-
-        # 실시간 재고 데이터 저장 (execute에서 사용)
+        # Facade 상태 업데이트
+        self._cut_items.update(new_cut_items)
+        self._unavailable_items.update(new_unavailable)
+        self._exclusion_records.extend(new_exclusions)
         self._last_stock_data = stock_data
 
         return pending_data
@@ -730,6 +881,21 @@ class AutoOrderSystem:
             "is_stock_stale": getattr(result, "is_stock_stale", False),
             # 유통기한 (단기유통 보호용)
             "expiration_days": self._get_expiration_days_for_item(result, product_detail),
+            # dryrun-excel-export: 기존 누락 필드 + 신규 5개 필드
+            "demand_pattern": getattr(result, "demand_pattern", ""),
+            "sell_day_ratio": getattr(result, "sell_day_ratio", 1.0),
+            "model_type": getattr(result, "model_type", "rule"),
+            "rule_order_qty": getattr(result, "rule_order_qty", None),
+            "ml_order_qty": getattr(result, "ml_order_qty", None),
+            "ml_weight_used": getattr(result, "ml_weight_used", None),
+            "wma_raw": getattr(result, "wma_raw", 0.0),
+            "feat_prediction": (
+                getattr(result, "predicted_qty", 0.0)  # blended = WMA+Feature
+            ),
+            "need_qty": getattr(result, "need_qty", 0.0),
+            "proposal_summary": getattr(result, "proposal_summary", ""),
+            "round_floor": getattr(result, "round_floor", 0),
+            "round_ceil": getattr(result, "round_ceil", 0),
         }
 
     def _get_expiration_days_for_item(self, result, product_detail: Optional[Dict]) -> int:
@@ -760,6 +926,41 @@ class AutoOrderSystem:
 
         # 4. 기본값
         return 365
+
+    def _get_site_order_counts_by_midcd(self, order_date: str) -> Dict[str, int]:
+        """
+        site(사용자) 발주 수량을 mid_cd별로 집계.
+        수동발주 포함 — floor/cap 계산 시 수동발주 수량을 인식하여 과다 보충 방지.
+
+        Args:
+            order_date: 발주일 (YYYY-MM-DD)
+
+        Returns:
+            {mid_cd: qty} 예: {'001': 5, '002': 12}
+            에러 시 빈 dict (기존 동작 유지)
+        """
+        try:
+            from src.infrastructure.database.connection import DBRouter, attach_common_with_views
+            conn = DBRouter.get_connection(store_id=self.store_id)
+            attach_common_with_views(conn, self.store_id)
+
+            sql = """
+                SELECT p.mid_cd, COALESCE(SUM(ot.order_qty), 0) as total_qty
+                FROM order_tracking ot
+                JOIN common.products p ON ot.item_cd = p.item_cd
+                WHERE ot.order_source = 'site'
+                  AND ot.order_date = ?
+                  AND ot.store_id = ?
+                GROUP BY p.mid_cd
+            """
+            rows = conn.execute(sql, (order_date, self.store_id)).fetchall()
+            result = {row[0]: row[1] for row in rows}
+            if result:
+                logger.info(f"[SiteBudget] site 발주 수량 조회: {result}")
+            return result
+        except Exception as e:
+            logger.warning(f"[SiteBudget] site 발주 조회 실패 (폴백: 빈 dict): {e}")
+            return {}
 
     def get_recommendations(
         self,
@@ -819,11 +1020,15 @@ class AutoOrderSystem:
                 logger.warning(f"사전 발주 평가 실패 (원본 플로우 유지): {e}")
 
             # 발주 대상 추출 (스킵 상품 제외)
-            candidates = self.improved_predictor.get_order_candidates(
-                target_date=target_date,
-                min_order_qty=min_order_qty,
-                exclude_items=skip_codes if skip_codes else None
-            )
+            try:
+                candidates = self.improved_predictor.get_order_candidates(
+                    target_date=target_date,
+                    min_order_qty=min_order_qty,
+                    exclude_items=skip_codes if skip_codes else None
+                )
+            except Exception as e:
+                logger.warning(f"예측 엔진 발주 후보 생성 실패 (빈 목록으로 계속): {e}")
+                candidates = []
 
             # PASS 상품 발주량 억제 (과잉발주 보정)
             if ENABLE_PASS_SUPPRESSION and eval_results:
@@ -853,17 +1058,27 @@ class AutoOrderSystem:
                     # 발주량 0이어도 FORCE이므로 최소 1개 보장
                     # FORCE 상한: 일평균 × FORCE_MAX_DAYS 초과 방지
                     for r in extra:
-                        # ★ 미입고분으로 충분한 경우 FORCE 보충 생략
-                        if r.pending_qty > 0 and r.current_stock + r.pending_qty > 0:
+                        # ★ 재고 또는 미입고분이 있으면 FORCE 보충 생략
+                        if r.current_stock + r.pending_qty > 0:
                             logger.info(
                                 f"[FORCE보충생략] {r.item_nm[:20]}: "
                                 f"stock={r.current_stock}+pending={r.pending_qty} "
-                                f"-> 미입고분 충분"
+                                f"-> 재고/미입고분 충분"
                             )
+                            self._exclusion_records.append({
+                                "item_cd": r.item_cd,
+                                "item_nm": r.item_nm,
+                                "mid_cd": r.mid_cd,
+                                "exclusion_type": ExclusionType.FORCE_SUPPRESSED,
+                                "predicted_qty": r.order_qty,
+                                "current_stock": r.current_stock,
+                                "pending_qty": r.pending_qty,
+                                "detail": f"FORCE보충 생략, stock={r.current_stock}+pending={r.pending_qty} 충분",
+                            })
                             continue
                         if r.order_qty < 1:
                             r.order_qty = 1
-                        if FORCE_MAX_DAYS > 0 and r.adjusted_qty > 0:
+                        if FORCE_MAX_DAYS > 0 and r.adjusted_qty > 0 and math.isfinite(r.adjusted_qty):
                             force_cap = max(1, int(r.adjusted_qty * FORCE_MAX_DAYS))
                             if r.order_qty > force_cap:
                                 logger.info(
@@ -913,15 +1128,108 @@ class AutoOrderSystem:
             if NEW_PRODUCT_MODULE_ENABLED:
                 order_list = self._process_3day_follow_orders(order_list)
 
+            # ★ 스마트발주 오버라이드: 예측 기반으로 스마트→수동 전환
+            order_list = self._inject_smart_order_items(order_list, target_date)
+
             # 사전 평가 결과가 없으면 기본 정렬 (중분류 오름차순 → 발주량 내림차순)
             # 사전 평가 결과가 있으면 이미 우선순위 정렬 적용됨
             if not eval_results:
                 order_list.sort(key=lambda x: (x.get("mid_cd", ""), -x.get("final_order_qty", 0)))
 
-            # 푸드류 요일별 총량 상한 적용
+            # site(사용자) 발주 카테고리별 집계
+            site_order_counts = {}
+            if CATEGORY_SITE_BUDGET_ENABLED:
+                today_str = datetime.now().strftime('%Y-%m-%d')
+                site_order_counts = self._get_site_order_counts_by_midcd(today_str)
+
+            # ★ 카테고리 총량 floor 보충 (신선식품) — Cap 전에 실행하여 최선의 상품 선별
+            try:
+                from src.prediction.prediction_config import PREDICTION_PARAMS
+                if self._category_forecaster and PREDICTION_PARAMS.get("category_floor", {}).get("enabled", False):
+                    before_qty = sum(item.get('final_order_qty', 0) for item in order_list)
+                    order_list = self._category_forecaster.supplement_orders(
+                        order_list, eval_results, self._cut_items,
+                        site_order_counts=site_order_counts
+                    )
+                    after_qty = sum(item.get('final_order_qty', 0) for item in order_list)
+                    if after_qty > before_qty:
+                        logger.info(
+                            f"[카테고리Floor] 보충: {before_qty}개 → {after_qty}개 "
+                            f"(+{after_qty - before_qty}개)"
+                        )
+            except Exception as e:
+                logger.warning(f"카테고리 총량 floor 보충 실패 (원본 유지): {e}")
+
+            # ★ 대분류(large_cd) 기반 카테고리 총량 floor 보충
+            try:
+                if self._large_category_forecaster and self._large_category_forecaster.enabled:
+                    before_qty = sum(item.get('final_order_qty', 0) for item in order_list)
+                    order_list = self._large_category_forecaster.supplement_orders(
+                        order_list, eval_results, self._cut_items,
+                        site_order_counts=site_order_counts
+                    )
+                    after_qty = sum(item.get('final_order_qty', 0) for item in order_list)
+                    if after_qty > before_qty:
+                        logger.info(
+                            f"[대분류Floor] 보충: {before_qty}개 → {after_qty}개 "
+                            f"(+{after_qty - before_qty}개)"
+                        )
+            except Exception as e:
+                logger.warning(f"대분류 카테고리 총량 floor 보충 실패 (원본 유지): {e}")
+
+            # ★ CUT 대체 보충 (발주중지 상품 수요를 동일 mid_cd 대체 상품에 배분)
+            try:
+                from src.prediction.prediction_config import PREDICTION_PARAMS
+                cut_replacement_cfg = PREDICTION_PARAMS.get("cut_replacement", {})
+                if cut_replacement_cfg.get("enabled", False):
+                    # eval_results에서 CUT SKIP 수요 데이터 복원 (pre_order_evaluator 보존분)
+                    # NOTE: EvalDecision은 모듈 상단(L56)에서 이미 임포트됨 — 여기서 재임포트하면
+                    # Python이 함수 전체에서 로컬 변수로 취급하여 L804 등에서 참조 에러 발생
+                    if eval_results:
+                        existing_cut_cds = {item.get("item_cd") for item in self._cut_lost_items}
+                        for cd, r in eval_results.items():
+                            if (r.decision == EvalDecision.SKIP
+                                    and "CUT" in r.reason
+                                    and r.mid_cd in FOOD_CATEGORIES
+                                    and r.daily_avg > 0
+                                    and cd not in existing_cut_cds):
+                                self._cut_lost_items.append({
+                                    "item_cd": cd,
+                                    "mid_cd": r.mid_cd,
+                                    "predicted_sales": r.daily_avg,
+                                    "item_nm": r.item_nm,
+                                })
+                        if self._cut_lost_items:
+                            logger.info(
+                                f"[CUT보충] 대상: {len(self._cut_lost_items)}건 "
+                                f"(eval={len(self._cut_lost_items) - len(existing_cut_cds)}건 복원)"
+                            )
+
+                    if self._cut_lost_items:
+                        from src.order.cut_replacement import CutReplacementService
+                        svc = CutReplacementService(store_id=self.store_id)
+                        before_qty = sum(item.get('final_order_qty', 0) for item in order_list)
+                        order_list = svc.supplement_cut_shortage(
+                            order_list=order_list,
+                            cut_lost_items=self._cut_lost_items,
+                            eval_results=eval_results,
+                        )
+                        after_qty = sum(item.get('final_order_qty', 0) for item in order_list)
+                        if after_qty > before_qty:
+                            logger.info(
+                                f"[CUT보충] 보충: {before_qty}개 → {after_qty}개 "
+                                f"(+{after_qty - before_qty}개)"
+                            )
+            except Exception as e:
+                logger.warning(f"CUT 대체 보충 실패 (원본 유지): {e}")
+
+            # 푸드류 요일별 총량 상한 적용 — 마지막에 실행하여 Floor/CUT 보충 결과를 최종 절삭
             try:
                 before_count = len(order_list)
-                order_list = apply_food_daily_cap(order_list, target_date=target_date, store_id=self.store_id)
+                order_list = apply_food_daily_cap(
+                    order_list, target_date=target_date, store_id=self.store_id,
+                    site_order_counts=site_order_counts
+                )
                 after_count = len(order_list)
                 if before_count != after_count:
                     logger.info(f"푸드류 총량 상한 적용: {before_count} → {after_count}개")
@@ -940,6 +1248,9 @@ class AutoOrderSystem:
             # 공통 제외 필터 적용 (미취급/CUT/자동발주/스마트발주)
             order_list = self._exclude_filtered_items(order_list)
             self._warn_stale_cut_items(order_list)
+
+            # ★ 스마트발주 오버라이드 (기존 예측기 경로)
+            order_list = self._inject_smart_order_items(order_list, target_date)
 
         if max_items and len(order_list) > max_items:
             order_list = order_list[:max_items]
@@ -1004,9 +1315,10 @@ class AutoOrderSystem:
         target_date: Optional[str] = None,
         dry_run: bool = True,
         prefetch_pending: bool = True,
-        max_pending_items: int = 200,
+        max_pending_items: int = 500,
         margin_collect_categories: Optional[Set[str]] = None,
-        skip_exclusion_fetch: bool = False
+        skip_exclusion_fetch: bool = False,
+        target_dates: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """
         자동 발주 실행
@@ -1021,12 +1333,17 @@ class AutoOrderSystem:
             max_pending_items: 미입고 조회 최대 상품 수
             margin_collect_categories: 매가/이익율 수집 대상 카테고리 (부분 발주 시)
             skip_exclusion_fetch: True면 자동/스마트발주 목록 사이트 조회 건너뛰고 DB 캐시 사용
+            target_dates: 발주할 날짜 목록 (YYYY-MM-DD). None이면 전체 발주
 
         Returns:
             결과 {success, success_count, fail_count, ...}
         """
         if not self.executor:
             return {"success": False, "message": "WebDriver not provided - cannot execute orders"}
+
+        # 발주 제외 사유 기록 초기화 (새 실행 사이클)
+        self._exclusion_records.clear()
+        self._cut_lost_items = []  # CUT 탈락 상품 초기화 (이전 실행 오염 방지)
 
         # DB에서 미취급 상품 목록 로드 (이전 조회에서 실패한 상품)
         self.load_unavailable_from_db()
@@ -1083,12 +1400,8 @@ class AutoOrderSystem:
             )
 
             # [CUT 순서 정정] prefetch에서 실시간 감지된 CUT 상품을 메인 필터로 재적용
-            if self._cut_items:
-                before_cut = len(order_list)
-                order_list = [item for item in order_list if item.get("item_cd") not in self._cut_items]
-                cut_removed = before_cut - len(order_list)
-                if cut_removed > 0:
-                    logger.info(f"[CUT 재필터] prefetch 실시간 감지 포함 {cut_removed}개 CUT 상품 제외")
+            order_list, _lost = self._refilter_cut_items(order_list)
+            self._cut_lost_items.extend(_lost)
 
             if pending_data or (hasattr(self, '_last_stock_data') and self._last_stock_data):
                 before_total = sum(item.get('final_order_qty', 0) for item in order_list)
@@ -1139,12 +1452,8 @@ class AutoOrderSystem:
             )
 
             # [CUT 순서 정정] prefetch에서 실시간 감지된 CUT 상품을 메인 필터로 재적용
-            if self._cut_items:
-                before_cut = len(order_list)
-                order_list = [item for item in order_list if item.get("item_cd") not in self._cut_items]
-                cut_removed = before_cut - len(order_list)
-                if cut_removed > 0:
-                    logger.info(f"[CUT 재필터] prefetch 실시간 감지 포함 {cut_removed}개 CUT 상품 제외")
+            order_list, _lost = self._refilter_cut_items(order_list)
+            self._cut_lost_items.extend(_lost)
 
             # 4단계: 기존 발주 목록을 미입고/실시간재고 데이터로 직접 업데이트
             # [v10 최적화] get_recommendations() 재호출 없이 직접 조정
@@ -1198,6 +1507,13 @@ class AutoOrderSystem:
             logger.info("발주 대상 상품 없음")
             return {"success": True, "success_count": 0, "fail_count": 0, "message": "no items"}
 
+        # ===== 푸드 수동발주 차감 =====
+        order_list = self._deduct_manual_food_orders(order_list, min_order_qty)
+
+        if not order_list:
+            logger.info("수동발주 차감 후 발주 대상 없음")
+            return {"success": True, "success_count": 0, "fail_count": 0, "message": "all deducted by manual orders"}
+
         # 발주 목록 출력
         self.print_recommendations(order_list)
 
@@ -1207,18 +1523,28 @@ class AutoOrderSystem:
         # [v10] 발주 전 화면 상태 초기화 (pending_collector 메뉴 닫힌 후 상태 정리)
         self._ensure_clean_screen_state()
 
-        # 실제 발주 실행
+        # [v11] 발주 직전 order_unit_qty 최종 보정 (common.db 배치 재조회)
+        if order_list:
+            self._finalize_order_unit_qty(order_list)
+
+        # 발주 실행 (전품목 직접 발주 - orderable_day는 안전재고 계산에만 사용)
         logger.info(f"{'테스트 모드 (dry_run)' if dry_run else '실제 발주 실행'}")
 
-        result = self.executor.execute_orders(
-            order_list=order_list,
-            target_date=target_date,
-            dry_run=dry_run
-        )
+        if order_list:
+            result = self.executor.execute_orders(
+                order_list=order_list,
+                target_date=target_date,
+                dry_run=dry_run,
+                target_dates=target_dates,
+            )
+        else:
+            result = {"success": True, "success_count": 0, "fail_count": 0, "results": []}
 
         # 발주 성공한 상품들을 order_tracking에 저장 (폐기 관리용)
         if not dry_run and result.get('results'):
             self._save_to_order_tracking(order_list, result['results'])
+            # 신상품 3일발주 분산 추적 업데이트
+            self._update_np3day_tracking_after_order()
 
         # eval_outcomes에 predicted_qty, actual_order_qty, order_status 업데이트
         if result.get('results'):
@@ -1317,6 +1643,22 @@ class AutoOrderSystem:
             except Exception as e:
                 logger.debug(f"[재고불일치] 진단 저장 실패 (무시): {e}")
 
+        # ★ 발주 제외 사유 배치 저장
+        if not dry_run and self._exclusion_records:
+            try:
+                today = datetime.now().strftime("%Y-%m-%d")
+                saved = self._exclusion_repo.save_exclusions_batch(
+                    today, self._exclusion_records
+                )
+                logger.info(f"[발주제외사유] {saved}건 저장 (총 {len(self._exclusion_records)}건 수집)")
+                self._exclusion_records.clear()
+            except Exception as e:
+                logger.warning(f"[발주제외사유] 저장 실패 (무시): {e}")
+
+        # 드라이런 리포트용 데이터 첨부
+        result["order_list"] = order_list
+        result["eval_results"] = self._last_eval_results
+
         return result
 
     def _recalculate_need_qty(
@@ -1331,74 +1673,18 @@ class AutoOrderSystem:
         expiration_days: Optional[int] = None,
         mid_cd: str = ""
     ) -> int:
-        """실시간 재고/미입고를 반영하여 need_qty를 재계산
-
-        예측 시점의 stale 재고 데이터 대신 실시간 데이터로 need를 다시 산출한다.
-        improved_predictor의 need 공식과 동일:
-            need = adjusted_prediction + safety_stock - current_stock - pending_qty
-
-        단기유통(≤1일) 푸드류는 미입고 할인 적용:
-            오늘 배송분은 오늘 소진 예상 → 내일 발주 차감에 50%만 반영
-
-        Args:
-            predicted_sales: 예측 판매량 (adjusted_prediction)
-            safety_stock: 안전재고
-            new_stock: 실시간 재고
-            new_pending: 실시간 미입고
-            daily_avg: 일평균 판매량 (올림 임계값 판단용)
-            order_unit_qty: 발주 배수 단위
-            promo_type: 행사 유형 ("1+1", "2+1", "")
-            expiration_days: 유통기한 일수 (None이면 할인 미적용)
-            mid_cd: 중분류 코드 (푸드 카테고리 판별용)
-
-        Returns:
-            재계산된 발주 수량 (정수, 배수 단위 적용, 행사 배수 보정 포함)
-        """
-        # 단기유통 푸드류 미입고 할인: 유통기한 1일 이하 푸드의 미입고는
-        # 오늘 배송분 = 오늘 소진 예상 → 내일 발주 차감에 할인율만 반영
-        effective_pending = new_pending
-        if (expiration_days is not None and expiration_days <= 1
-                and mid_cd in FOOD_CATEGORIES
-                and new_pending > 0):
-            effective_pending = max(0, int(new_pending * FOOD_SHORT_EXPIRY_PENDING_DISCOUNT))
-            if effective_pending != new_pending:
-                logger.debug(
-                    f"[단기유통할인] mid_cd={mid_cd}, 유통기한={expiration_days}일: "
-                    f"미입고 {new_pending} → {effective_pending} "
-                    f"(할인율={FOOD_SHORT_EXPIRY_PENDING_DISCOUNT})"
-                )
-
-        need = predicted_sales + safety_stock - new_stock - effective_pending
-        if need <= 0:
-            return 0
-
-        # 올림 규칙 (improved_predictor._apply_order_rules와 동일)
-        from src.prediction.prediction_config import PREDICTION_PARAMS
-        min_threshold = PREDICTION_PARAMS.get("min_order_threshold", 0.5)
-        round_up_threshold = PREDICTION_PARAMS.get("round_up_threshold", 0.3)
-
-        if need < min_threshold:
-            return 0
-        elif need < 1.0:
-            order_qty = 1
-        else:
-            if need - int(need) >= round_up_threshold:
-                order_qty = int(need) + 1
-            else:
-                order_qty = int(need)
-
-        # 발주 배수 단위 적용
-        if order_unit_qty > 1 and order_qty > 0:
-            order_qty = max(order_unit_qty, ((order_qty + order_unit_qty - 1) // order_unit_qty) * order_unit_qty)
-
-        # 행사 배수 보정 (1+1->최소2, 2+1->최소3)
-        if promo_type and order_qty > 0:
-            from src.settings.constants import PROMO_MIN_STOCK_UNITS
-            promo_unit = PROMO_MIN_STOCK_UNITS.get(promo_type, 1)
-            if order_qty < promo_unit:
-                order_qty = promo_unit
-
-        return order_qty
+        """실시간 재고/미입고를 반영하여 need_qty를 재계산"""
+        return self._adjuster.recalculate_need_qty(
+            predicted_sales=predicted_sales,
+            safety_stock=safety_stock,
+            new_stock=new_stock,
+            new_pending=new_pending,
+            daily_avg=daily_avg,
+            order_unit_qty=order_unit_qty,
+            promo_type=promo_type,
+            expiration_days=expiration_days,
+            mid_cd=mid_cd,
+        )
 
     def _apply_pending_and_stock_to_order_list(
         self,
@@ -1407,173 +1693,102 @@ class AutoOrderSystem:
         stock_data: Dict[str, int],
         min_order_qty: int = 1
     ) -> List[Dict[str, Any]]:
+        """기존 발주 목록에 미입고/실시간재고 데이터를 직접 반영"""
+        adjusted_list, stock_discrepancies = self._adjuster.apply_pending_and_stock(
+            order_list=order_list,
+            pending_data=pending_data,
+            stock_data=stock_data,
+            min_order_qty=min_order_qty,
+            cut_items=self._cut_items,
+            unavailable_items=self._unavailable_items,
+            exclusion_records=self._exclusion_records,
+            last_eval_results=self._last_eval_results,
+        )
+        self._last_stock_discrepancies = stock_discrepancies
+        return adjusted_list
+
+    def _finalize_order_unit_qty(self, order_list: List[Dict[str, Any]]) -> None:
+        """발주 직전 order_unit_qty 최종 보정 (배치 조회).
+
+        product_details 수집 타이밍에 따라 order_unit_qty가 1(폴백)로 남아있을 수 있음.
+        발주 실행 직전에 common.db 최신값으로 일괄 보정하여 과발주 방지.
+
+        기존 order_executor._refetch_order_unit_qty()를 대체 (superset):
+        - 배치 조회 (건건→500개 청크)
+        - unit=1뿐 아니라 모든 상품 최신값 비교
+        - 변경 시 실발주량 영향 로깅
+
+        수정 이력:
+        - 2026-03-14: 신규 생성 (order_executor._refetch 대체)
         """
-        기존 발주 목록에 미입고/실시간재고 데이터를 직접 반영
+        from src.infrastructure.database.connection import DBRouter
 
-        [v11 개선] 실시간 재고가 변경된 경우 need를 재계산하여 과대발주 방지
-        - 기존(v10): 원발주 - (신재고-원재고) → 올림/배수가 적용된 원발주 기준이라 과대
-        - 개선(v11): need = predicted_sales + safety - 신재고 - 신미입고 로 재계산
+        if not order_list:
+            return
 
-        Args:
-            order_list: 기존 발주 목록
-            pending_data: {item_cd: pending_qty} 미입고 수량
-            stock_data: {item_cd: stock_qty} 실시간 재고
-            min_order_qty: 최소 발주량 (미만 시 제거)
+        # 1. 전체 item_cd 수집
+        item_codes = [item.get("item_cd", "") for item in order_list if item.get("item_cd")]
+        if not item_codes:
+            return
 
-        Returns:
-            조정된 발주 목록
-        """
-        adjusted_list = []
-        cut_excluded = 0
-        unavailable_excluded = 0
-        recalculated_count = 0
-        self._last_stock_discrepancies = []  # 재고 불일치 진단용
-
-        logger.info(f"[미입고조정 시작] 원본 발주 목록: {len(order_list)}개 상품")
-
-        for item in order_list:
-            item_cd = item.get('item_cd')
-            if not item_cd:
-                continue
-
-            # 발주중지(CUT) 상품 스킵
-            if item_cd in self._cut_items:
-                cut_excluded += 1
-                continue
-
-            # prefetch 실패(미취급) 상품 스킵
-            if item_cd in self._unavailable_items:
-                unavailable_excluded += 1
-                continue
-
-            # 복사본 생성 (원본 수정 방지)
-            adjusted_item = item.copy()
-
-            # 기존 값
-            original_qty = item.get('final_order_qty', 0)
-            original_stock = item.get('current_stock', 0)
-            original_pending = item.get('pending_receiving_qty', 0)
-
-            # 새 값 적용
-            new_pending = pending_data.get(item_cd, original_pending)
-            new_stock = stock_data.get(item_cd, original_stock) if stock_data else original_stock
-
-            item_name = item.get('item_nm', item_cd)
-
-            # 미입고/재고 변동 여부 확인
-            stock_changed = (new_stock != original_stock) or (new_pending != original_pending)
-
-            if stock_changed:
-                # ★ v11: need 재계산 방식 (실시간 재고 기반)
-                predicted_sales = item.get('predicted_sales', 0)
-                safety_stock = item.get('safety_stock', 0)
-                daily_avg = item.get('daily_avg', 0)
-                order_unit_qty = item.get('order_unit_qty', 1)
-                promo_type = item.get('promo_type', '')
-                expiration_days = item.get('expiration_days')
-                mid_cd = item.get('mid_cd', '')
-
-                new_qty = self._recalculate_need_qty(
-                    predicted_sales=predicted_sales,
-                    safety_stock=safety_stock,
-                    new_stock=max(0, new_stock),  # 음수 재고는 0으로
-                    new_pending=new_pending,
-                    daily_avg=daily_avg,
-                    order_unit_qty=order_unit_qty,
-                    promo_type=promo_type,
-                    expiration_days=expiration_days,
-                    mid_cd=mid_cd
-                )
-                recalculated_count += 1
-
-                # 재고 불일치 진단 데이터 수집
-                self._last_stock_discrepancies.append({
-                    "item_cd": item_cd,
-                    "item_nm": item_name,
-                    "mid_cd": item.get("mid_cd", ""),
-                    "stock_at_prediction": original_stock,
-                    "pending_at_prediction": original_pending,
-                    "stock_at_order": new_stock,
-                    "pending_at_order": new_pending,
-                    "stock_source": item.get("stock_source", ""),
-                    "is_stock_stale": item.get("is_stock_stale", False),
-                    "original_order_qty": original_qty,
-                    "recalculated_order_qty": new_qty,
-                })
-
-                logger.info(
-                    f"[미입고조정] {item_name[:20]}: "
-                    f"원발주={original_qty}, 원재고={original_stock}, 원미입고={original_pending} → "
-                    f"신재고={new_stock}, 신미입고={new_pending} → "
-                    f"재계산(pred={predicted_sales}+safe={safety_stock:.1f}-stk={max(0,new_stock)}-pnd={new_pending})={new_qty}"
-                )
-            else:
-                new_qty = original_qty
-
-            # 최소 발주량 미만이면 제외 (단기유통 보호 → FORCE/URGENT 보호 순)
-            if new_qty < min_order_qty:
-                # ★ 단기유통 푸드 보호: 미입고 증가로 발주 소멸 시 원발주 유지
-                item_exp_days = adjusted_item.get('expiration_days')
-                item_mid_cd = adjusted_item.get('mid_cd', '')
-                if (item_exp_days is not None and item_exp_days <= 1
-                        and item_mid_cd in FOOD_CATEGORIES
-                        and original_qty > 0
-                        and stock_changed
-                        and new_pending > original_pending):
-                    # 미입고 증가로 발주 0이 된 경우: 원발주 유지
-                    new_qty = original_qty
-                    logger.info(
-                        f"[단기유통보호] {item_name[:20]}: "
-                        f"미입고 {original_pending}->{new_pending} 증가로 발주 소멸 → "
-                        f"유통기한 {item_exp_days}일 → 원발주 {original_qty}개 유지"
+        # 2. 배치 조회 (500개씩 청크 — SQLite 바인드 변수 제한 999개)
+        CHUNK_SIZE = 500
+        db_units: Dict[str, int] = {}
+        try:
+            conn = DBRouter.get_connection(table="product_details")
+            try:
+                cursor = conn.cursor()
+                for i in range(0, len(item_codes), CHUNK_SIZE):
+                    chunk = item_codes[i:i + CHUNK_SIZE]
+                    placeholders = ",".join("?" * len(chunk))
+                    cursor.execute(
+                        f"SELECT item_cd, order_unit_qty FROM product_details "
+                        f"WHERE item_cd IN ({placeholders})",
+                        chunk,
                     )
-                else:
-                    eval_result = self._last_eval_results.get(item_cd)
-                    if eval_result and eval_result.decision in (
-                        EvalDecision.FORCE_ORDER, EvalDecision.URGENT_ORDER
-                    ):
-                        # ★ 실시간 재고 또는 미입고분으로 충분한 경우 FORCE/URGENT 보호도 생략
-                        if new_stock + new_pending > 0:
-                            logger.info(
-                                f"[보호생략] {item_name[:20]}: {eval_result.decision.name}이지만 "
-                                f"가용재고={new_stock}+미입고={new_pending}={new_stock + new_pending} → 제외"
-                            )
-                            continue
-                        new_qty = 1  # FORCE/URGENT 최소 보장
-                        logger.info(
-                            f"[보호] {item_name[:20]}: {eval_result.decision.name} → 최소 1개 유지"
-                        )
-                    else:
-                        continue
+                    for row in cursor.fetchall():
+                        cd = row[0]
+                        unit = int(row[1] or 1) if row[1] else 1
+                        db_units[cd] = unit
+            finally:
+                conn.close()
+        except Exception as e:
+            logger.warning(f"[배수보정] DB 배치 조회 실패, 보정 스킵: {e}")
+            return
 
-            # 업데이트
-            adjusted_item['final_order_qty'] = new_qty
-            adjusted_item['recommended_qty'] = new_qty
-            adjusted_item['current_stock'] = new_stock
-            adjusted_item['pending_receiving_qty'] = new_pending
-            adjusted_item['expected_stock'] = new_stock + new_pending
+        # 3. 비교 & 보정 (order_unit_qty만 갱신, final_order_qty는 변경 안 함)
+        unit_corrected = 0
+        for item in order_list:
+            item_cd = item.get("item_cd", "")
+            if not item_cd or item_cd not in db_units:
+                continue
 
-            adjusted_list.append(adjusted_item)
+            fresh_unit = db_units[item_cd]
+            old_unit = item.get("order_unit_qty", 1) or 1
 
-        if cut_excluded > 0:
-            logger.info(f"발주중지(CUT) {cut_excluded}개 상품 제외 (재고/미입고 조정 단계)")
-        if unavailable_excluded > 0:
-            logger.info(f"미취급/조회실패 {unavailable_excluded}개 상품 제외 (재고/미입고 조정 단계)")
-        if recalculated_count > 0:
-            logger.info(f"[v11] need 재계산: {recalculated_count}개 상품 (실시간 재고 반영)")
+            if fresh_unit == old_unit:
+                continue
 
-        # 중분류 코드 오름차순 → 같은 중분류 내 발주량 내림차순
-        adjusted_list.sort(key=lambda x: (x.get("mid_cd", ""), -x.get("final_order_qty", 0)))
+            qty = item.get("final_order_qty", 0)
+            # 변경 전 실발주량
+            old_mult = max(1, (qty + old_unit - 1) // old_unit) if qty > 0 else 0
+            old_actual = old_mult * old_unit
+            # 변경 후 실발주량
+            new_mult = max(1, (qty + fresh_unit - 1) // fresh_unit) if qty > 0 else 0
+            new_mult = min(new_mult, MAX_ORDER_MULTIPLIER)
+            new_actual = new_mult * fresh_unit
 
-        # 전량 소멸 경고
-        if not adjusted_list and order_list:
+            item["order_unit_qty"] = fresh_unit
+            unit_corrected += 1
+
             logger.warning(
-                f"[전량소멸] 원본 {len(order_list)}개 상품이 조정 후 전부 제외됨! "
-                f"(CUT={cut_excluded}, 미취급={unavailable_excluded}, "
-                f"조정소멸={len(order_list) - cut_excluded - unavailable_excluded})"
+                f"[배수보정] {item_cd}: unit {old_unit}→{fresh_unit}, "
+                f"배수 {old_mult}→{new_mult}, "
+                f"실발주 {old_actual}→{new_actual} (need={qty})"
             )
 
-        return adjusted_list
+        if unit_corrected:
+            logger.info(f"[배수보정] {unit_corrected}건 order_unit_qty 보정 완료")
 
     def _ensure_clean_screen_state(self) -> None:
         """
@@ -1632,160 +1847,25 @@ class AutoOrderSystem:
         order_list: List[Dict[str, Any]],
         results: List[Dict[str, Any]]
     ) -> None:
-        """
-        발주 성공한 상품들을 order_tracking에 저장
-
-        Args:
-            order_list: 원본 발주 목록
-            results: 발주 실행 결과
-
-        Returns:
-            저장된 건수
-        """
-        # 발주 목록을 item_cd로 인덱싱
-        order_dict = {item['item_cd']: item for item in order_list}
-
-        saved_count = 0
-        for res in results:
-            if not res.get('success'):
-                continue
-
-            item_cd = res.get('item_cd')
-            order_date = res.get('order_date')
-            actual_qty = res.get('actual_qty', 0)
-
-            if not item_cd or actual_qty <= 0:
-                continue
-
-            # 원본 정보 가져오기
-            order_info = order_dict.get(item_cd, {})
-            item_nm = order_info.get('item_nm', item_cd)
-            mid_cd = order_info.get('mid_cd', '')
-
-            # 배송 차수 판별 (푸드류만 해당)
-            # order_date는 "%Y-%m-%d" 또는 "%Y%m%d" 형식 모두 허용
-            try:
-                order_datetime = datetime.strptime(order_date, "%Y-%m-%d")
-            except ValueError:
-                order_datetime = datetime.strptime(order_date, "%Y%m%d")
-            if mid_cd in ALERT_CATEGORIES:
-                delivery_type = get_delivery_type(item_nm) or "1차"
-                # use_product_expiry 카테고리(012 빵)는 상품별 유통기한 전달
-                exp_days = None
-                cat_cfg = ALERT_CATEGORIES.get(mid_cd, {})
-                if cat_cfg.get("use_product_expiry"):
-                    pd_info = self._product_repo.get(item_cd)
-                    exp_days = pd_info.get('expiration_days') if pd_info else None
-                shelf_hours, arrival_time, expiry_time = calculate_shelf_life_after_arrival(
-                    item_nm, mid_cd, order_datetime, expiration_days=exp_days
-                )
-            else:
-                # 비푸드류: product_details.expiration_days 기반 유통기한 추적
-                delivery_type = "일반"
-                arrival_time = order_datetime + timedelta(days=1)  # D+1 도착
-                try:
-                    pd_repo = ProductDetailRepository()  # db_type="common"
-                    pd_info = pd_repo.get(item_cd)
-                    exp_days = pd_info.get('expiration_days') if pd_info else None
-                    if exp_days and exp_days > 0:
-                        expiry_time = arrival_time + timedelta(days=exp_days)
-                    else:
-                        # 유통기한 정보 없으면 추적 스킵
-                        logger.debug(f"비푸드 유통기한 미등록, tracking 스킵: {item_cd}")
-                        continue
-                except Exception:
-                    logger.debug(f"비푸드 유통기한 조회 실패, tracking 스킵: {item_cd}")
-                    continue
-
-            # order_tracking에 저장
-            try:
-                self.tracking_repo.save_order(
-                    order_date=order_date,
-                    item_cd=item_cd,
-                    item_nm=item_nm,
-                    mid_cd=mid_cd,
-                    delivery_type=delivery_type,
-                    order_qty=actual_qty,
-                    arrival_time=arrival_time.strftime("%Y-%m-%d %H:%M"),
-                    expiry_time=expiry_time.strftime("%Y-%m-%d %H:%M"),
-                    store_id=self.store_id,
-                    order_source='auto'
-                )
-                saved_count += 1
-                if arrival_time and expiry_time:
-                    logger.info(f"Tracking: {item_nm[:15]} → 도착:{arrival_time.strftime('%m/%d %H:%M')} 폐기:{expiry_time.strftime('%m/%d %H:%M')}")
-                else:
-                    logger.info(f"Tracking: {item_nm[:15]} → 발주:{actual_qty}개")
-
-                # 비푸드류는 inventory_batches에도 배치 생성
-                if mid_cd not in ALERT_CATEGORIES and exp_days and exp_days > 0:
-                    try:
-                        batch_repo = InventoryBatchRepository(store_id=self.store_id)
-                        batch_repo.create_batch(
-                            item_cd=item_cd,
-                            item_nm=item_nm,
-                            mid_cd=mid_cd,
-                            receiving_date=arrival_time.strftime("%Y-%m-%d"),
-                            expiration_days=exp_days,
-                            initial_qty=actual_qty,
-                            store_id=self.store_id
-                        )
-                        logger.debug(f"inventory_batches 생성: {item_nm} (발주일: {order_date}, {actual_qty}개)")
-                    except Exception as e:
-                        logger.warning(f"inventory_batches 생성 실패 ({item_cd}): {e}")
-
-            except Exception as e:
-                logger.warning(f"Tracking 저장 실패 ({item_cd}): {e}")
-
-        if saved_count > 0:
-            logger.info(f"발주 추적 등록: {saved_count}건")
+        """발주 성공한 상품들을 order_tracking에 저장"""
+        try:
+            self._tracker.save_to_order_tracking(order_list, results)
+        except Exception as e:
+            logger.warning(f"order_tracking 저장 실패 (발주는 정상 완료): {e}")
 
     def _update_eval_order_results(
         self,
         order_list: List[Dict[str, Any]],
         results: List[Dict[str, Any]]
     ) -> None:
-        """eval_outcomes에 predicted_qty, actual_order_qty, order_status 업데이트
-
-        발주 실행 후 호출하여 예측기 산출량과 실제 발주량, 상태를 기록한다.
-        predicted_qty는 evaluation 시점이 아닌 발주 후에 기록 (순환 의존 방지).
-
-        Args:
-            order_list: 원본 발주 목록 (final_order_qty = 예측기 산출)
-            results: 발주 실행 결과 (actual_qty, success)
-        """
-        today = datetime.now().strftime("%Y-%m-%d")
-        order_dict = {item['item_cd']: item for item in order_list}
-        updated = 0
-
+        """eval_outcomes에 predicted_qty, actual_order_qty, order_status 업데이트"""
         try:
-            for res in results:
-                item_cd = res.get('item_cd')
-                if not item_cd:
-                    continue
-
-                order_info = order_dict.get(item_cd, {})
-                predicted_qty = order_info.get('final_order_qty')
-                actual_qty = res.get('actual_qty', 0) if res.get('success') else 0
-                order_status = 'success' if res.get('success') else 'fail'
-
-                if res.get('dry_run'):
-                    order_status = 'pending'
-                    actual_qty = predicted_qty
-
-                self._eval_calibrator.outcome_repo.update_order_result(
-                    eval_date=today,
-                    item_cd=item_cd,
-                    predicted_qty=predicted_qty,
-                    actual_order_qty=actual_qty,
-                    order_status=order_status
-                )
-                updated += 1
-
-            if updated > 0:
-                logger.info(f"eval_outcomes 발주 결과 업데이트: {updated}건")
+            from .order_tracker import OrderTracker
+            OrderTracker.update_eval_order_results(
+                order_list, results, self._eval_calibrator
+            )
         except Exception as e:
-            logger.warning(f"eval_outcomes 발주 결과 업데이트 실패: {e}")
+            logger.warning(f"eval_outcomes 업데이트 실패 (발주는 정상 완료): {e}")
 
     def run_daily_order(
         self,
@@ -1793,7 +1873,8 @@ class AutoOrderSystem:
         max_items: Optional[int] = None,
         dry_run: bool = True,
         prefetch_pending: bool = True,
-        skip_exclusion_fetch: bool = False
+        skip_exclusion_fetch: bool = False,
+        target_dates: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """
         일일 자동 발주 실행
@@ -1804,6 +1885,7 @@ class AutoOrderSystem:
             dry_run: True면 실제 발주 안함
             prefetch_pending: True면 발주 전 미입고 수량 조회 (중복 발주 방지)
             skip_exclusion_fetch: True면 자동/스마트발주 목록 사이트 재조회 건너뜀
+            target_dates: 발주할 날짜 목록 (YYYY-MM-DD). None이면 전체 발주
 
         Returns:
             결과 dict
@@ -1822,7 +1904,8 @@ class AutoOrderSystem:
             max_items=max_items,
             dry_run=dry_run,
             prefetch_pending=prefetch_pending,
-            skip_exclusion_fetch=skip_exclusion_fetch
+            skip_exclusion_fetch=skip_exclusion_fetch,
+            target_dates=target_dates,
         )
 
         elapsed = time.time() - start_time

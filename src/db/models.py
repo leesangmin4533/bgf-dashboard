@@ -16,7 +16,7 @@ logger = get_logger(__name__)
 
 # 기본 DB 경로
 DEFAULT_DB_DIR = Path(__file__).parent.parent.parent / "data"
-DEFAULT_DB_NAME = "bgf_sales.db"
+DEFAULT_DB_NAME = "bgf_sales.db"  # deprecated: resolve_db_path() 사용 권장
 
 
 def get_db_path(db_name: Optional[str] = None) -> Path:
@@ -1389,6 +1389,380 @@ SCHEMA_MIGRATIONS = {
     41: """
     -- v41: dashboard_users에 phone 컬럼 추가
     ALTER TABLE dashboard_users ADD COLUMN phone TEXT;
+    """,
+
+    42: """
+    -- v42: product_details에 demand_pattern 컬럼 추가 (수요 패턴 분류)
+    ALTER TABLE product_details ADD COLUMN demand_pattern TEXT DEFAULT NULL;
+    CREATE INDEX IF NOT EXISTS idx_pd_demand_pattern ON product_details(demand_pattern);
+    """,
+
+    43: """
+    -- v43: 발주 제외 사유 추적 테이블
+    CREATE TABLE IF NOT EXISTS order_exclusions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        store_id TEXT NOT NULL,
+        eval_date TEXT NOT NULL,
+        item_cd TEXT NOT NULL,
+        item_nm TEXT,
+        mid_cd TEXT,
+        exclusion_type TEXT NOT NULL,
+        predicted_qty INTEGER DEFAULT 0,
+        current_stock INTEGER DEFAULT 0,
+        pending_qty INTEGER DEFAULT 0,
+        detail TEXT,
+        created_at TEXT NOT NULL,
+        UNIQUE(store_id, eval_date, item_cd)
+    );
+    CREATE INDEX IF NOT EXISTS idx_oe_date ON order_exclusions(eval_date);
+    CREATE INDEX IF NOT EXISTS idx_oe_type ON order_exclusions(exclusion_type);
+    """,
+
+    44: """
+    -- v44: 수동(일반) 발주 항목 테이블
+    CREATE TABLE IF NOT EXISTS manual_order_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        store_id TEXT,
+        item_cd TEXT NOT NULL,
+        item_nm TEXT,
+        mid_cd TEXT,
+        mid_nm TEXT,
+        order_qty INTEGER NOT NULL DEFAULT 0,
+        ord_cnt INTEGER DEFAULT 0,
+        ord_unit_qty INTEGER DEFAULT 1,
+        ord_input_id TEXT,
+        ord_amt INTEGER DEFAULT 0,
+        order_date TEXT NOT NULL,
+        collected_at TEXT DEFAULT (datetime('now', 'localtime')),
+        UNIQUE(item_cd, order_date)
+    );
+    CREATE INDEX IF NOT EXISTS idx_moi_date ON manual_order_items(order_date);
+    CREATE INDEX IF NOT EXISTS idx_moi_mid ON manual_order_items(mid_cd);
+    """,
+
+    45: """
+    -- v45: 입고 시 감지된 신제품 이력 테이블
+    CREATE TABLE IF NOT EXISTS detected_new_products (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        item_cd TEXT NOT NULL,
+        item_nm TEXT,
+        mid_cd TEXT,
+        mid_cd_source TEXT DEFAULT 'fallback',
+        first_receiving_date TEXT NOT NULL,
+        receiving_qty INTEGER DEFAULT 0,
+        order_unit_qty INTEGER DEFAULT 1,
+        center_cd TEXT,
+        center_nm TEXT,
+        cust_nm TEXT,
+        registered_to_products INTEGER DEFAULT 0,
+        registered_to_details INTEGER DEFAULT 0,
+        registered_to_inventory INTEGER DEFAULT 0,
+        detected_at TEXT NOT NULL,
+        store_id TEXT,
+        UNIQUE(item_cd, first_receiving_date)
+    );
+    CREATE INDEX IF NOT EXISTS idx_detected_new_products_date
+        ON detected_new_products(first_receiving_date);
+    CREATE INDEX IF NOT EXISTS idx_detected_new_products_item
+        ON detected_new_products(item_cd);
+    """,
+
+    46: """
+    -- v46: 신제품 라이프사이클 관리 컬럼 + 일별 추적 테이블
+    ALTER TABLE detected_new_products ADD COLUMN lifecycle_status TEXT DEFAULT 'detected';
+    ALTER TABLE detected_new_products ADD COLUMN monitoring_start_date TEXT;
+    ALTER TABLE detected_new_products ADD COLUMN monitoring_end_date TEXT;
+    ALTER TABLE detected_new_products ADD COLUMN total_sold_qty INTEGER DEFAULT 0;
+    ALTER TABLE detected_new_products ADD COLUMN sold_days INTEGER DEFAULT 0;
+    ALTER TABLE detected_new_products ADD COLUMN similar_item_avg REAL;
+    ALTER TABLE detected_new_products ADD COLUMN status_changed_at TEXT;
+
+    CREATE TABLE IF NOT EXISTS new_product_daily_tracking (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        item_cd TEXT NOT NULL,
+        tracking_date TEXT NOT NULL,
+        sales_qty INTEGER DEFAULT 0,
+        stock_qty INTEGER DEFAULT 0,
+        order_qty INTEGER DEFAULT 0,
+        store_id TEXT,
+        created_at TEXT NOT NULL,
+        UNIQUE(item_cd, tracking_date, store_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_np_tracking_item
+        ON new_product_daily_tracking(item_cd);
+    CREATE INDEX IF NOT EXISTS idx_np_tracking_date
+        ON new_product_daily_tracking(tracking_date);
+    """,
+    47: """
+-- v47: 상품 3단계 분류 체계 컬럼 추가 (대분류/소분류)
+
+-- mid_categories에 대분류 정보 추가
+ALTER TABLE mid_categories ADD COLUMN large_cd TEXT;
+ALTER TABLE mid_categories ADD COLUMN large_nm TEXT;
+
+-- product_details에 분류 컬럼 추가
+ALTER TABLE product_details ADD COLUMN large_cd TEXT;
+ALTER TABLE product_details ADD COLUMN small_cd TEXT;
+ALTER TABLE product_details ADD COLUMN small_nm TEXT;
+ALTER TABLE product_details ADD COLUMN class_nm TEXT;
+
+-- 인덱스
+CREATE INDEX IF NOT EXISTS idx_mid_categories_large ON mid_categories(large_cd);
+CREATE INDEX IF NOT EXISTS idx_product_details_large ON product_details(large_cd);
+CREATE INDEX IF NOT EXISTS idx_product_details_small ON product_details(small_cd);
+    """,
+    48: """
+-- v48: food_waste_calibration에 small_cd 컬럼 추가 (소분류 세분화)
+ALTER TABLE food_waste_calibration ADD COLUMN small_cd TEXT DEFAULT '';
+
+-- 소분류 포함 복합 유니크 인덱스
+CREATE UNIQUE INDEX IF NOT EXISTS idx_fwc_store_mid_small_date
+    ON food_waste_calibration(store_id, mid_cd, small_cd, calibration_date);
+    """,
+    49: """
+-- v49: substitution_events 테이블 (소분류 내 잠식 감지)
+CREATE TABLE IF NOT EXISTS substitution_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    store_id TEXT NOT NULL,
+    detection_date TEXT NOT NULL,
+    small_cd TEXT NOT NULL,
+    small_nm TEXT,
+    gainer_item_cd TEXT NOT NULL,
+    gainer_item_nm TEXT,
+    gainer_prior_avg REAL,
+    gainer_recent_avg REAL,
+    gainer_growth_rate REAL,
+    loser_item_cd TEXT NOT NULL,
+    loser_item_nm TEXT,
+    loser_prior_avg REAL,
+    loser_recent_avg REAL,
+    loser_decline_rate REAL,
+    adjustment_coefficient REAL NOT NULL DEFAULT 1.0,
+    total_change_rate REAL,
+    confidence REAL DEFAULT 0.0,
+    is_active INTEGER DEFAULT 1,
+    expires_at TEXT,
+    created_at TEXT NOT NULL,
+    UNIQUE(store_id, detection_date, loser_item_cd, gainer_item_cd)
+);
+CREATE INDEX IF NOT EXISTS idx_substitution_store_date
+    ON substitution_events(store_id, detection_date);
+CREATE INDEX IF NOT EXISTS idx_substitution_loser
+    ON substitution_events(loser_item_cd, is_active);
+CREATE INDEX IF NOT EXISTS idx_substitution_small_cd
+    ON substitution_events(small_cd);
+    """,
+    50: """
+-- v50: 스마트발주 오버라이드 설정
+INSERT OR IGNORE INTO app_settings (key, value) VALUES ('SMART_ORDER_OVERRIDE', 'false');
+    """,
+    51: """
+-- v51: 조회 실패 내성 (query_fail_count + unavail_reason)
+ALTER TABLE realtime_inventory ADD COLUMN query_fail_count INTEGER DEFAULT 0;
+ALTER TABLE realtime_inventory ADD COLUMN unavail_reason TEXT;
+    """,
+    52: """
+-- v52: 디저트 발주 유지/정지 판단
+CREATE TABLE IF NOT EXISTS dessert_decisions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    store_id TEXT NOT NULL,
+    item_cd TEXT NOT NULL,
+    item_nm TEXT,
+    mid_cd TEXT DEFAULT '014',
+    dessert_category TEXT NOT NULL,
+    expiration_days INTEGER,
+    small_nm TEXT,
+    lifecycle_phase TEXT NOT NULL,
+    first_receiving_date TEXT,
+    first_receiving_source TEXT,
+    weeks_since_intro INTEGER DEFAULT 0,
+    judgment_period_start TEXT NOT NULL,
+    judgment_period_end TEXT NOT NULL,
+    total_order_qty INTEGER DEFAULT 0,
+    total_sale_qty INTEGER DEFAULT 0,
+    total_disuse_qty INTEGER DEFAULT 0,
+    sale_amount INTEGER DEFAULT 0,
+    disuse_amount INTEGER DEFAULT 0,
+    sell_price INTEGER DEFAULT 0,
+    sale_rate REAL DEFAULT 0.0,
+    category_avg_sale_qty REAL DEFAULT 0.0,
+    prev_period_sale_qty INTEGER DEFAULT 0,
+    sale_trend_pct REAL DEFAULT 0.0,
+    consecutive_low_weeks INTEGER DEFAULT 0,
+    consecutive_zero_months INTEGER DEFAULT 0,
+    decision TEXT NOT NULL,
+    decision_reason TEXT,
+    is_rapid_decline_warning INTEGER DEFAULT 0,
+    operator_action TEXT,
+    operator_note TEXT,
+    action_taken_at TEXT,
+    judgment_cycle TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    UNIQUE(store_id, item_cd, judgment_period_end)
+);
+CREATE INDEX IF NOT EXISTS idx_dessert_dec_store_date ON dessert_decisions(store_id, judgment_period_end);
+CREATE INDEX IF NOT EXISTS idx_dessert_dec_item ON dessert_decisions(item_cd);
+CREATE INDEX IF NOT EXISTS idx_dessert_dec_category ON dessert_decisions(dessert_category, decision);
+CREATE INDEX IF NOT EXISTS idx_dessert_dec_decision ON dessert_decisions(decision, created_at);
+    """,
+
+    53: """
+-- v53: dessert_decisions에 category_type 컬럼 추가 (음료 판단 통합)
+ALTER TABLE dessert_decisions ADD COLUMN category_type TEXT DEFAULT 'dessert';
+UPDATE dessert_decisions SET category_type = 'dessert' WHERE category_type IS NULL;
+CREATE INDEX IF NOT EXISTS idx_cat_decisions_type ON dessert_decisions(category_type, store_id);
+    """,
+
+    55: """
+-- v55: ML 가중치 개선 인프라 — Rule vs ML 분리 추적
+ALTER TABLE prediction_logs ADD COLUMN rule_order_qty INTEGER DEFAULT NULL;
+ALTER TABLE prediction_logs ADD COLUMN ml_order_qty INTEGER DEFAULT NULL;
+ALTER TABLE prediction_logs ADD COLUMN ml_weight_used REAL DEFAULT NULL;
+    """,
+
+    54: """
+-- v54: 데이터 무결성 검증 결과
+CREATE TABLE IF NOT EXISTS integrity_checks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    store_id TEXT NOT NULL,
+    session_id TEXT NOT NULL,
+    check_date TEXT NOT NULL,
+    check_name TEXT NOT NULL,
+    status TEXT NOT NULL,
+    anomaly_count INTEGER DEFAULT 0,
+    details TEXT,
+    created_at TEXT NOT NULL,
+    UNIQUE(store_id, check_date, check_name)
+);
+CREATE INDEX IF NOT EXISTS idx_integrity_date ON integrity_checks(check_date, store_id);
+CREATE INDEX IF NOT EXISTS idx_integrity_status ON integrity_checks(status);
+    """,
+
+    56: """
+-- v56: 신제품 안착 판정 컬럼 (detected_new_products 확장)
+ALTER TABLE detected_new_products ADD COLUMN analysis_window_days INTEGER;
+ALTER TABLE detected_new_products ADD COLUMN extension_count INTEGER DEFAULT 0;
+ALTER TABLE detected_new_products ADD COLUMN settlement_score REAL;
+ALTER TABLE detected_new_products ADD COLUMN settlement_verdict TEXT;
+ALTER TABLE detected_new_products ADD COLUMN settlement_date TEXT;
+ALTER TABLE detected_new_products ADD COLUMN settlement_checked_at TEXT;
+    """,
+
+    57: """
+-- v57: external_factors store_id 격리 (매장별 날씨/급여일 데이터 분리)
+CREATE TABLE IF NOT EXISTS external_factors_new (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    factor_date TEXT NOT NULL,
+    factor_type TEXT NOT NULL,
+    factor_key TEXT NOT NULL,
+    factor_value TEXT,
+    store_id TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    UNIQUE(factor_date, factor_type, factor_key, store_id)
+);
+INSERT OR IGNORE INTO external_factors_new (id, factor_date, factor_type, factor_key, factor_value, store_id, created_at) SELECT id, factor_date, factor_type, factor_key, factor_value, '', created_at FROM external_factors;
+DROP TABLE IF EXISTS external_factors;
+ALTER TABLE external_factors_new RENAME TO external_factors;
+CREATE INDEX IF NOT EXISTS idx_external_factors_date ON external_factors(factor_date);
+CREATE INDEX IF NOT EXISTS idx_external_factors_type ON external_factors(factor_type);
+CREATE INDEX IF NOT EXISTS idx_external_factors_store ON external_factors(store_id);
+    """,
+
+    58: """
+-- v58: 온보딩 플로우 (dashboard_users 확장 + invite_codes + onboarding_events)
+ALTER TABLE dashboard_users ADD COLUMN bgf_id TEXT;
+ALTER TABLE dashboard_users ADD COLUMN bgf_password_enc TEXT;
+ALTER TABLE dashboard_users ADD COLUMN store_code TEXT;
+ALTER TABLE dashboard_users ADD COLUMN store_name TEXT;
+ALTER TABLE dashboard_users ADD COLUMN onboarding_step INTEGER DEFAULT 0;
+ALTER TABLE dashboard_users ADD COLUMN active_categories TEXT DEFAULT '001,002,003,004,005,012';
+ALTER TABLE dashboard_users ADD COLUMN kakao_connected INTEGER DEFAULT 0;
+
+CREATE TABLE IF NOT EXISTS invite_codes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    code TEXT NOT NULL UNIQUE,
+    store_id TEXT,
+    created_by INTEGER,
+    used_by INTEGER,
+    is_used INTEGER DEFAULT 0,
+    expires_at TEXT,
+    created_at TEXT NOT NULL,
+    used_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_invite_codes_code ON invite_codes(code);
+
+CREATE TABLE IF NOT EXISTS onboarding_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    step INTEGER NOT NULL,
+    action TEXT NOT NULL,
+    error_code TEXT,
+    duration_sec REAL,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_onboarding_events_user ON onboarding_events(user_id);
+    """,
+
+    59: """
+-- v59: 신상품 3일발주 분산 추적 테이블
+CREATE TABLE IF NOT EXISTS new_product_3day_tracking (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    store_id TEXT NOT NULL,
+    week_label TEXT NOT NULL,
+    week_start DATE NOT NULL,
+    week_end DATE NOT NULL,
+    product_code TEXT NOT NULL,
+    product_name TEXT,
+    sub_category TEXT,
+    bgf_order_count INTEGER DEFAULT 0,
+    our_order_count INTEGER DEFAULT 0,
+    order_interval_days INTEGER,
+    next_order_date DATE,
+    skip_count INTEGER DEFAULT 0,
+    last_sale_after_order INTEGER DEFAULT 0,
+    last_checked_at DATETIME,
+    last_ordered_at DATETIME,
+    is_completed INTEGER DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(store_id, week_label, product_code)
+);
+CREATE INDEX IF NOT EXISTS idx_np3day_store_week ON new_product_3day_tracking(store_id, week_label);
+CREATE INDEX IF NOT EXISTS idx_np3day_product ON new_product_3day_tracking(product_code);
+CREATE INDEX IF NOT EXISTS idx_np3day_completed ON new_product_3day_tracking(is_completed);
+    """,
+
+    60: """
+-- v60: 신상품 3일발주 그룹핑 (base_name 기준 UNIQUE, product_codes/selected_code 추가)
+-- 운영 데이터 없으므로 DROP & CREATE
+DROP TABLE IF EXISTS new_product_3day_tracking;
+CREATE TABLE IF NOT EXISTS new_product_3day_tracking (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    store_id TEXT NOT NULL,
+    week_label TEXT NOT NULL,
+    week_start DATE NOT NULL,
+    week_end DATE NOT NULL,
+    product_code TEXT NOT NULL,
+    product_name TEXT,
+    sub_category TEXT,
+    base_name TEXT DEFAULT '',
+    product_codes TEXT DEFAULT '',
+    selected_code TEXT DEFAULT '',
+    bgf_order_count INTEGER DEFAULT 0,
+    our_order_count INTEGER DEFAULT 0,
+    order_interval_days INTEGER,
+    next_order_date DATE,
+    skip_count INTEGER DEFAULT 0,
+    last_sale_after_order INTEGER DEFAULT 0,
+    last_checked_at DATETIME,
+    last_ordered_at DATETIME,
+    is_completed INTEGER DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(store_id, week_label, base_name)
+);
+CREATE INDEX IF NOT EXISTS idx_np3day_store_week ON new_product_3day_tracking(store_id, week_label);
+CREATE INDEX IF NOT EXISTS idx_np3day_product ON new_product_3day_tracking(product_code);
+CREATE INDEX IF NOT EXISTS idx_np3day_completed ON new_product_3day_tracking(is_completed);
+CREATE INDEX IF NOT EXISTS idx_np3day_base_name ON new_product_3day_tracking(base_name);
     """,
 }
 
