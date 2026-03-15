@@ -72,6 +72,29 @@ class NewProduct3DayTrackingRepository(BaseRepository):
         finally:
             conn.close()
 
+    def get_all_active_weeks(
+        self,
+        store_id: str,
+        today: str,
+    ) -> List[Dict]:
+        """현재 날짜가 범위에 속하는 활성 주차 목록 조회 (week_end 오름차순)"""
+        conn = self._get_conn()
+        try:
+            cursor = conn.cursor()
+            cursor.execute(
+                """SELECT DISTINCT week_label, week_start, week_end
+                   FROM new_product_3day_tracking
+                   WHERE store_id = ?
+                     AND is_completed = 0
+                     AND week_start <= ?
+                     AND week_end >= ?
+                   ORDER BY week_end ASC""",
+                (store_id, today, today),
+            )
+            return [dict(row) for row in cursor.fetchall()]
+        finally:
+            conn.close()
+
     def get_active_items(
         self,
         store_id: str,

@@ -223,13 +223,26 @@ def get_today_new_product_orders(
             items_by_week[wl] = []
         items_by_week[wl].append(item)
 
-    for week_label, week_items in items_by_week.items():
+    # 마감 빠른 주차(week_end 오름차순) 우선 처리 — 주차간 중복 방지
+    sorted_weeks = sorted(
+        items_by_week.items(),
+        key=lambda x: min(i.get("week_end", "9999") for i in x[1]),
+    )
+    seen_base_names: set = set()
+
+    for week_label, week_items in sorted_weeks:
         # base_name 그룹핑
         groups = group_by_base_name(week_items)
 
         for group in groups:
             base_name = group["base_name"]
             variants = group["variants"]
+
+            # 주차간 중복 방지: 마감 빠른 주차가 이미 이 base_name을 점유
+            if base_name in seen_base_names:
+                logger.info(f"신상품3일 주차간 중복 스킵: {base_name} (week={week_label})")
+                continue
+            seen_base_names.add(base_name)
 
             # 그룹의 대표 항목에서 추적 정보 가져오기 (base_name 기반 조회)
             tracking = repo.get_group_tracking(store_id, week_label, base_name)

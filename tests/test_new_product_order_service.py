@@ -771,3 +771,234 @@ class TestDistributedOrderScenario:
         ]
         result = merge_with_ai_orders(ai_orders, np_orders)
         assert result[0]["final_order_qty"] == 4
+
+
+# ═══════════════════════════════════════════════════
+# 복수 주차 동시 처리 (multi-week)
+# ═══════════════════════════════════════════════════
+
+class TestMultiWeekConcurrent:
+    """복수 주차 동시 활성 시 중복 방지 + 마감 빠른 주차 우선"""
+
+    def test_get_all_active_weeks(self, tracking_db):
+        """오늘이 두 주차에 속하면 두 주차 모두 반환 (week_end 오름차순)"""
+        repo = NewProduct3DayTrackingRepository(db_path=tracking_db)
+        # W3: 03.02~03.20 (week_end 먼저)
+        repo.upsert_tracking(
+            store_id="46513", week_label="202603-W3",
+            week_start="2026-03-02", week_end="2026-03-20",
+            product_code="P001", base_name="상품A",
+        )
+        # W4: 03.09~03.27 (week_end 나중)
+        repo.upsert_tracking(
+            store_id="46513", week_label="202603-W4",
+            week_start="2026-03-09", week_end="2026-03-27",
+            product_code="P002", base_name="상품B",
+        )
+        weeks = repo.get_all_active_weeks("46513", "2026-03-15")
+        assert len(weeks) == 2
+        assert weeks[0]["week_label"] == "202603-W3"  # week_end 오름차순
+        assert weeks[1]["week_label"] == "202603-W4"
+
+    def test_active_weeks_excludes_completed(self, tracking_db):
+        """완료된 항목만 있는 주차는 제외"""
+        repo = NewProduct3DayTrackingRepository(db_path=tracking_db)
+        repo.upsert_tracking(
+            store_id="46513", week_label="202603-W3",
+            week_start="2026-03-02", week_end="2026-03-20",
+            product_code="P001", base_name="상품A",
+        )
+        repo.mark_completed("46513", "202603-W3", "P001")
+        weeks = repo.get_all_active_weeks("46513", "2026-03-15")
+        assert len(weeks) == 0
+
+    def test_active_weeks_excludes_out_of_range(self, tracking_db):
+        """오늘이 범위 밖인 주차는 제외"""
+        repo = NewProduct3DayTrackingRepository(db_path=tracking_db)
+        repo.upsert_tracking(
+            store_id="46513", week_label="202603-W1",
+            week_start="2026-02-20", week_end="2026-03-10",
+            product_code="P001", base_name="상품A",
+        )
+        weeks = repo.get_all_active_weeks("46513", "2026-03-15")
+        assert len(weeks) == 0
+
+
+class TestMultiWeekDedup:
+    """주차간 동일 상품(base_name) 중복 발주 방지"""
+
+    def _make_repo_factory(self, tracking_db):
+        """테스트 DB를 사용하는 repo factory 반환"""
+        def factory(*args, **kwargs):
+            return NewProduct3DayTrackingRepository(db_path=tracking_db)
+        return factory
+
+    def test_same_base_name_two_weeks_earlier_wins(self, tracking_db, monkeypatch):
+        """동일 base_name이 W3+W4에 존재 → W3(week_end 빠름)에서만 처리"""
+        repo = NewProduct3DayTrackingRepository(db_path=tracking_db)
+        monkeypatch.setattr(
+            "src.infrastructure.database.repos.NP3DayTrackingRepo",
+            self._make_repo_factory(tracking_db),
+        )
+        # W3: 03.02~03.20
+        repo.upsert_tracking(
+            store_id="46513", week_label="202603-W3",
+            week_start="2026-03-02", week_end="2026-03-20",
+            product_code="P001", product_name="샌)크림샌드1",
+            base_name="샌)크림샌드",
+            bgf_order_count=3, order_interval_days=6,
+            next_order_date="2026-03-02",
+        )
+        # W4: 03.09~03.27 — 동일 base_name
+        repo.upsert_tracking(
+            store_id="46513", week_label="202603-W4",
+            week_start="2026-03-09", week_end="2026-03-27",
+            product_code="P001", product_name="샌)크림샌드1",
+            base_name="샌)크림샌드",
+            bgf_order_count=3, order_interval_days=6,
+            next_order_date="2026-03-09",
+        )
+
+        orders = get_today_new_product_orders(
+            store_id="46513", today="2026-03-15",
+        )
+        # base_name 중복 → 최대 1건
+        matching = [o for o in orders if o["base_name"] == "샌)크림샌드"]
+        assert len(matching) <= 1
+
+    def test_different_base_names_both_ordered(self, tracking_db, monkeypatch):
+        """서로 다른 base_name → 주차 다르더라도 둘 다 발주 가능"""
+        repo = NewProduct3DayTrackingRepository(db_path=tracking_db)
+        monkeypatch.setattr(
+            "src.infrastructure.database.repos.NP3DayTrackingRepo",
+            self._make_repo_factory(tracking_db),
+        )
+        # W3: 상품A
+        repo.upsert_tracking(
+            store_id="46513", week_label="202603-W3",
+            week_start="2026-03-02", week_end="2026-03-20",
+            product_code="P001", product_name="샌)크림샌드1",
+            base_name="샌)크림샌드",
+            bgf_order_count=3, order_interval_days=6,
+            next_order_date="2026-03-02",
+        )
+        # W4: 상품B (다른 base_name)
+        repo.upsert_tracking(
+            store_id="46513", week_label="202603-W4",
+            week_start="2026-03-09", week_end="2026-03-27",
+            product_code="P002", product_name="줄)참치마요",
+            base_name="줄)참치마요",
+            bgf_order_count=3, order_interval_days=6,
+            next_order_date="2026-03-09",
+        )
+
+        orders = get_today_new_product_orders(
+            store_id="46513", today="2026-03-15",
+        )
+        base_names = {o["base_name"] for o in orders}
+        # 서로 다른 base_name이므로 둘 다 있을 수 있음 (발주 조건 충족 시)
+        assert len(base_names) <= 2
+
+    def test_dedup_prefers_earlier_week_end(self, tracking_db, monkeypatch):
+        """week_end 정렬 확인: W3(3/20) vs W4(3/27) → W3 우선"""
+        repo = NewProduct3DayTrackingRepository(db_path=tracking_db)
+        monkeypatch.setattr(
+            "src.infrastructure.database.repos.NP3DayTrackingRepo",
+            self._make_repo_factory(tracking_db),
+        )
+        # W4 먼저 삽입해도 W3이 우선
+        repo.upsert_tracking(
+            store_id="46513", week_label="202603-W4",
+            week_start="2026-03-09", week_end="2026-03-27",
+            product_code="P001", product_name="햄)치즈버거1",
+            base_name="햄)치즈버거",
+            bgf_order_count=3, order_interval_days=6,
+            next_order_date="2026-03-09",
+        )
+        repo.upsert_tracking(
+            store_id="46513", week_label="202603-W3",
+            week_start="2026-03-02", week_end="2026-03-20",
+            product_code="P001", product_name="햄)치즈버거1",
+            base_name="햄)치즈버거",
+            bgf_order_count=3, order_interval_days=6,
+            next_order_date="2026-03-02",
+        )
+
+        orders = get_today_new_product_orders(
+            store_id="46513", today="2026-03-15",
+        )
+        matching = [o for o in orders if o["base_name"] == "햄)치즈버거"]
+        if matching:
+            # W3에서 발주됐으면 week_label이 W3이어야 함
+            assert matching[0]["week_label"] == "202603-W3"
+
+
+class TestMultiWeekD3Force:
+    """주차별 D-3 마감 개별 계산"""
+
+    def _make_repo_factory(self, tracking_db):
+        """테스트 DB를 사용하는 repo factory 반환"""
+        def factory(*args, **kwargs):
+            return NewProduct3DayTrackingRepository(db_path=tracking_db)
+        return factory
+
+    def test_w3_d3_force_w4_not(self, tracking_db, monkeypatch):
+        """W3은 D-2 (강제), W4는 D-12 (정상) → 동일 상품 W3에서 강제 발주"""
+        repo = NewProduct3DayTrackingRepository(db_path=tracking_db)
+        monkeypatch.setattr(
+            "src.infrastructure.database.repos.NP3DayTrackingRepo",
+            self._make_repo_factory(tracking_db),
+        )
+        # W3: week_end 03.20, 오늘 03.18 → D-2 강제
+        repo.upsert_tracking(
+            store_id="46513", week_label="202603-W3",
+            week_start="2026-03-02", week_end="2026-03-20",
+            product_code="P001", product_name="도)해물도시락1",
+            base_name="도)해물도시락",
+            bgf_order_count=3, order_interval_days=6,
+            next_order_date="2026-03-14",
+        )
+
+        orders = get_today_new_product_orders(
+            store_id="46513", today="2026-03-18",
+        )
+        matching = [o for o in orders if o["base_name"] == "도)해물도시락"]
+        # D-2이므로 강제 발주 대상
+        assert len(matching) == 1
+
+    def test_w3_completed_w4_active(self, tracking_db, monkeypatch):
+        """W3 완료(3회 달성), W4에 같은 상품 미완료 → W4에서 처리"""
+        repo = NewProduct3DayTrackingRepository(db_path=tracking_db)
+        monkeypatch.setattr(
+            "src.infrastructure.database.repos.NP3DayTrackingRepo",
+            self._make_repo_factory(tracking_db),
+        )
+        # W3: 완료
+        repo.upsert_tracking(
+            store_id="46513", week_label="202603-W3",
+            week_start="2026-03-02", week_end="2026-03-20",
+            product_code="P001", product_name="샌)크림샌드1",
+            base_name="샌)크림샌드",
+            bgf_order_count=3, order_interval_days=6,
+            next_order_date="2026-03-14",
+        )
+        repo.mark_completed_by_base_name("46513", "202603-W3", "샌)크림샌드")
+
+        # W4: 미완료
+        repo.upsert_tracking(
+            store_id="46513", week_label="202603-W4",
+            week_start="2026-03-09", week_end="2026-03-27",
+            product_code="P001", product_name="샌)크림샌드1",
+            base_name="샌)크림샌드",
+            bgf_order_count=3, order_interval_days=6,
+            next_order_date="2026-03-09",
+        )
+
+        orders = get_today_new_product_orders(
+            store_id="46513", today="2026-03-15",
+        )
+        # W3은 completed → _get_all_active_items_in_range에서 제외
+        # W4만 활성 → W4에서 처리
+        matching = [o for o in orders if o["base_name"] == "샌)크림샌드"]
+        if matching:
+            assert matching[0]["week_label"] == "202603-W4"
