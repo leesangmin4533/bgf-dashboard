@@ -240,8 +240,8 @@ class TestShouldOrderToday:
 class TestMergeWithAiOrders:
     """AI 예측 발주 + 신상품 발주 합산"""
 
-    def test_existing_item_qty_add(self):
-        """AI 목록에 이미 있는 상품 → qty 합산"""
+    def test_existing_item_qty_unchanged(self):
+        """AI 목록에 이미 있는 상품 → qty 그대로, 추적 플래그만 True"""
         ai_orders = [
             {"item_cd": "ABC001", "item_nm": "김밥", "final_order_qty": 3, "mid_cd": "003"},
             {"item_cd": "DEF002", "item_nm": "도시락", "final_order_qty": 2, "mid_cd": "001"},
@@ -251,12 +251,12 @@ class TestMergeWithAiOrders:
         ]
         result = merge_with_ai_orders(ai_orders, np_orders)
         abc_item = [r for r in result if r.get("item_cd") == "ABC001"][0]
-        assert abc_item["final_order_qty"] == 4  # 3 + 1
-        assert "신상품3일" in abc_item.get("label", "")
+        assert abc_item["final_order_qty"] == 3  # AI 수량 그대로 (합산 안 함)
+        assert abc_item.get("np_3day_tracking") is True  # 추적 플래그
         assert abc_item.get("new_product_3day") is True
 
     def test_new_item_insert_front(self):
-        """AI 목록에 없는 신상품 → 앞에 삽입"""
+        """AI 목록에 없는 신상품 → 앞에 삽입, np_3day_tracking=True"""
         ai_orders = [
             {"item_cd": "ABC001", "item_nm": "김밥", "final_order_qty": 3, "mid_cd": "003"},
         ]
@@ -268,23 +268,26 @@ class TestMergeWithAiOrders:
         assert result[0]["item_cd"] == "NEW999"  # 앞에 삽입
         assert result[0]["final_order_qty"] == 1
         assert result[0].get("force_order") is True
+        assert result[0].get("np_3day_tracking") is True
         assert result[1]["item_cd"] == "ABC001"
 
     def test_mixed_existing_and_new(self):
-        """기존 + 신규 혼합"""
+        """기존(수량 유지+플래그) + 신규(삽입) 혼합"""
         ai_orders = [
             {"item_cd": "A001", "final_order_qty": 2},
             {"item_cd": "B002", "final_order_qty": 1},
         ]
         np_orders = [
-            {"product_code": "A001", "qty": 1},  # 기존에 합산
-            {"product_code": "C003", "product_name": "샌드위치", "qty": 1},  # 신규
+            {"product_code": "A001", "qty": 1},  # 기존 → 수량 유지, 플래그만
+            {"product_code": "C003", "product_name": "샌드위치", "qty": 1},  # 신규 삽입
         ]
         result = merge_with_ai_orders(ai_orders, np_orders)
         assert len(result) == 3
         assert result[0]["item_cd"] == "C003"
+        assert result[0].get("np_3day_tracking") is True
         a001 = [r for r in result if r.get("item_cd") == "A001"][0]
-        assert a001["final_order_qty"] == 3
+        assert a001["final_order_qty"] == 2  # AI 수량 그대로 (합산 안 함)
+        assert a001.get("np_3day_tracking") is True
 
     def test_empty_np_orders(self):
         """신상품 없으면 AI 목록 그대로"""
@@ -739,8 +742,8 @@ class TestDynamicOrderScenario:
         assert ok is True
         assert action == "force"
 
-    def test_ai_merge_total_quantity(self):
-        """총량 합산: AI 김밥 3개 + 신상품 줄김밥 1개 → 4개"""
+    def test_ai_merge_tracking_flag(self):
+        """AI 중복: 수량 유지 + np_3day_tracking 플래그"""
         ai_orders = [
             {"item_cd": "KIMBAP01", "item_nm": "김밥", "final_order_qty": 3, "mid_cd": "003"},
         ]
@@ -748,7 +751,8 @@ class TestDynamicOrderScenario:
             {"product_code": "KIMBAP01", "product_name": "줄김밥", "qty": 1},
         ]
         result = merge_with_ai_orders(ai_orders, np_orders)
-        assert result[0]["final_order_qty"] == 4
+        assert result[0]["final_order_qty"] == 3  # AI 수량 그대로
+        assert result[0].get("np_3day_tracking") is True  # 횟수 인정 플래그
 
 
 # ═══════════════════════════════════════════════════

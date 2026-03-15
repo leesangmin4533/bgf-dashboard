@@ -372,17 +372,19 @@ def merge_with_ai_orders(
     ai_orders: List[Dict],
     new_product_orders: List[Dict],
 ) -> List[Dict]:
-    """AI 예측 발주 목록에 신상품 발주 합산
+    """AI 예측 발주 목록에 신상품 3일발주 통합
 
-    - AI 목록에 이미 있는 상품: qty += 신상품 qty, 라벨 추가
-    - AI 목록에 없는 신상품: 앞에 삽입 (force_order)
+    - AI 목록에 이미 있는 상품: 수량 변경 없음, np_3day_tracking 플래그만 표시 (횟수 인정)
+    - AI 목록에 없는 신상품: 앞에 삽입 (force_order, qty=1)
+
+    발주 완료 후 np_3day_tracking=True인 상품은 모두 our_order_count += 1 처리.
 
     Args:
         ai_orders: AI 예측 발주 목록 (item_cd/final_order_qty 키)
         new_product_orders: 신상품 발주 목록 (product_code/qty 키)
 
     Returns:
-        합산된 발주 목록 (ai_orders 원본을 수정하지 않고 새 리스트 반환)
+        통합된 발주 목록 (ai_orders 원본을 수정하지 않고 새 리스트 반환)
     """
     result = list(ai_orders)
     ai_code_map = {}
@@ -397,15 +399,14 @@ def merge_with_ai_orders(
         qty = np_item.get("qty", 1)
 
         if code in ai_code_map:
-            # AI가 이미 예측한 상품 → 수량 합산
+            # AI가 이미 발주 예정 → 수량 변경 없음, 추적 플래그만 표시
+            # 발주 완료 후 our_order_count 증가 처리 (횟수 인정)
             idx = ai_code_map[code]
-            result[idx]["final_order_qty"] = result[idx].get("final_order_qty", 0) + qty
-            existing_label = result[idx].get("label", "")
-            result[idx]["label"] = (existing_label + "+신상품3일").lstrip("+")
+            result[idx]["np_3day_tracking"] = True
             result[idx]["new_product_3day"] = True
             logger.info(
-                f"신상품3일 합산: {code} AI={result[idx].get('final_order_qty', 0) - qty}+"
-                f"{qty}={result[idx].get('final_order_qty', 0)}"
+                f"신상품3일 AI중복: {code} AI수량={result[idx].get('final_order_qty', 0)} "
+                f"유지 (횟수만 인정)"
             )
         else:
             # AI 목록에 없는 신상품 → 앞에 삽입
@@ -418,6 +419,7 @@ def merge_with_ai_orders(
                 "label": "신상품3일발주",
                 "force_order": True,
                 "new_product_3day": True,
+                "np_3day_tracking": True,
                 "orderable_day": "일월화수목금토",
                 "week_label": np_item.get("week_label", ""),
             })
