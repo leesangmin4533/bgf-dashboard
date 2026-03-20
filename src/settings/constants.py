@@ -252,7 +252,7 @@ BATCH_EXPIRY_ALERT_DAYS = 1             # 폐기 N일 전 알림
 
 # DB 스키마 버전
 # =====================================================================
-DB_SCHEMA_VERSION = 60  # v60: 신상품 3일발주 그룹핑 (base_name/product_codes/selected_code)
+DB_SCHEMA_VERSION = 67  # v67: realtime_inventory stop_plan_ymd/cut_reason
 
 # =====================================================================
 # 디저트 판단 시스템
@@ -356,7 +356,14 @@ NEW_PRODUCT_DS_OVERSTOCK_RATIO = 1.5      # 과발주 방지: 재고 > 유통기
 NEW_PRODUCT_POPUP_FRAME_ID = "STBJ460_P0" # 미도입 상품 상세 팝업 프레임 ID
 NEW_PRODUCT_DS_FORCE_REMAINING_DAYS = 5  # 기간 잔여일 이하면 미달성 강제 발주 (D-5 보험)
 NEW_PRODUCT_DS_NO_SALE_INTERVAL_DAYS = 3  # 판매/폐기 없을 때 재발주 대기 간격 (일)
-NEW_PRODUCT_FOOD_SUBCATEGORIES = ["햄버거", "줄김밥", "삼각김밥", "정식도시락", "샌드위치"]  # 3일발주 대상 소분류
+NEW_PRODUCT_FOOD_MID_CDS = ["001", "002", "003", "004", "005", "014"]  # 3일발주 대상 중분류 (도시락/주먹밥/김밥/샌드위치/햄버거/디저트)
+
+# 디저트 REDUCE_ORDER 관련 상수
+DESSERT_REDUCE_ORDER_MULTIPLIER = 0.5  # REDUCE_ORDER 발주량 승수 (50% 감량)
+DESSERT_WASTE_RATE_REDUCE_THRESHOLD = 1.0  # 폐기율 100% 이상 → REDUCE_ORDER
+DESSERT_WASTE_RATE_STOP_THRESHOLD = 1.5  # 폐기율 150% 이상 → STOP_RECOMMEND
+DESSERT_CONFIRMED_STOP_WASTE_WEEKS = 2  # 폐기율 기준 CONFIRMED_STOP 연속 주 수
+DESSERT_CONFIRMED_STOP_WASTE_DAYS = 14  # 폐기율 기준 CONFIRMED_STOP 판단 기간 (일)
 
 # =====================================================================
 # 스마트발주 오버라이드 (스마트→수동 전환)
@@ -381,6 +388,7 @@ DIFF_FEEDBACK_REMOVAL_THRESHOLDS = {
 # 반복 추가 부스트
 DIFF_FEEDBACK_ADDITION_MIN_COUNT = 3      # 최소 3회 추가 시 부스트
 DIFF_FEEDBACK_ADDITION_MIN_QTY = 1        # 부스트 최소 발주 수량
+DIFF_FEEDBACK_STOCKOUT_EXCLUSION_DAYS = 7  # 제거 후 N일 내 품절 시 페널티 제외
 
 # =====================================================================
 # 소분류 내 상품 대체/잠식 감지 (Substitution/Cannibalization Detection)
