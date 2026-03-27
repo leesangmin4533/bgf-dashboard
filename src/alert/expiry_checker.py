@@ -108,11 +108,11 @@ class ExpiryChecker:
                 mid_cd = row['mid_cd']
                 current_stock = row['current_stock']
 
-                # 배송 차수 판별 (상품명 끝자리: 1=1차, 2=2차)
-                delivery_type = get_delivery_type(item_nm) or "1차"
+                # 배송 차수 판별 (order_tracking 우선 → 상품명 끝자리 폴백)
+                delivery_type = get_delivery_type(item_nm, item_cd=item_cd) or "1차"
 
-                # 실제 입고 기반 유통기한 조회 (order_tracking 또는 receiving_history)
-                actual_expiry = self._get_actual_expiry_time(item_cd, mid_cd)
+                # 실제 입고 기반 유통기한 조회 (inventory_batches → order_tracking → receiving_history)
+                actual_expiry = self._get_actual_expiry_time(item_cd, mid_cd, item_nm=item_nm)
 
                 if actual_expiry:
                     # 실제 입고 데이터 있음 - 실제 유통기한 사용
@@ -157,30 +157,58 @@ class ExpiryChecker:
         finally:
             cursor.close()
 
-    def _get_actual_expiry_time(self, item_cd: str, mid_cd: str) -> Optional[datetime]:
+    def _get_actual_expiry_time(self, item_cd: str, mid_cd: str, item_nm: str = '') -> Optional[datetime]:
         """
-        실제 입고 기반 유통기한 조회
+        실제 입고 기반 유통기한 조회 (4단계 폴백)
 
-        1. order_tracking에서 최근 입고건 조회 (arrival_time이 있는 경우)
-        2. receiving_history에서 최근 입고 조회 후 유통기한 계산
+        0순위: inventory_batches.expiry_date (datetime 포함된 것만)
+        1순위: order_tracking.expiry_time
+        2순위: receiving_history + FOOD_EXPIRY_CONFIG 기반 정밀 계산
+        3순위: delivery_utils 계산 (호출자에서 처리)
 
         Returns:
             유통기한 datetime 또는 None
         """
+        # FOOD_EXPIRY_CONFIG import (receiving_collector와 동일 상수 공유)
+        try:
+            from src.collectors.receiving_collector import FOOD_EXPIRY_CONFIG
+        except ImportError:
+            FOOD_EXPIRY_CONFIG = {}
+
         conn = self._get_connection()
         cursor = conn.cursor()
 
         try:
-            # 1. order_tracking에서 최근 입고건 조회 (잔량이 있는 경우)
             store_filter = "AND store_id = ?" if self.store_id else ""
             store_params = (self.store_id,) if self.store_id else ()
 
+            # 0순위: inventory_batches.expiry_date (datetime 포함된 것만)
+            cursor.execute(f"""
+                SELECT expiry_date FROM inventory_batches
+                WHERE item_cd = ?
+                  AND status = 'active'
+                  AND length(expiry_date) > 10
+                {store_filter}
+                ORDER BY receiving_date DESC
+                LIMIT 1
+            """, (item_cd,) + store_params)
+
+            batch_row = cursor.fetchone()
+            if batch_row and batch_row['expiry_date']:
+                for fmt in ('%Y-%m-%d %H:%M:%S', '%Y-%m-%d %H:%M'):
+                    try:
+                        return datetime.strptime(batch_row['expiry_date'], fmt)
+                    except (ValueError, TypeError):
+                        continue
+
+            # 1순위: order_tracking에서 최근 입고건 조회 (잔량이 있는 경우)
             cursor.execute(f"""
                 SELECT expiry_time, arrival_time, remaining_qty
                 FROM order_tracking
                 WHERE item_cd = ?
                 {store_filter}
                 AND remaining_qty > 0
+                AND status NOT IN ('expired', 'disposed', 'cancelled')
                 ORDER BY arrival_time DESC
                 LIMIT 1
             """, (item_cd,) + store_params)
@@ -197,9 +225,9 @@ class ExpiryChecker:
                         continue
                 return None
 
-            # 2. receiving_history에서 최근 입고 조회
+            # 2순위: receiving_history + FOOD_EXPIRY_CONFIG 기반 정밀 계산
             cursor.execute(f"""
-                SELECT receiving_date, receiving_time
+                SELECT receiving_date, receiving_time, item_nm
                 FROM receiving_history
                 WHERE item_cd = ?
                 {store_filter}
@@ -211,13 +239,32 @@ class ExpiryChecker:
             if recv_row:
                 recv_date = recv_row['receiving_date']
                 recv_time = recv_row['receiving_time'] or '00:00'
+                recv_item_nm = recv_row['item_nm'] or item_nm or ''
 
                 try:
                     recv_dt = datetime.strptime(f"{recv_date} {recv_time}", '%Y-%m-%d %H:%M')
                 except (ValueError, TypeError):
                     recv_dt = datetime.strptime(recv_date, '%Y-%m-%d')
 
-                # 푸드류 유통기한 계산 (1일)
+                # FOOD_EXPIRY_CONFIG 기반 정밀 폐기시간 계산
+                if mid_cd in FOOD_EXPIRY_CONFIG:
+                    # item_nm 끝자리로 배송차수 판별
+                    last_char = recv_item_nm.strip()[-1] if recv_item_nm.strip() else ''
+                    if last_char == '2':
+                        delivery_type = '2차'
+                    elif last_char == '1':
+                        delivery_type = '1차'
+                    else:
+                        delivery_type = None
+
+                    cfg = FOOD_EXPIRY_CONFIG.get(mid_cd, {}).get(delivery_type)
+                    if cfg:
+                        days_offset, hour = cfg
+                        recv_date_dt = datetime.strptime(recv_date, '%Y-%m-%d')
+                        expiry_dt = recv_date_dt + timedelta(days=days_offset)
+                        return expiry_dt.replace(hour=hour, minute=0, second=0)
+
+                # FOOD_EXPIRY_CONFIG에 없거나 차수 미판별: 기존 폴백 (+1일)
                 if mid_cd in ALERT_CATEGORIES:
                     expiry_dt = recv_dt + timedelta(days=1)
                     return expiry_dt
@@ -542,7 +589,8 @@ class ExpiryChecker:
             last_date = row['last_date']
 
             # sales_date = 발주일(데이터 수집일), 도착은 익일(D+1)
-            delivery_type = get_delivery_type(item_nm) or "1차"
+            item_cd = row['item_cd'] if 'item_cd' in row.keys() else None
+            delivery_type = get_delivery_type(item_nm, item_cd=item_cd) or "1차"
             try:
                 order_date = datetime.strptime(last_date, "%Y-%m-%d")
             except (ValueError, TypeError):

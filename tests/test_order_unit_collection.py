@@ -75,10 +75,12 @@ class TestClickAllRadio:
 
 
 class TestCollectAllOrderUnitQty:
+    """Selenium 폴백 경로 테스트 (Direct API는 None으로 패치)"""
+
+    DIRECT_API_PATCH = "src.collectors.order_status_collector.OrderStatusCollector._try_direct_api_order_data"
 
     def test_success_returns_items(self, collector, mock_driver):
         """정상 수집 시 item_cd, order_unit_qty 포함 리스트 반환"""
-        # click_all_radio 성공
         mock_driver.execute_script.side_effect = [
             {"success": True, "method": "api"},  # click_all_radio
             {  # dsResult 추출
@@ -90,7 +92,8 @@ class TestCollectAllOrderUnitQty:
             },
         ]
 
-        with patch("src.collectors.order_status_collector.time"):
+        with patch("src.collectors.order_status_collector.time"), \
+             patch(self.DIRECT_API_PATCH, return_value=None):
             items = collector.collect_all_order_unit_qty()
 
         assert items is not None
@@ -114,7 +117,8 @@ class TestCollectAllOrderUnitQty:
             {"error": "dsResult not found"},  # dsResult 실패
         ]
 
-        with patch("src.collectors.order_status_collector.time"):
+        with patch("src.collectors.order_status_collector.time"), \
+             patch(self.DIRECT_API_PATCH, return_value=None):
             result = collector.collect_all_order_unit_qty()
 
         assert result is None
@@ -126,7 +130,8 @@ class TestCollectAllOrderUnitQty:
             {"items": [], "total": 0},
         ]
 
-        with patch("src.collectors.order_status_collector.time"):
+        with patch("src.collectors.order_status_collector.time"), \
+             patch(self.DIRECT_API_PATCH, return_value=None):
             result = collector.collect_all_order_unit_qty()
 
         assert result == []
@@ -148,7 +153,8 @@ class TestCollectAllOrderUnitQty:
             },
         ]
 
-        with patch("src.collectors.order_status_collector.time"):
+        with patch("src.collectors.order_status_collector.time"), \
+             patch(self.DIRECT_API_PATCH, return_value=None):
             items = collector.collect_all_order_unit_qty()
 
         assert items[0]["order_unit_qty"] == 1

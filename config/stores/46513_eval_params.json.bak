@@ -1,6 +1,6 @@
 {
   "daily_avg_days": {
-    "value": 25.25,
+    "value": 29.992966,
     "default": 14.0,
     "min": 7.0,
     "max": 30.0,
@@ -9,7 +9,7 @@
     "locked": false
   },
   "weight_daily_avg": {
-    "value": 0.5802,
+    "value": 0.56,
     "default": 0.4,
     "min": 0.2,
     "max": 0.55,
@@ -18,7 +18,7 @@
     "locked": false
   },
   "weight_sell_day_ratio": {
-    "value": 0.2851,
+    "value": 0.3382,
     "default": 0.35,
     "min": 0.15,
     "max": 0.55,
@@ -27,7 +27,7 @@
     "locked": false
   },
   "weight_trend": {
-    "value": 0.1347,
+    "value": 0.1018,
     "default": 0.25,
     "min": 0.1,
     "max": 0.45,
@@ -36,7 +36,7 @@
     "locked": false
   },
   "popularity_high_percentile": {
-    "value": 85.0,
+    "value": 88.75,
     "default": 70.0,
     "min": 50.0,
     "max": 90.0,
@@ -45,7 +45,7 @@
     "locked": false
   },
   "popularity_low_percentile": {
-    "value": 37.725633,
+    "value": 15.000253,
     "default": 35.0,
     "min": 15.0,
     "max": 50.0,
@@ -54,7 +54,7 @@
     "locked": false
   },
   "exposure_urgent": {
-    "value": 0.6460929999999998,
+    "value": 0.300002,
     "default": 1.0,
     "min": 0.3,
     "max": 2.0,
@@ -63,7 +63,7 @@
     "locked": false
   },
   "exposure_normal": {
-    "value": 1.6477469999999999,
+    "value": 1.000001,
     "default": 2.0,
     "min": 1.0,
     "max": 3.5,
@@ -72,7 +72,7 @@
     "locked": false
   },
   "exposure_sufficient": {
-    "value": 2.5,
+    "value": 2.507865,
     "default": 3.0,
     "min": 2.5,
     "max": 5.0,
@@ -81,7 +81,7 @@
     "locked": false
   },
   "stockout_freq_threshold": {
-    "value": 0.24837716549999997,
+    "value": 0.25,
     "default": 0.15,
     "min": 0.05,
     "max": 0.25,
@@ -90,7 +90,7 @@
     "locked": false
   },
   "target_accuracy": {
-    "value": 0.692647,
+    "value": 0.849998,
     "default": 0.6,
     "min": 0.4,
     "max": 0.85,
@@ -99,7 +99,7 @@
     "locked": false
   },
   "calibration_decay": {
-    "value": 0.907639,
+    "value": 0.999998,
     "default": 0.7,
     "min": 0.3,
     "max": 1.0,
@@ -108,7 +108,7 @@
     "locked": false
   },
   "calibration_reversion_rate": {
-    "value": 0.15000000000000002,
+    "value": 0.170119,
     "default": 0.1,
     "min": 0.0,
     "max": 0.3,

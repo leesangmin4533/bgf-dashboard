@@ -8,6 +8,7 @@
 - 빵 유통기한 1시간 전 알림: 23:00(자정 만료)
 - 정밀 폐기 확정 (3단계): 10분 전 수집 → 판정(정시) → 10분 후 수집+확정
   폐기 시간대: 02:00, 10:00, 14:00, 22:00, 00:00
+- 매일 10:30: 발주 확정 pending 동기화 (BGF 발주현황 → pending 마킹)
 - 배송 도착 후 배치 동기화 (07:30 2차, 20:30 1차)
 - 매일 23:00: 폐기 보고서 생성 (엑셀)
 - 매일 23:30: 배치 유통기한 만료 처리 (정밀 폐기 미처리 잔여분 폴백)
@@ -26,6 +27,7 @@ Usage:
     python run_scheduler.py --batch-expire   # 배치 만료 처리 즉시 실행
     python run_scheduler.py --collect-order-unit  # 전체 품목 발주단위 수집 즉시 실행
     python run_scheduler.py --fetch-detail       # 상품 상세 정보 일괄 수집 즉시 실행
+    python run_scheduler.py --pending-sync         # 발주 pending 동기화 즉시 실행
     python run_scheduler.py --sync-waste-backfill --days 20  # 폐기전표→daily_sales 동기화 백필
 """
 
@@ -51,6 +53,10 @@ if sys.platform == "win32":
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root / "src"))
 sys.path.insert(0, str(project_root))
+
+# .env 로드 (kakao_notifier 등 모듈 레벨 환경변수 참조 전에 실행)
+from dotenv import load_dotenv
+load_dotenv(project_root / ".env")
 
 # 로그 정리 (30일 초과 삭제, 50MB 초과 잘라내기)
 from src.utils.logger import cleanup_old_logs
@@ -476,10 +482,73 @@ def expiry_confirm_wrapper(expiry_hour: int) -> Callable[[], None]:
     return wrapper
 
 
+def receiving_collect_wrapper(delivery_type: str) -> Callable[[], None]:
+    """배송 도착 후 센터매입 데이터 즉시 수집
+
+    1차 입고(20:00) 후 센터매입 데이터를 즉시 수집하여
+    delivery_confirm, 폐기 알림(21:30), 수동발주 감지(21:00) 등이
+    정확한 재고 기준으로 동작하게 함.
+    BGF 사이트 Selenium 세션을 새로 열어 ReceivingCollector로 오늘 입고분 수집.
+    """
+    def wrapper() -> None:
+        config = DELIVERY_CONFIG.get(delivery_type, {})
+        arrival_hour = config.get("arrival_hour", "?")
+
+        logger.info("=" * 60)
+        logger.info(f"Receiving collect ({delivery_type}, "
+                    f"도착 {arrival_hour:02d}:00) at {datetime.now().isoformat()}")
+        logger.info("=" * 60)
+
+        def collect_task(ctx):
+            try:
+                from src.sales_analyzer import SalesAnalyzer
+                from src.collectors.receiving_collector import ReceivingCollector
+                from src.settings.timing import SA_LOGIN_WAIT, SA_POPUP_CLOSE_WAIT
+
+                today_str = datetime.now().strftime("%Y%m%d")
+
+                analyzer = SalesAnalyzer()
+                try:
+                    analyzer.setup_driver()
+                    analyzer.connect()
+                    time.sleep(SA_LOGIN_WAIT)
+
+                    if not analyzer.do_login():
+                        logger.error(f"[{ctx.store_id}] BGF 로그인 실패")
+                        return {"success": False, "error": "login_failed"}
+
+                    time.sleep(SA_POPUP_CLOSE_WAIT * 2)
+                    analyzer.close_popup()
+                    time.sleep(SA_POPUP_CLOSE_WAIT)
+
+                    recv_collector = ReceivingCollector(
+                        driver=analyzer.driver,
+                        store_id=ctx.store_id,
+                    )
+
+                    if recv_collector.navigate_to_receiving_menu():
+                        stats = recv_collector.collect_and_save(today_str)
+                        recv_collector.close_receiving_menu()
+                        logger.info(f"[{ctx.store_id}] 입고 수집 완료: {stats}")
+                        return {"success": True, "stats": stats}
+                    else:
+                        logger.warning(f"[{ctx.store_id}] 센터매입 메뉴 이동 실패")
+                        return {"success": False, "error": "navigate_failed"}
+                finally:
+                    analyzer.close()
+            except Exception as e:
+                logger.error(f"[{ctx.store_id}] Receiving collect error: {e}")
+                return {"success": False, "error": str(e)}
+
+        _run_task(collect_task, f"ReceivingCollect({delivery_type})")
+
+    return wrapper
+
+
 def delivery_confirm_wrapper(delivery_type: str) -> Callable[[], None]:
     """배송 도착 후 배치 동기화 래퍼
 
-    1차 도착(20:00) -> 20:30 실행
+    1차 도착(20:00) -> 20:40 실행 (receiving_collect 후)
     2차 도착(07:00) -> 07:30 실행
 
     배치 만료 체크 + 만료 임박 상품 로깅
@@ -646,6 +715,41 @@ def pre_alert_collection_wrapper(expiry_hour: int) -> Callable[[], None]:
     return wrapper
 
 
+def promotion_alert_wrapper() -> None:
+    """행사 변경 알림 (매일 08:30)
+
+    send_daily_alert: 3일 내 행사 시작/종료 알림
+    send_critical_alert: 종료 D-1 이내 긴급 알림
+    """
+    logger.info("=" * 60)
+    logger.info(f"Promotion alert at {datetime.now().isoformat()}")
+    logger.info("=" * 60)
+
+    def alert_task(ctx):
+        try:
+            from src.notification.kakao_notifier import KakaoNotifier, DEFAULT_REST_API_KEY
+            from src.alert.promotion_alert import PromotionAlert
+
+            notifier = KakaoNotifier(DEFAULT_REST_API_KEY)
+            if not notifier.ensure_valid_token():
+                logger.warning(f"[{ctx.store_id}] 카카오 토큰 갱신 실패 — 행사 알림 건너뜀")
+                return {"success": False, "error": "token_failed"}
+
+            alert = PromotionAlert(kakao_notifier=notifier, store_id=ctx.store_id)
+            daily_msg = alert.send_daily_alert(send_kakao=True)
+            critical_msg = alert.send_critical_alert(send_kakao=True)
+
+            logger.info(f"[{ctx.store_id}] 행사 알림 완료 — "
+                        f"일일: {'발송' if daily_msg else '없음'}, "
+                        f"긴급: {'발송' if critical_msg else '없음'}")
+            return {"success": True}
+        except Exception as e:
+            logger.error(f"[{ctx.store_id}] Promotion alert error: {e}")
+            return {"success": False, "error": str(e)}
+
+    _run_task(alert_task, "PromotionAlert")
+
+
 def token_refresh_wrapper() -> None:
     """카카오 토큰 사전 갱신 (매일 06:30)
 
@@ -744,6 +848,11 @@ def ml_train_wrapper(incremental: bool = False) -> None:
     Args:
         incremental: True면 증분학습(30일), False면 전체학습(90일)
     """
+    # 일요일 증분 스킵: 03:00 전체학습(90일)이 증분(30일)을 포함하므로 중복
+    if incremental and datetime.now().weekday() == 6:  # 0=월, 6=일
+        logger.info("[MLTrain] 일요일 전체학습 완료 — 증분 건너뜀")
+        return
+
     mode = "증분(30일)" if incremental else "전체(90일)"
     logger.info("=" * 60)
     logger.info(f"ML model training ({mode}) at {datetime.now().isoformat()}")
@@ -801,6 +910,32 @@ def bayesian_optimize_wrapper() -> None:
     _run_task(task, "BayesianOptimize")
 
 
+def payday_analyze_wrapper() -> None:
+    """주간 급여일 패턴 분석 (일요일 03:30)
+
+    매장별 daily_sales 90일 데이터에서 고매출/저매출 구간을 통계적으로 감지하여
+    external_factors(factor_type='payday')에 boost_days/decline_days를 저장한다.
+    get_payday_coefficient()가 DB 우선 조회로 동적 구간을 활용하게 된다.
+    """
+    logger.info("=" * 60)
+    logger.info(f"Payday pattern analysis at {datetime.now().isoformat()}")
+    logger.info("=" * 60)
+
+    def task(ctx):
+        from src.settings.constants import PAYDAY_ENABLED
+        if not PAYDAY_ENABLED:
+            return {"skipped": True, "reason": "PAYDAY_ENABLED=False"}
+
+        from src.prediction.payday_analyzer import PaydayAnalyzer
+        analyzer = PaydayAnalyzer(
+            store_id=ctx.store_id,
+            db_path=str(ctx.db_path),
+        )
+        return analyzer.analyze()
+
+    _run_task(task, "PaydayAnalyze")
+
+
 def inventory_verify_wrapper() -> None:
     """주간 재고 검증 (수요일 02:00)
 
@@ -812,7 +947,9 @@ def inventory_verify_wrapper() -> None:
     logger.info("=" * 60)
 
     try:
-        sys.path.insert(0, str(Path(__file__).parent / "scripts"))
+        scripts_path = str(Path(__file__).parent / "scripts")
+        if scripts_path not in sys.path:
+            sys.path.insert(0, scripts_path)
         from scripts.verify_inventory_direct_api import run_verification_all_stores
 
         excel_path = run_verification_all_stores(
@@ -976,7 +1113,7 @@ def dessert_biweekly_wrapper() -> None:
 
 
 def dessert_monthly_wrapper() -> None:
-    """디저트 카테고리 C/D 월간 판단 (매일 22:30, 매월 1일만 실행)"""
+    """디저트 카테고리 C/D 월간 판단 (매일 22:25, 매월 1일만 실행)"""
     if datetime.now().day != 1:
         return
     dessert_decision_wrapper(["C", "D"])
@@ -1023,6 +1160,72 @@ def beverage_monthly_wrapper() -> None:
     beverage_decision_wrapper(["C", "D"])
 
 
+def monthly_store_analysis_wrapper() -> None:
+    """매월 1일 전체 매장 상권 재분석 (매일 04:00, 1일에만 실제 동작)"""
+    if datetime.now().day != 1:
+        return
+    logger.info("[스케줄] 월간 상권 분석 시작")
+    try:
+        from src.infrastructure.database.connection import DBRouter
+        conn = DBRouter.get_common_connection()
+        try:
+            rows = conn.execute(
+                "SELECT store_id FROM stores WHERE lat IS NOT NULL AND lng IS NOT NULL"
+            ).fetchall()
+        finally:
+            conn.close()
+
+        from src.application.services.analysis_service import run_store_analysis
+        for row in rows:
+            try:
+                run_store_analysis(row[0])
+                logger.info("[스케줄] 상권분석 완료: %s", row[0])
+            except Exception as e:
+                logger.warning("[스케줄] 상권분석 실패: %s — %s", row[0], e)
+
+        logger.info("[스케줄] 월간 상권 분석 완료 (%d개 매장)", len(rows))
+    except Exception as e:
+        logger.error("[스케줄] 월간 상권분석 오류: %s", e)
+
+
+def pending_sync_wrapper() -> None:
+    """발주 확정 pending 동기화 (매일 10:30)
+
+    BGF 로그인 → 발주현황 조회 → pending 마킹 → 만료 클리어
+    07:00 발주 완료 후 BGF 반영 확인용 독립 세션.
+    """
+    logger.info("=" * 60)
+    logger.info(f"Pending sync at {datetime.now().isoformat()}")
+    logger.info("=" * 60)
+
+    from src.application.use_cases.pending_sync_flow import PendingSyncFlow
+
+    _run_task(
+        task_fn=lambda ctx: PendingSyncFlow(store_ctx=ctx).run(),
+        task_name="PendingSync"
+    )
+
+
+def second_delivery_adjustment_wrapper() -> None:
+    """D-1: 2차 배송 보정 (매일 14:00)
+
+    Phase 1: DB 판단 (부스트 대상 결정, Selenium 불필요)
+    Phase 2: 부스트 대상 있을 때만 Selenium 세션 시작 → 추가 발주
+    """
+    logger.info("=" * 60)
+    logger.info(f"D-1 Second Delivery Adjustment at {datetime.now().isoformat()}")
+    logger.info("=" * 60)
+
+    try:
+        from src.scheduler.daily_job import run_second_delivery_adjustment
+        result = run_second_delivery_adjustment()
+        logger.info(f"[D-1] 완료: {result}")
+    except Exception as e:
+        logger.error(f"[D-1] 실행 실패: {e}")
+        import traceback
+        traceback.print_exc()
+
+
 def detail_fetch_wrapper() -> None:
     """상품 상세 정보 일괄 수집 (매일 01:00)
 
@@ -1067,17 +1270,6 @@ def detail_fetch_wrapper() -> None:
             stats = collector.collect_all()
 
             logger.info(f"[DetailFetch] 결과: {stats}")
-
-            # 3. 카카오 알림 (선택)
-            if stats["success"] > 0:
-                try:
-                    notifier = KakaoNotifier(rest_api_key=DEFAULT_REST_API_KEY)
-                    notifier.send_to_me(
-                        f"상품상세 수집 완료: "
-                        f"성공 {stats['success']}/{stats['total']}건"
-                    )
-                except Exception:
-                    pass
 
         finally:
             analyzer.close()
@@ -1136,9 +1328,12 @@ def run_scheduler(schedule_time: str = "07:00", multi_store: bool = True) -> Non
     # DB 초기화
     init_db()
 
-    # 0. 카카오 토큰 사전 갱신 (매일 06:30)
+    # 0. 카카오 토큰 사전 갱신 (매일 06:30, 18:00)
+    #    access_token 유효기간 6시간 → 06:30 갱신분이 ~12:30 만료
+    #    18:00 추가 갱신으로 저녁 알림(21:30, 23:00 등) 401 재시도 방지
     schedule.every().day.at("06:30").do(token_refresh_wrapper)
-    logger.info("[Schedule] Kakao token refresh: 06:30")
+    schedule.every().day.at("18:00").do(token_refresh_wrapper)
+    logger.info("[Schedule] Kakao token refresh: 06:30, 18:00")
 
     # 1. 매일 지정 시간에 데이터 수집 + 자동 발주 실행
     if multi_store:
@@ -1203,13 +1398,19 @@ def run_scheduler(schedule_time: str = "07:00", multi_store: bool = True) -> Non
     schedule.every().monday.at("08:00").do(weekly_report_wrapper)
     logger.info("[Schedule] Weekly trend report: Monday 08:00")
 
+    # 4.5 행사 변경 알림 (매일 08:30)
+    schedule.every().day.at("08:30").do(promotion_alert_wrapper)
+    logger.info("[Schedule] Promotion alert: 08:30")
+
     # 5. 배송 도착 후 배치 동기화
     # 2차 배송 도착(07:00) -> 07:30 배치 체크
     schedule.every().day.at("07:30").do(delivery_confirm_wrapper("2차"))
     logger.info("[Schedule] Delivery confirm (2차): 07:30")
-    # 1차 배송 도착(20:00) -> 20:30 배치 체크
-    schedule.every().day.at("20:30").do(delivery_confirm_wrapper("1차"))
-    logger.info("[Schedule] Delivery confirm (1차): 20:30")
+    # 1차 배송 도착(20:00) -> 20:30 입고 수집 -> 20:40 배치 체크
+    schedule.every().day.at("20:30").do(receiving_collect_wrapper("1차"))
+    logger.info("[Schedule] Receiving collect (1차): 20:30")
+    schedule.every().day.at("20:40").do(delivery_confirm_wrapper("1차"))
+    logger.info("[Schedule] Delivery confirm (1차): 20:40")
 
     # 6. 일일 폐기 보고서 (매일 23:00)
     schedule.every().day.at("23:00").do(waste_report_wrapper)
@@ -1245,6 +1446,11 @@ def run_scheduler(schedule_time: str = "07:00", multi_store: bool = True) -> Non
     schedule.every().sunday.at("23:00").do(bayesian_optimize_wrapper)
     logger.info("[Schedule] Bayesian parameter optimization: Sunday 23:00")
 
+    # 16. 급여일 패턴 분석 (매주 일요일 03:30)
+    # ML 전체학습(03:00) 직후, daily_sales 90일 분석 → boost/decline 구간 감지
+    schedule.every().sunday.at("03:30").do(payday_analyze_wrapper)
+    logger.info("[Schedule] Payday pattern analysis: Sunday 03:30")
+
     # 14. 디저트 발주 유지/정지 판단
     # Cat A: 매주 월요일 22:00
     schedule.every().monday.at("22:00").do(dessert_weekly_wrapper)
@@ -1252,9 +1458,10 @@ def run_scheduler(schedule_time: str = "07:00", multi_store: bool = True) -> Non
     # Cat B: 매주 월요일 22:15 (ISO 짝수주만 실행)
     schedule.every().monday.at("22:15").do(dessert_biweekly_wrapper)
     logger.info("[Schedule] Dessert decision (Cat B biweekly): Monday 22:15")
-    # Cat C/D: 매일 22:30 (매월 1일만 실행)
-    schedule.every().day.at("22:30").do(dessert_monthly_wrapper)
-    logger.info("[Schedule] Dessert decision (Cat C/D monthly): daily 22:30 (1st only)")
+    # Cat C/D: 매일 22:25 (매월 1일만 실행)
+    #    22:30 beverage_weekly(A)와 충돌 방지를 위해 5분 선행
+    schedule.every().day.at("22:25").do(dessert_monthly_wrapper)
+    logger.info("[Schedule] Dessert decision (Cat C/D monthly): daily 22:25 (1st only)")
 
     # 15. 음료 발주 유지/정지 판단
     # Cat A: 매주 월요일 22:30
@@ -1267,10 +1474,24 @@ def run_scheduler(schedule_time: str = "07:00", multi_store: bool = True) -> Non
     schedule.every().day.at("23:00").do(beverage_monthly_wrapper)
     logger.info("[Schedule] Beverage decision (Cat C/D monthly): daily 23:00 (1st only)")
 
-    # 13. 주간 재고 검증 (매주 수요일 02:00)
-    # 전 매장 BGF 실재고 vs DB 비교 + 불일치 동기화 + 엑셀 리포트
-    schedule.every().wednesday.at("02:00").do(inventory_verify_wrapper)
-    logger.info("[Schedule] Weekly inventory verification: Wednesday 02:00")
+    # 13. 발주 확정 pending 동기화 (매일 10:30)
+    # 07:00 발주 후 BGF 반영 확인 → order_tracking pending 마킹
+    schedule.every().day.at("10:30").do(pending_sync_wrapper)
+    logger.info("[Schedule] Pending sync: 10:30")
+
+    # 14. D-1 2차 배송 보정 (매일 14:00)
+    schedule.every().day.at("14:00").do(second_delivery_adjustment_wrapper)
+    logger.info("[Schedule] D-1 Second delivery adjustment: daily 14:00")
+
+    # 14. 주간 재고 검증 (매주 수요일 03:00)
+    #    02:00 → 03:00 이동: 정밀 폐기 3단계(01:50→02:00→02:10)와 충돌 방지
+    #    일요일 ML 전체학습(03:00)과는 요일이 달라 안전
+    schedule.every().wednesday.at("03:00").do(inventory_verify_wrapper)
+    logger.info("[Schedule] Weekly inventory verification: Wednesday 03:00")
+
+    # 15. 월간 상권 분석 (매일 04:00, 매월 1일에만 실행)
+    schedule.every().day.at("04:00").do(monthly_store_analysis_wrapper)
+    logger.info("[Schedule] Monthly store analysis: daily 04:00 (1st only)")
 
     logger.info("=" * 60)
 
@@ -1409,6 +1630,11 @@ if __name__ == "__main__":
         help="Run beverage decision immediately (e.g., --beverage-decision A B or --beverage-decision for all)"
     )
     parser.add_argument(
+        "--pending-sync",
+        action="store_true",
+        help="Run pending sync immediately"
+    )
+    parser.add_argument(
         "--multi-store",
         action="store_true",
         default=True,
@@ -1449,6 +1675,27 @@ if __name__ == "__main__":
         help="Filter auto-order to specific date(s) only (YYYY-MM-DD). "
              "Can be specified multiple times. (e.g., --order-date 2026-03-01)"
     )
+    parser.add_argument(
+        "--backfill-hourly-detail",
+        type=int,
+        nargs='?',
+        const=180,
+        default=None,
+        metavar="DAYS",
+        help="Backfill hourly sales detail data (default: 180 days = 6 months)"
+    )
+    parser.add_argument(
+        "--start-date",
+        type=str,
+        default=None,
+        help="Start date for backfill (YYYY-MM-DD, used with --backfill-hourly-detail)"
+    )
+    parser.add_argument(
+        "--end-date",
+        type=str,
+        default=None,
+        help="End date for backfill (YYYY-MM-DD, used with --backfill-hourly-detail)"
+    )
     args = parser.parse_args()
 
     # --single-store면 멀티 비활성, 아니면 기본 멀티
@@ -1486,6 +1733,78 @@ if __name__ == "__main__":
                 logger.warning(f"[CloudSync] 건너뜀: {result.get('reason')}")
             else:
                 logger.error(f"[CloudSync] 실패: {result.get('error', result.get('failed', []))}")
+        elif args.backfill_hourly_detail is not None:
+            init_db()
+            days = args.backfill_hourly_detail
+            start_date = getattr(args, 'start_date', None)
+            end_date = getattr(args, 'end_date', None)
+            range_desc = f"{days} days"
+            if start_date:
+                range_desc = f"from {start_date}"
+            if end_date:
+                range_desc += f" to {end_date}"
+            logger.info(f"[HSD Backfill] Starting hourly sales detail backfill ({range_desc})...")
+            from src.application.services.hourly_detail_service import HourlyDetailService
+            if args.store:
+                store_ids = [args.store]
+            else:
+                store_ids = _runner.get_active_store_ids() if _MULTI_STORE else [_DEFAULT_STORE["store_id"]]
+            from src.sales_analyzer import SalesAnalyzer
+            for sid in store_ids:
+                logger.info(f"[HSD Backfill] Store {sid}: {range_desc}")
+                analyzer = SalesAnalyzer(store_id=sid)
+                try:
+                    logger.info(f"[HSD Backfill] BGF 사이트 로그인 중...")
+                    analyzer.setup_driver()
+                    analyzer.connect()
+                    if not analyzer.do_login():
+                        logger.error(f"[HSD Backfill] Store {sid}: 로그인 실패")
+                        continue
+                    driver = analyzer.driver
+                    if not driver:
+                        logger.error(f"[HSD Backfill] Store {sid}: 드라이버 연결 실패")
+                        continue
+                    # 로그인 후 팝업 닫기 + 메인 페이지 로딩 대기
+                    import time as _time
+                    _time.sleep(2)
+                    analyzer.close_popup()
+                    _time.sleep(1)
+                    logger.info("[HSD Backfill] 메인 페이지 로딩 대기...")
+                    for _wait_i in range(20):
+                        try:
+                            _ready = driver.execute_script("""
+                                try {
+                                    var app = nexacro.getApplication();
+                                    var top = app.mainframe.HFrameSet00.VFrameSet00.TopFrame;
+                                    return top && top.form ? true : false;
+                                } catch(e) { return false; }
+                            """)
+                            if _ready:
+                                logger.info("[HSD Backfill] 메인 페이지 로딩 완료")
+                                break
+                        except Exception:
+                            pass
+                        _time.sleep(0.5)
+                    else:
+                        logger.warning("[HSD Backfill] 메인 페이지 로딩 타임아웃 — 계속 진행")
+                    service = HourlyDetailService(store_id=sid, driver=driver)
+                    stats = service.backfill(
+                        days=days,
+                        driver=driver,
+                        start_date=start_date,
+                        end_date=end_date,
+                    )
+                    logger.info(f"[HSD Backfill] Store {sid} done: {stats}")
+                except KeyboardInterrupt:
+                    logger.info("[HSD Backfill] 사용자 중단")
+                    break
+                except Exception as e:
+                    logger.error(f"[HSD Backfill] Store {sid} 실패: {e}")
+                finally:
+                    try:
+                        analyzer.close()
+                    except Exception:
+                        pass
         elif args.collect_order_unit:
             init_db()
             order_unit_collect_wrapper()
@@ -1500,6 +1819,9 @@ if __name__ == "__main__":
             init_db()
             cats = args.beverage_decision if args.beverage_decision else ["A", "B", "C", "D"]
             beverage_decision_wrapper(cats)
+        elif args.pending_sync:
+            init_db()
+            pending_sync_wrapper()
         elif args.bayesian_optimize:
             init_db()
             bayesian_optimize_wrapper()

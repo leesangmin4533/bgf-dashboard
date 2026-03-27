@@ -79,13 +79,10 @@ def is_daily_necessity_category(mid_cd: str) -> bool:
     return mid_cd in DAILY_NECESSITY_CATEGORIES
 
 
-def _get_db_path() -> str:
-    """DB 경로 반환
-
-    Returns:
-        bgf_sales.db의 절대 경로 문자열
-    """
-    return str(Path(__file__).parent.parent.parent.parent / "data" / "bgf_sales.db")
+def _get_db_path(store_id: str = None) -> str:
+    """DB 경로 반환"""
+    from src.infrastructure.database.connection import resolve_db_path
+    return resolve_db_path(store_id=store_id)
 
 
 def _learn_weekday_pattern(mid_cd: str, db_path: str = None, min_data_days: int = 14,
@@ -105,7 +102,7 @@ def _learn_weekday_pattern(mid_cd: str, db_path: str = None, min_data_days: int 
         요일별 계수 딕셔너리 {0: 계수, 1: 계수, ..., 6: 계수}
     """
     if db_path is None:
-        db_path = _get_db_path()
+        db_path = _get_db_path(store_id)
 
     try:
         conn = sqlite3.connect(db_path)
@@ -191,7 +188,7 @@ def analyze_daily_necessity_pattern(
     config = DAILY_NECESSITY_DYNAMIC_SAFETY_CONFIG
 
     if db_path is None:
-        db_path = _get_db_path()
+        db_path = _get_db_path(store_id)
 
     # 요일 계수 학습
     weekday_coefs = _learn_weekday_pattern(mid_cd, db_path, config["min_data_days"], store_id=store_id)

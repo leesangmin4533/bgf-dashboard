@@ -79,7 +79,7 @@ class TestGetFoodExpiryGroup:
         """초단기 그룹 (0~1일): 당일 폐기 상품"""
         group_name, group_cfg = get_food_expiry_group(days)
         assert group_name == expected_group
-        assert group_cfg["safety_days"] == 0.5
+        assert group_cfg["safety_days"] == 0.7  # 0.5→0.7 (need-qty-fix: gap 흡수)
 
     @pytest.mark.unit
     @pytest.mark.parametrize("days,expected_group", [
@@ -90,7 +90,7 @@ class TestGetFoodExpiryGroup:
         """단기 그룹 (2~3일): 샌드위치, 일부 빵"""
         group_name, group_cfg = get_food_expiry_group(days)
         assert group_name == expected_group
-        assert group_cfg["safety_days"] == 0.7
+        assert group_cfg["safety_days"] == 0.8  # 0.7→0.8 (need-qty-fix: gap 흡수)
 
     @pytest.mark.unit
     @pytest.mark.parametrize("days,expected_group", [

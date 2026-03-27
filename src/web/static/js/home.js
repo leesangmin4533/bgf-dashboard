@@ -62,7 +62,7 @@ async function loadHomeData() {
         // 7일 스파크라인 차트
         if (data.order_trend_7d) {
             renderSparkline('homeOrderSpark', data.order_trend_7d);
-            renderSparklineChart('sparkOrderChart', data.order_trend_7d, '#6366f1');
+            renderSparklineChart('sparkOrderChart', data.order_trend_7d, '#F43F5E');
         }
         if (data.sales_trend_7d) {
             renderSparklineChart('sparkSalesChart', data.sales_trend_7d, '#22c55e');

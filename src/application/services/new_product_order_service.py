@@ -16,7 +16,6 @@ from typing import List, Dict, Optional, Callable
 from src.settings.constants import (
     NEW_PRODUCT_DS_MIN_ORDERS,
     NEW_PRODUCT_INTRO_ORDER_QTY,
-    NEW_PRODUCT_DS_FORCE_REMAINING_DAYS,
     NEW_PRODUCT_DS_NO_SALE_INTERVAL_DAYS,
 )
 from src.utils.logger import get_logger
@@ -202,6 +201,7 @@ def should_order_today(
         return True, "첫 발주 — 즉시 실행", "order"
 
     # D-5 이내 미달성 → 강제 발주 (보험)
+    from src.settings.constants import NEW_PRODUCT_DS_FORCE_REMAINING_DAYS
     remaining_days = (end_dt - today_dt).days
     if remaining_days <= NEW_PRODUCT_DS_FORCE_REMAINING_DAYS:
         logger.info(

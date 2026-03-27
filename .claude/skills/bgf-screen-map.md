@@ -42,6 +42,8 @@
 | 메뉴 경로 | 프레임 ID | 용도 | 수집기 |
 |-----------|-----------|------|--------|
 | 매출분석 > 시간대별 매출 | STAJ001_M0 | 판매 데이터 수집 | SalesCollector |
+| 매출분석 > 중분류별 매출 구성비 | STMB011_M0 | 중분류별 매출 수집 (Direct API) | DirectSalesFetcher |
+| 매출분석 > 시간대별 매출 정보 | STMB010_M0 | 시간대별 매출 수집 (Direct API) | HourlySalesCollector |
 | 발주 > 단품별 발주 | STBJ030_M0 | 미입고/행사 조회, 발주 실행 | OrderPrepCollector, OrderExecutor |
 | 발주 > 카테고리 발주 | STBJ010_M0 | 카테고리별 발주 | (미사용) |
 | 검수전표 > 센터매입 조회 | (별도) | 입고 데이터 수집 | ReceivingCollector |

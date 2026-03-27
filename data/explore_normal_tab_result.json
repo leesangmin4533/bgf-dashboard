@@ -1,0 +1,622 @@
+{
+  "timestamp": "2026-02-26T09:44:16.695002",
+  "store_id": "46513",
+  "tab_counts": {
+    "전체": 580,
+    "일반": 513,
+    "자동": 29,
+    "스마트": 38
+  },
+  "dsResult_normal_tab": {
+    "col_count": 39,
+    "columns": [
+      {
+        "name": "MID_CD_GROUP",
+        "size": 7,
+        "type": "STRING"
+      },
+      {
+        "name": "MID_CD",
+        "size": 3,
+        "type": "STRING"
+      },
+      {
+        "name": "MID_NM",
+        "size": 30,
+        "type": "STRING"
+      },
+      {
+        "name": "ORD_YMD",
+        "size": 8,
+        "type": "STRING"
+      },
+      {
+        "name": "ITEM_CD",
+        "size": 13,
+        "type": "STRING"
+      },
+      {
+        "name": "JIP_ITEM_CD",
+        "size": 13,
+        "type": "STRING"
+      },
+      {
+        "name": "PYUNSU_ID",
+        "size": 1,
+        "type": "STRING"
+      },
+      {
+        "name": "ITEM_NM",
+        "size": 36,
+        "type": "STRING"
+      },
+      {
+        "name": "ITEM_SPEC",
+        "size": 18,
+        "type": "STRING"
+      },
+      {
+        "name": "ORD_INPUT_ID",
+        "size": 75,
+        "type": "STRING"
+      },
+      {
+        "name": "ORD_UNIT_QTY",
+        "size": 5,
+        "type": "BIGDECIMAL"
+      },
+      {
+        "name": "PYUN_QTY",
+        "size": 5,
+        "type": "BIGDECIMAL"
+      },
+      {
+        "name": "ORD_CNT",
+        "size": 16,
+        "type": "BIGDECIMAL"
+      },
+      {
+        "name": "ITEM_WONGA",
+        "size": 9,
+        "type": "BIGDECIMAL"
+      },
+      {
+        "name": "WONGA_AMT",
+        "size": 16,
+        "type": "BIGDECIMAL"
+      },
+      {
+        "name": "HQ_MAEGA_SET",
+        "size": 16,
+        "type": "BIGDECIMAL"
+      },
+      {
+        "name": "ORD_AMT",
+        "size": 16,
+        "type": "BIGDECIMAL"
+      },
+      {
+        "name": "ORD_TURN_HMS",
+        "size": 6,
+        "type": "STRING"
+      },
+      {
+        "name": "MODIFY_FLAG",
+        "size": 16,
+        "type": "BIGDECIMAL"
+      },
+      {
+        "name": "ORD_MULT_LLMT",
+        "size": 5,
+        "type": "BIGDECIMAL"
+      },
+      {
+        "name": "ORD_MULT_ULMT",
+        "size": 5,
+        "type": "BIGDECIMAL"
+      },
+      {
+        "name": "NOW_QTY",
+        "size": 16,
+        "type": "BIGDECIMAL"
+      },
+      {
+        "name": "ORD_PSS_ID",
+        "size": 1,
+        "type": "STRING"
+      },
+      {
+        "name": "NAP_NEXTORD",
+        "size": 6,
+        "type": "STRING"
+      },
+      {
+        "name": "IMG_CHK",
+        "size": 1,
+        "type": "STRING"
+      },
+      {
+        "name": "IMG_URL",
+        "size": 75,
+        "type": "STRING"
+      },
+      {
+        "name": "EVT_DC_YMD",
+        "size": 55,
+        "type": "STRING"
+      },
+      {
+        "name": "EVT_DC_RATE",
+        "size": 85,
+        "type": "STRING"
+      },
+      {
+        "name": "RB_AMT",
+        "size": 20,
+        "type": "STRING"
+      },
+      {
+        "name": "RB_CON",
+        "size": 50,
+        "type": "STRING"
+      },
+      {
+        "name": "RB_YMD",
+        "size": 30,
+        "type": "STRING"
+      },
+      {
+        "name": "RT_YMD",
+        "size": 19,
+        "type": "STRING"
+      },
+      {
+        "name": "STOP_PLAN_YMD",
+        "size": 10,
+        "type": "STRING"
+      },
+      {
+        "name": "CUT_ITEM_YN",
+        "size": 1,
+        "type": "STRING"
+      },
+      {
+        "name": "CT_ITEM_YN",
+        "size": 1,
+        "type": "STRING"
+      },
+      {
+        "name": "PITEM_ID",
+        "size": 2,
+        "type": "STRING"
+      },
+      {
+        "name": "PITEM_ID_NM",
+        "size": 4000,
+        "type": "STRING"
+      },
+      {
+        "name": "ITEM_SUPORT_INFO",
+        "size": 35,
+        "type": "STRING"
+      },
+      {
+        "name": "PITEM_ID_CSS",
+        "size": 17,
+        "type": "STRING"
+      }
+    ],
+    "dataset": "dsResult",
+    "row_count": 513,
+    "samples": [
+      {
+        "CT_ITEM_YN": "0",
+        "CUT_ITEM_YN": "0",
+        "EVT_DC_RATE": "",
+        "EVT_DC_YMD": "",
+        "HQ_MAEGA_SET": "5500",
+        "IMG_CHK": "1",
+        "IMG_URL": "8809196617779_S.jpg",
+        "ITEM_CD": "8809196617779",
+        "ITEM_NM": "도)동원리챔앤참치김치1",
+        "ITEM_SPEC": "425G",
+        "ITEM_SUPORT_INFO": "",
+        "ITEM_WONGA": "3650",
+        "JIP_ITEM_CD": "8809196617779",
+        "MID_CD": "001",
+        "MID_CD_GROUP": "001 1회차",
+        "MID_NM": "도시락",
+        "MODIFY_FLAG": "1",
+        "NAP_NEXTORD": "28(27)",
+        "NOW_QTY": "0",
+        "ORD_AMT": "0",
+        "ORD_CNT": "0",
+        "ORD_INPUT_ID": "발주수정(재택)",
+        "ORD_MULT_LLMT": "1",
+        "ORD_MULT_ULMT": "99",
+        "ORD_PSS_ID": "0",
+        "ORD_TURN_HMS": "100000",
+        "ORD_UNIT_QTY": "1",
+        "ORD_YMD": "20260226",
+        "PITEM_ID": "2",
+        "PITEM_ID_CSS": "",
+        "PITEM_ID_NM": "",
+        "PYUNSU_ID": "1",
+        "PYUN_QTY": "0",
+        "RB_AMT": "",
+        "RB_CON": "",
+        "RB_YMD": "",
+        "RT_YMD": "",
+        "STOP_PLAN_YMD": "",
+        "WONGA_AMT": "0"
+      },
+      {
+        "CT_ITEM_YN": "0",
+        "CUT_ITEM_YN": "0",
+        "EVT_DC_RATE": "",
+        "EVT_DC_YMD": "",
+        "HQ_MAEGA_SET": "5500",
+        "IMG_CHK": "1",
+        "IMG_URL": "8800336394352_S.jpg",
+        "ITEM_CD": "8800336394352",
+        "ITEM_NM": "도)밥반찬반돈까스1",
+        "ITEM_SPEC": "416G",
+        "ITEM_SUPORT_INFO": "",
+        "ITEM_WONGA": "3640",
+        "JIP_ITEM_CD": "8800336394352",
+        "MID_CD": "001",
+        "MID_CD_GROUP": "001 1회차",
+        "MID_NM": "도시락",
+        "MODIFY_FLAG": "1",
+        "NAP_NEXTORD": "28(27)",
+        "NOW_QTY": "0",
+        "ORD_AMT": "5500",
+        "ORD_CNT": "1",
+        "ORD_INPUT_ID": "발주수정(재택)",
+        "ORD_MULT_LLMT": "1",
+        "ORD_MULT_ULMT": "99",
+        "ORD_PSS_ID": "0",
+        "ORD_TURN_HMS": "100000",
+        "ORD_UNIT_QTY": "1",
+        "ORD_YMD": "20260226",
+        "PITEM_ID": "5",
+        "PITEM_ID_CSS": "grid_purplishBlue",
+        "PITEM_ID_NM": "신상품",
+        "PYUNSU_ID": "1",
+        "PYUN_QTY": "1",
+        "RB_AMT": "",
+        "RB_CON": "",
+        "RB_YMD": "",
+        "RT_YMD": "",
+        "STOP_PLAN_YMD": "",
+        "WONGA_AMT": "3640"
+      },
+      {
+        "CT_ITEM_YN": "0",
+        "CUT_ITEM_YN": "0",
+        "EVT_DC_RATE": "",
+        "EVT_DC_YMD": "",
+        "HQ_MAEGA_SET": "5900",
+        "IMG_CHK": "1",
+        "IMG_URL": "8800279679004_S.jpg",
+        "ITEM_CD": "8800279679004",
+        "ITEM_NM": "도)압도적뉴한돈김치제육1",
+        "ITEM_SPEC": "408G",
+        "ITEM_SUPORT_INFO": "",
+        "ITEM_WONGA": "3860",
+        "JIP_ITEM_CD": "8800279679004",
+        "MID_CD": "001",
+        "MID_CD_GROUP": "001 1회차",
+        "MID_NM": "도시락",
+        "MODIFY_FLAG": "1",
+        "NAP_NEXTORD": "28(27)",
+        "NOW_QTY": "0",
+        "ORD_AMT": "0",
+        "ORD_CNT": "0",
+        "ORD_INPUT_ID": "발주수정(재택)",
+        "ORD_MULT_LLMT": "1",
+        "ORD_MULT_ULMT": "99",
+        "ORD_PSS_ID": "0",
+        "ORD_TURN_HMS": "100000",
+        "ORD_UNIT_QTY": "1",
+        "ORD_YMD": "20260226",
+        "PITEM_ID": "2",
+        "PITEM_ID_CSS": "",
+        "PITEM_ID_NM": "",
+        "PYUNSU_ID": "1",
+        "PYUN_QTY": "0",
+        "RB_AMT": "",
+        "RB_CON": "",
+        "RB_YMD": "",
+        "RT_YMD": "",
+        "STOP_PLAN_YMD": "",
+        "WONGA_AMT": "0"
+      },
+      {
+        "CT_ITEM_YN": "0",
+        "CUT_ITEM_YN": "0",
+        "EVT_DC_RATE": "",
+        "EVT_DC_YMD": "",
+        "HQ_MAEGA_SET": "5900",
+        "IMG_CHK": "1",
+        "IMG_URL": "8809196620052_S.jpg",
+        "ITEM_CD": "8809196620052",
+        "ITEM_NM": "도)압도적두툼돈까스정식1",
+        "ITEM_SPEC": "452G",
+        "ITEM_SUPORT_INFO": "",
+        "ITEM_WONGA": "3860",
+        "JIP_ITEM_CD": "8809196620052",
+        "MID_CD": "001",
+        "MID_CD_GROUP": "001 1회차",
+        "MID_NM": "도시락",
+        "MODIFY_FLAG": "1",
+        "NAP_NEXTORD": "28(27)",
+        "NOW_QTY": "0",
+        "ORD_AMT": "5900",
+        "ORD_CNT": "1",
+        "ORD_INPUT_ID": "단품별(재택)",
+        "ORD_MULT_LLMT": "1",
+        "ORD_MULT_ULMT": "99",
+        "ORD_PSS_ID": "0",
+        "ORD_TURN_HMS": "100000",
+        "ORD_UNIT_QTY": "1",
+        "ORD_YMD": "20260226",
+        "PITEM_ID": "2",
+        "PITEM_ID_CSS": "",
+        "PITEM_ID_NM": "",
+        "PYUNSU_ID": "1",
+        "PYUN_QTY": "1",
+        "RB_AMT": "",
+        "RB_CON": "",
+        "RB_YMD": "",
+        "RT_YMD": "",
+        "STOP_PLAN_YMD": "",
+        "WONGA_AMT": "3860"
+      },
+      {
+        "CT_ITEM_YN": "0",
+        "CUT_ITEM_YN": "0",
+        "EVT_DC_RATE": "",
+        "EVT_DC_YMD": "",
+        "HQ_MAEGA_SET": "5500",
+        "IMG_CHK": "1",
+        "IMG_URL": "8800271904715_S.jpg",
+        "ITEM_CD": "8800271904715",
+        "ITEM_NM": "도)정성가득불백한상1",
+        "ITEM_SPEC": "368G",
+        "ITEM_SUPORT_INFO": "",
+        "ITEM_WONGA": "3550",
+        "JIP_ITEM_CD": "8800271904715",
+        "MID_CD": "001",
+        "MID_CD_GROUP": "001 1회차",
+        "MID_NM": "도시락",
+        "MODIFY_FLAG": "1",
+        "NAP_NEXTORD": "28(27)",
+        "NOW_QTY": "0",
+        "ORD_AMT": "5500",
+        "ORD_CNT": "1",
+        "ORD_INPUT_ID": "단품별(재택)",
+        "ORD_MULT_LLMT": "1",
+        "ORD_MULT_ULMT": "99",
+        "ORD_PSS_ID": "0",
+        "ORD_TURN_HMS": "100000",
+        "ORD_UNIT_QTY": "1",
+        "ORD_YMD": "20260226",
+        "PITEM_ID": "2",
+        "PITEM_ID_CSS": "",
+        "PITEM_ID_NM": "",
+        "PYUNSU_ID": "1",
+        "PYUN_QTY": "1",
+        "RB_AMT": "",
+        "RB_CON": "",
+        "RB_YMD": "",
+        "RT_YMD": "",
+        "STOP_PLAN_YMD": "",
+        "WONGA_AMT": "3550"
+      }
+    ]
+  },
+  "dsOrderSale_normal_tab": {
+    "col_count": 8,
+    "columns": [
+      {
+        "name": "ORD_YMD",
+        "size": 256,
+        "type": "STRING"
+      },
+      {
+        "name": "JIP_ITEM_CD",
+        "size": 256,
+        "type": "STRING"
+      },
+      {
+        "name": "ITEM_CD",
+        "size": 256,
+        "type": "STRING"
+      },
+      {
+        "name": "ORD_QTY",
+        "size": 256,
+        "type": "INT"
+      },
+      {
+        "name": "BUY_QTY",
+        "size": 256,
+        "type": "INT"
+      },
+      {
+        "name": "SALE_QTY",
+        "size": 256,
+        "type": "INT"
+      },
+      {
+        "name": "DISUSE_QTY",
+        "size": 256,
+        "type": "INT"
+      },
+      {
+        "name": "SUM_UNIT_ID",
+        "size": 256,
+        "type": "STRING"
+      }
+    ],
+    "dataset": "dsOrderSale",
+    "row_count": 2265,
+    "samples": [
+      {
+        "BUY_QTY": "",
+        "DISUSE_QTY": "",
+        "ITEM_CD": "0000080761761",
+        "JIP_ITEM_CD": "0000080761761",
+        "ORD_QTY": "",
+        "ORD_YMD": "20260220",
+        "SALE_QTY": "1",
+        "SUM_UNIT_ID": "0"
+      },
+      {
+        "BUY_QTY": "",
+        "DISUSE_QTY": "",
+        "ITEM_CD": "0000080768258",
+        "JIP_ITEM_CD": "0000080768258",
+        "ORD_QTY": "",
+        "ORD_YMD": "20260221",
+        "SALE_QTY": "",
+        "SUM_UNIT_ID": "0"
+      },
+      {
+        "BUY_QTY": "",
+        "DISUSE_QTY": "",
+        "ITEM_CD": "0000088006611",
+        "JIP_ITEM_CD": "0000088006611",
+        "ORD_QTY": "",
+        "ORD_YMD": "20260224",
+        "SALE_QTY": "",
+        "SUM_UNIT_ID": "0"
+      }
+    ]
+  },
+  "dsResult_direct_sample": {
+    "dataset": "dsResult",
+    "row_count": 513,
+    "samples": [
+      {
+        "ITEM_CD": "8809196617779",
+        "ITEM_NM": "도)동원리챔앤참치김치1",
+        "ITEM_WONGA": "3650",
+        "MID_CD": "001",
+        "MID_NM": "도시락",
+        "NAP_NEXTORD": "28(27)",
+        "NOW_QTY": "0",
+        "ORD_CNT": "0",
+        "ORD_INPUT_ID": "발주수정(재택)",
+        "ORD_PSS_ID": "0",
+        "ORD_PSS_NM": null,
+        "ORD_UNIT_QTY": "1",
+        "ORD_YMD": "20260226"
+      },
+      {
+        "ITEM_CD": "8800336394352",
+        "ITEM_NM": "도)밥반찬반돈까스1",
+        "ITEM_WONGA": "3640",
+        "MID_CD": "001",
+        "MID_NM": "도시락",
+        "NAP_NEXTORD": "28(27)",
+        "NOW_QTY": "0",
+        "ORD_CNT": "1",
+        "ORD_INPUT_ID": "발주수정(재택)",
+        "ORD_PSS_ID": "0",
+        "ORD_PSS_NM": null,
+        "ORD_UNIT_QTY": "1",
+        "ORD_YMD": "20260226"
+      },
+      {
+        "ITEM_CD": "8800279679004",
+        "ITEM_NM": "도)압도적뉴한돈김치제육1",
+        "ITEM_WONGA": "3860",
+        "MID_CD": "001",
+        "MID_NM": "도시락",
+        "NAP_NEXTORD": "28(27)",
+        "NOW_QTY": "0",
+        "ORD_CNT": "0",
+        "ORD_INPUT_ID": "발주수정(재택)",
+        "ORD_PSS_ID": "0",
+        "ORD_PSS_NM": null,
+        "ORD_UNIT_QTY": "1",
+        "ORD_YMD": "20260226"
+      },
+      {
+        "ITEM_CD": "8809196620052",
+        "ITEM_NM": "도)압도적두툼돈까스정식1",
+        "ITEM_WONGA": "3860",
+        "MID_CD": "001",
+        "MID_NM": "도시락",
+        "NAP_NEXTORD": "28(27)",
+        "NOW_QTY": "0",
+        "ORD_CNT": "1",
+        "ORD_INPUT_ID": "단품별(재택)",
+        "ORD_PSS_ID": "0",
+        "ORD_PSS_NM": null,
+        "ORD_UNIT_QTY": "1",
+        "ORD_YMD": "20260226"
+      },
+      {
+        "ITEM_CD": "8800271904715",
+        "ITEM_NM": "도)정성가득불백한상1",
+        "ITEM_WONGA": "3550",
+        "MID_CD": "001",
+        "MID_NM": "도시락",
+        "NAP_NEXTORD": "28(27)",
+        "NOW_QTY": "0",
+        "ORD_CNT": "1",
+        "ORD_INPUT_ID": "단품별(재택)",
+        "ORD_PSS_ID": "0",
+        "ORD_PSS_NM": null,
+        "ORD_UNIT_QTY": "1",
+        "ORD_YMD": "20260226"
+      }
+    ]
+  },
+  "dsOrderSale_direct_sample": {
+    "dataset": "dsOrderSale",
+    "row_count": 2265,
+    "samples": [
+      {
+        "BUY_QTY": "",
+        "DISUSE_QTY": "",
+        "ITEM_CD": "0000080761761",
+        "ORD_QTY": "",
+        "ORD_YMD": "20260220",
+        "SALE_QTY": "1"
+      },
+      {
+        "BUY_QTY": "",
+        "DISUSE_QTY": "",
+        "ITEM_CD": "0000080768258",
+        "ORD_QTY": "",
+        "ORD_YMD": "20260221",
+        "SALE_QTY": ""
+      },
+      {
+        "BUY_QTY": "",
+        "DISUSE_QTY": "",
+        "ITEM_CD": "0000088006611",
+        "ORD_QTY": "",
+        "ORD_YMD": "20260224",
+        "SALE_QTY": ""
+      }
+    ]
+  },
+  "input_id_distribution": {
+    "ord_input_id_dist": {
+      "단품별(재택)": 262,
+      "발주수정(재택)": 234,
+      "분류별발주(재택)": 9,
+      "신상품사전안내(재택)": 7,
+      "품절상품발주(재택)": 1
+    },
+    "ord_pss_dist": {
+      "0:(empty)": 513
+    },
+    "total": 513
+  }
+}

@@ -1,0 +1,98 @@
+{
+  "description": "saveOrd API 라이브 캡처 (2026-02-28, 크롬 확장으로 실제 저장 테스트)",
+  "endpoint": "https://store.bgfretail.com/stbjz00/saveOrd",
+  "method": "POST",
+  "content_type": "text/plain;charset=UTF-8",
+  "captured_at": "2026-02-28T02:57:16Z",
+  "store_id": "46513",
+  "test_item": "8801116012176 (LIL액상카트리지)",
+
+  "response": {
+    "status": 200,
+    "body": "SSV:UTF-8\\u001eErrorCode:string=99999\\u001eErrorMsg:string= \\u001exm_tid:string=6703100931724150738\\u001eDataset:gds_ErrMsg\\u001e_RowType_\\u001fTYPE:string(10)\\u001fCODE:string(5)\\u001fMESSAGE:string(200)\\u001eN\\u001fNORMAL\\u001f\\u001f\\u001e",
+    "error_code": "99999",
+    "meaning": "발주시간 제한 (새벽 시간대, 서버 비즈니스 로직 거부. API 호출 자체는 성공)"
+  },
+
+  "ssv_body_structure": {
+    "total_lines": 34,
+    "total_bytes": 2122,
+    "line_separator": "RS (\\u001e)",
+    "column_separator": "US (\\u001f)",
+    "sections": [
+      {"lines": "0", "content": "SSV:utf-8"},
+      {"lines": "1-20", "content": "세션 변수 20개 (key=value 형식)"},
+      {"lines": "21-25", "content": "파라미터 5개 (strPyunsuId, strOrdInputFlag, GV_MENU_ID, GV_USERFLAG, GV_CHANNELTYPE)"},
+      {"lines": "26", "content": "Dataset:dsGeneralGrid"},
+      {"lines": "27", "content": "컬럼 헤더 (55개 컬럼, US-separated, _RowType_ + 54 typed columns)"},
+      {"lines": "28", "content": "데이터 행 (RowType=I, US-separated values)"},
+      {"lines": "29", "content": "빈 줄 (dsGeneralGrid 데이터 종료)"},
+      {"lines": "30", "content": "Dataset:dsSaveChk"},
+      {"lines": "31", "content": "컬럼 헤더 (6개 컬럼)"},
+      {"lines": "32-33", "content": "빈 줄 (데이터 없음)"}
+    ]
+  },
+
+  "key_findings": {
+    "row_type": "I (Insert, RowType=2). NOT U (Update, RowType=4) as previously assumed.",
+    "multiplier_column": "PYUN_QTY (배수 필드). ORD_MUL_QTY는 빈값.",
+    "total_qty": "TOT_QTY = PYUN_QTY × ORD_UNIT_QTY = 1 × 10 = 10",
+    "dsSaveChk": "빈 데이터셋 (컬럼 헤더만 있고 데이터 행 없음)",
+    "session_vars_format": "key=value on separate RS-delimited lines (NOT US-separated)",
+    "column_type_format": "COLNAME:TYPE(SIZE) e.g. STORE_CD:STRING(256), NOW_QTY:INT(256)",
+    "inDS_no_filter": "dsGeneralGrid=dsGeneralGrid dsSaveChk=dsSaveChk (no :U filter suffix)"
+  },
+
+  "session_variables": [
+    "GV_USERFLAG", "_xm_webid_1_", "_xm_tid_1_",
+    "SS_STORE_CD", "SS_PRE_STORE_CD", "SS_STORE_NM",
+    "SS_SLC_CD", "SS_LOC_CD", "SS_ADM_SECT_CD",
+    "SS_STORE_OWNER_NM", "SS_STORE_POS_QTY", "SS_STORE_IP",
+    "SS_SV_EMP_NO", "SS_SSTORE_ID", "SS_RCV_ID",
+    "SS_FC_CD", "SS_USER_GRP_ID", "SS_USER_NO",
+    "SS_SGGD_CD", "SS_LOGIN_USER_NO"
+  ],
+
+  "parameters": [
+    "strPyunsuId=0",
+    "strOrdInputFlag=04",
+    "GV_MENU_ID=0001,STBJ030_M0",
+    "GV_USERFLAG=HOME",
+    "GV_CHANNELTYPE=HOME"
+  ],
+
+  "data_row_sample": {
+    "_RowType_": "I",
+    "STORE_CD": "46513",
+    "ORD_YMD": "20260302",
+    "PRE_STORE_CD": "190623",
+    "JIP_ITEM_CD": "8801116012176",
+    "RET_PSS_ID": "불가",
+    "ITEM_NM": "LIL액상카트리지",
+    "PITEM_ID": "2",
+    "PROFIT_RATE": "6.1",
+    "HQ_MAEGA_SET": "500",
+    "ORD_UNIT": "묶음",
+    "ORD_UNIT_QTY": "10",
+    "ITEM_CD": "8801116012176",
+    "PYUN_ID": "0",
+    "PYUN_QTY": "1",
+    "ORD_TURN_HMS": "100000",
+    "ORD_MULT_ULMT": "99",
+    "ORD_MULT_LLMT": "1",
+    "CT_ITEM_YN": "0",
+    "CUT_ITEM_YN": "0",
+    "NOW_QTY": "80",
+    "ORD_MUL_QTY": "",
+    "OLD_PYUN_QTY": "1",
+    "TOT_QTY": "10",
+    "CURDAY": "20260228",
+    "CURTIME": "120156",
+    "MID_NM": "전자담배",
+    "PRE_BKCOLOR": "#FCEAD3",
+    "IMG_CHK": "1",
+    "IMG_URL": "8801116012176_S.jpg",
+    "PAGE_CNT": "1",
+    "EXPIRE_DAY": "365"
+  }
+}

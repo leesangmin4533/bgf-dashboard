@@ -26,6 +26,7 @@ Usage:
 
 from typing import List, Dict, Any, Set, Optional
 from src.utils.logger import get_logger
+from src.settings.constants import GLOBAL_EXCLUDE_ITEMS
 
 logger = get_logger(__name__)
 
@@ -142,6 +143,35 @@ def filter_smart_order(
     return result
 
 
+def filter_global_exclude(
+    order_list: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """전 점포 영구 발주 제외 상품 필터링
+
+    GLOBAL_EXCLUDE_ITEMS (constants.py)에 등록된 상품은
+    모든 점포에서 무조건 발주 대상에서 제외합니다.
+
+    Args:
+        order_list: 발주 목록
+
+    Returns:
+        필터링된 발주 목록
+    """
+    if not GLOBAL_EXCLUDE_ITEMS:
+        return order_list
+
+    exclude_set = set(GLOBAL_EXCLUDE_ITEMS.keys())
+    before = len(order_list)
+    result = [item for item in order_list
+              if item.get("item_cd") not in exclude_set]
+    excluded = before - len(result)
+    if excluded > 0:
+        names = [GLOBAL_EXCLUDE_ITEMS.get(item.get("item_cd"), item.get("item_cd"))
+                 for item in order_list if item.get("item_cd") in exclude_set]
+        logger.info(f"전 점포 영구 제외 {excluded}개 상품: {', '.join(names)}")
+    return result
+
+
 def filter_stopped_items(
     order_list: List[Dict[str, Any]],
     stopped_items: Set[str],
@@ -179,7 +209,8 @@ def apply_all_filters(
 ) -> List[Dict[str, Any]]:
     """전체 필터 순차 적용
 
-    4개 필터를 순서대로 적용합니다:
+    5개 필터를 순서대로 적용합니다:
+    0. 전 점포 영구 제외 (GLOBAL_EXCLUDE_ITEMS)
     1. 미취급 상품 제외
     2. CUT 상품 제외
     3. 자동발주 상품 제외 (설정에 따라)
@@ -199,6 +230,7 @@ def apply_all_filters(
     """
     result = order_list
 
+    result = filter_global_exclude(result)
     result = filter_unavailable(result, unavailable_items or set())
     result = filter_cut_items(result, cut_items or set())
     result = filter_auto_order(

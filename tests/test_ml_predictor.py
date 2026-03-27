@@ -66,7 +66,7 @@ class TestMLFeatureBuilder:
 
         assert features is not None
         assert isinstance(features, np.ndarray)
-        assert features.shape == (36,)
+        assert features.shape == (45,)  # 39→45 시간대피처 확장
         assert not np.any(np.isnan(features))
 
     def test_build_features_insufficient_data(self):
@@ -85,44 +85,19 @@ class TestMLFeatureBuilder:
         assert features is None
 
     def test_feature_names_count(self):
-        """FEATURE_NAMES 목록 개수 확인 (31+입고패턴5=36)"""
+        """FEATURE_NAMES 목록 개수 확인 (food-ml-dual-model: 31→35)"""
         from src.prediction.ml.feature_builder import MLFeatureBuilder
 
-        assert len(MLFeatureBuilder.FEATURE_NAMES) == 36
+        assert len(MLFeatureBuilder.FEATURE_NAMES) == 45
 
-    def test_category_one_hot_encoding(self):
-        """카테고리 그룹별 원핫 인코딩 검증"""
-        from src.prediction.ml.feature_builder import MLFeatureBuilder
+    def test_category_group_lookup(self):
+        """카테고리 그룹 조회 정상 동작 (원핫 피처 제거 후에도 매핑은 유지)"""
+        from src.prediction.ml.feature_builder import get_category_group
 
-        daily_sales = _make_daily_sales(14, 5)
-        target_date = daily_sales[-1]["sales_date"]
-
-        # 맥주 (alcohol_group)
-        features_beer = MLFeatureBuilder.build_features(
-            daily_sales=daily_sales,
-            target_date=target_date,
-            mid_cd="049",
-        )
-
-        # 담배 (tobacco_group)
-        features_tobacco = MLFeatureBuilder.build_features(
-            daily_sales=daily_sales,
-            target_date=target_date,
-            mid_cd="072",
-        )
-
-        assert features_beer is not None
-        assert features_tobacco is not None
-
-        # 원핫 인코딩 위치: 인덱스 14~18 (is_food, is_alcohol, is_tobacco, is_perishable, is_general)
-        # (is_holiday가 인덱스 12에 추가되어 1칸 shift)
-        # 맥주: is_alcohol_group = 1
-        assert features_beer[15] == 1.0   # is_alcohol_group
-        assert features_beer[16] == 0.0   # is_tobacco_group
-
-        # 담배: is_tobacco_group = 1
-        assert features_tobacco[15] == 0.0  # is_alcohol_group
-        assert features_tobacco[16] == 1.0  # is_tobacco_group
+        assert get_category_group("049") == "alcohol_group"
+        assert get_category_group("072") == "tobacco_group"
+        assert get_category_group("001") == "food_group"
+        assert get_category_group("999") == "general_group"
 
     def test_build_batch_features(self):
         """배치 feature 생성"""
@@ -147,7 +122,7 @@ class TestMLFeatureBuilder:
         assert X is not None
         assert y is not None
         assert len(codes) == 5
-        assert X.shape == (5, 36)
+        assert X.shape == (5, 45)  # 39→45 시간대피처 확장
         assert y.shape == (5,)
         assert all(yi >= 0 for yi in y)
 
@@ -225,7 +200,7 @@ class TestMLPredictor:
         predictor.save_model("alcohol_group", _MockMLModel(7.5))
         predictor.load_models()
 
-        features = np.random.rand(31)
+        features = np.random.rand(39)
         result = predictor.predict(features, mid_cd="049")
 
         assert result is not None
@@ -237,7 +212,7 @@ class TestMLPredictor:
         from src.prediction.ml.model import MLPredictor
 
         predictor = MLPredictor(model_dir=str(tmp_path / "models"))
-        features = np.random.rand(31)
+        features = np.random.rand(39)
         result = predictor.predict(features, mid_cd="049")
 
         assert result is None

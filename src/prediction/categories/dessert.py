@@ -113,13 +113,10 @@ class DessertPatternResult:
 # =============================================================================
 # Private 함수
 # =============================================================================
-def _get_db_path() -> str:
-    """DB 경로 반환
-
-    Returns:
-        bgf_sales.db 절대 경로 문자열
-    """
-    return str(Path(__file__).parent.parent.parent.parent / "data" / "bgf_sales.db")
+def _get_db_path(store_id: str = None) -> str:
+    """DB 경로 반환"""
+    from src.infrastructure.database.connection import resolve_db_path
+    return resolve_db_path(store_id=store_id)
 
 
 def _get_dessert_expiry_group(expiration_days: int) -> Tuple[str, dict]:
@@ -206,7 +203,7 @@ def _learn_weekday_pattern(db_path: Optional[str] = None, min_data_days: int = 1
         {0: coef, 1: coef, ..., 6: coef} (Python weekday: 월=0, 일=6)
     """
     if db_path is None:
-        db_path = _get_db_path()
+        db_path = _get_db_path(store_id)
 
     try:
         conn = sqlite3.connect(db_path, timeout=30)
@@ -324,7 +321,7 @@ def analyze_dessert_pattern(
     config = DESSERT_EXPIRY_SAFETY_CONFIG
 
     if db_path is None:
-        db_path = _get_db_path()
+        db_path = _get_db_path(store_id)
 
     # 1. 유통기한 조회
     expiration_days, data_source = _get_dessert_expiration_days(item_cd, db_path)

@@ -6,6 +6,9 @@
 # Kakao token
 config/kakao_token.json
 
+# PythonAnywhere API token
+config/pythonanywhere.json
+
 # Database files
 data/*.db
 data/*.db.bak

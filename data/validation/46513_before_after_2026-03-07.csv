@@ -1,0 +1,34 @@
+﻿category,month,period,metric_1,metric_2,metric_3,metric_4,detail
+disuse_monthly,2025-08,before,sale=14983,disuse=26,rate=0.174%,daily_avg=1.13,"품목수=21, 수집일수=23"
+disuse_monthly,2025-09,before,sale=19517,disuse=53,rate=0.272%,daily_avg=1.77,"품목수=45, 수집일수=30"
+disuse_monthly,2025-10,before,sale=20261,disuse=39,rate=0.192%,daily_avg=1.26,"품목수=29, 수집일수=31"
+disuse_monthly,2025-11,before,sale=18581,disuse=47,rate=0.253%,daily_avg=1.57,"품목수=39, 수집일수=30"
+disuse_monthly,2025-12,before,sale=19821,disuse=32,rate=0.161%,daily_avg=1.03,"품목수=25, 수집일수=31"
+disuse_monthly,2026-01,after,sale=20349,disuse=48,rate=0.236%,daily_avg=1.55,"품목수=43, 수집일수=31"
+disuse_monthly,2026-02,after,sale=18490,disuse=394,rate=2.131%,daily_avg=14.07,"품목수=194, 수집일수=28"
+disuse_monthly,2026-03,after,sale=4084,disuse=112,rate=2.742%,daily_avg=16.0,"품목수=86, 수집일수=7"
+waste_slips,2026-02,after,wonga=684763.0,maega=1195300.0,slips=146,items=332,일평균원가=24456.0
+waste_slips,2026-03,after,wonga=180514.0,maega=308700.0,slips=47,items=102,일평균원가=25788.0
+prediction_accuracy,2026-01,after,accuracy=70.1%,over=1174,under=664,accurate=2080,"total=13449, actual=13449, coverage=100.0%"
+prediction_accuracy,2026-02,after,accuracy=69.8%,over=2515,under=2033,accurate=4668,"total=47203, actual=47203, coverage=100.0%"
+prediction_accuracy,2026-03,after,accuracy=19.3%,over=13,under=28,accurate=2,"total=9406, actual=8087, coverage=86.0%"
+top_disuse_before,,before,rank=1,disuse=9,sale=18,,동아)얼박사캔355ml (8806011416685) mid:040
+top_disuse_before,,before,rank=2,disuse=5,sale=5,,주)압도적플러스흑돈제육1 (8800271903596) mid:002
+top_disuse_before,,before,rank=3,disuse=5,sale=2,,농심)사리곰탕면 (8801043015165) mid:032
+top_disuse_before,,before,rank=4,disuse=5,sale=1,,선우)냠냠찍먹젤리멜론 (8809963483019) mid:020
+top_disuse_before,,before,rank=5,disuse=4,sale=9,,서울)흰우유1L (8801115114154) mid:047
+top_disuse_before,,before,rank=6,disuse=4,sale=4,,주)정성전주비빔불고기1 (8801771035480) mid:002
+top_disuse_before,,before,rank=7,disuse=4,sale=4,,도)압도적두툼돈까스정식1 (8809196620052) mid:001
+top_disuse_before,,before,rank=8,disuse=3,sale=2,,대진)요거트향츄잉캔디12g (6926106108447) mid:020
+top_disuse_before,,before,rank=9,disuse=3,sale=3,,주)3XL뉴매콤돈까스삼각2 (8800271904487) mid:002
+top_disuse_before,,before,rank=10,disuse=3,sale=3,,주)3XL뉴리챔청양마요1 (8800271904517) mid:002
+top_disuse_after,,after,rank=1,disuse=13,sale=3,,고구마)군고구마2200N (2201148680729) mid:300
+top_disuse_after,,after,rank=2,disuse=9,sale=3,,주)3XL뉴리챔청양마요1 (8800271904517) mid:002
+top_disuse_after,,after,rank=3,disuse=7,sale=1,,김)압도적제육김밥1 (8800271900144) mid:003
+top_disuse_after,,after,rank=4,disuse=7,sale=0,,우양)반반크리스피핫도그 (8805489005858) mid:035
+top_disuse_after,,after,rank=5,disuse=6,sale=0,,서울)딸기우유300ml (8801115134213) mid:047
+top_disuse_after,,after,rank=6,disuse=6,sale=0,,연세)고구마생크림빵 (8801753116114) mid:014
+top_disuse_after,,after,rank=7,disuse=6,sale=2,,겟모닝)통스팸꼬마김밥1 (8801771304173) mid:003
+top_disuse_after,,after,rank=8,disuse=6,sale=1,,샌)샤샤샤요거트샌드1 (8809895793552) mid:004
+top_disuse_after,,after,rank=9,disuse=5,sale=4,,도)정성가득불백한상1 (8800271904715) mid:001
+top_disuse_after,,after,rank=10,disuse=5,sale=1,,주)고추장삼겹삼각2 (8800275320665) mid:002

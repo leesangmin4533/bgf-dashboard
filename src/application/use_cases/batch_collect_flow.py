@@ -58,6 +58,10 @@ class BatchCollectFlow:
                     f"BatchCollect 실패: store={self.store_id},"
                     f" error={result.get('error', 'Unknown')}"
                 )
+
+            # 행사 연장 사전 감지 (D-5 이내 자동 트리거)
+            self._check_promotion_extensions()
+
             return result
 
         except ImportError as e:
@@ -66,3 +70,26 @@ class BatchCollectFlow:
         except Exception as e:
             logger.error(f"BatchCollect 실패: {e}", exc_info=True)
             return {"success": False, "error": str(e)}
+
+    def _check_promotion_extensions(self) -> None:
+        """행사 연장 사전 감지 (반월 경계 D-5 이내 자동 실행)"""
+        if not self.driver:
+            logger.debug("행사연장 체크 스킵: driver 없음")
+            return
+
+        try:
+            from src.collectors.promotion_collector import PromotionCollector
+
+            collector = PromotionCollector(
+                driver=self.driver,
+                store_id=self.store_id,
+            )
+            extensions = collector.check_and_update_extensions()
+
+            if extensions:
+                logger.info(
+                    f"[행사연장] store={self.store_id}, "
+                    f"{len(extensions)}건 연장 감지"
+                )
+        except Exception as e:
+            logger.warning(f"[행사연장] 체크 실패 (무시): {e}")

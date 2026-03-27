@@ -279,7 +279,7 @@ class TestWarnStaleCutItems:
 
         return ao
 
-    @patch("src.order.auto_order.logger")
+    @patch("src.order.order_filter.logger")
     def test_warn_stale_items_logs_warning(self, mock_logger):
         """stale 상품이 있으면 경고 로그 출력"""
         stale_date = (datetime.now() - timedelta(days=7)).isoformat()
@@ -296,7 +296,7 @@ class TestWarnStaleCutItems:
         assert "CUT" in call_msg
         assert "1" in call_msg
 
-    @patch("src.order.auto_order.logger")
+    @patch("src.order.order_filter.logger")
     def test_warn_no_stale_items_no_warning(self, mock_logger):
         """모든 상품이 최신이면 경고 없음"""
         fresh_date = datetime.now().isoformat()
@@ -314,7 +314,7 @@ class TestWarnStaleCutItems:
 
         mock_logger.warning.assert_not_called()
 
-    @patch("src.order.auto_order.logger")
+    @patch("src.order.order_filter.logger")
     def test_warn_never_queried_item(self, mock_logger):
         """queried_at이 없는 상품 → 'never'로 경고"""
         inv_data = {
@@ -330,7 +330,7 @@ class TestWarnStaleCutItems:
         assert "CUT" in call_msg
         assert "never" in call_msg
 
-    @patch("src.order.auto_order.logger")
+    @patch("src.order.order_filter.logger")
     def test_warn_inventory_not_found(self, mock_logger):
         """인벤토리에 없는 상품 → 'never'로 경고"""
         ao = self._make_auto_order(inventory_data={})  # empty
@@ -346,7 +346,7 @@ class TestWarnStaleCutItems:
         ao = self._make_auto_order()
         ao._warn_stale_cut_items([])  # should not raise
 
-    @patch("src.order.auto_order.logger")
+    @patch("src.order.order_filter.logger")
     def test_warn_mixed_stale_and_fresh(self, mock_logger):
         """stale + fresh 혼합 → stale 상품만 경고에 포함"""
         stale_date = (datetime.now() - timedelta(days=10)).isoformat()

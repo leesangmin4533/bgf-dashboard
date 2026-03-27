@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 
-from src.utils.logger import get_logger
+from src.utils.logger import get_logger, set_session_id, clear_session_id
 
 logger = get_logger(__name__)
 
@@ -38,6 +38,42 @@ from src.settings.constants import (
 from src.collectors.fail_reason_collector import FailReasonCollector
 from src.collectors.manual_order_detector import run_manual_order_detection
 from src.collectors.receiving_collector import ReceivingCollector
+
+
+def _cleanup_dangling_tabs(driver: Any, frame_ids: List[str]) -> int:
+    """잔여 nexacro 탭 강제 정리
+
+    Phase 전환 시 이전 Phase의 탭이 남아있으면 이후 메뉴 이동이 실패할 수 있다.
+    지정된 frame_id 목록의 탭이 열려있으면 강제로 닫는다.
+
+    Args:
+        driver: Selenium WebDriver
+        frame_ids: 닫을 프레임 ID 목록
+
+    Returns:
+        닫은 탭 수
+    """
+    from src.utils.nexacro_helpers import close_tab_by_frame_id
+    closed = 0
+    for fid in frame_ids:
+        try:
+            # 프레임이 아직 열려있는지 확인
+            exists = driver.execute_script("""
+                try {
+                    var el = document.querySelector('[id*="tab_openList"][id$=".' + arguments[0] + '"]');
+                    return !!el;
+                } catch(e) { return false; }
+            """, fid)
+            if exists:
+                if close_tab_by_frame_id(driver, fid):
+                    logger.info(f"잔여 탭 정리: {fid}")
+                    closed += 1
+                    time.sleep(0.1)  # [최적화: 0.3→0.1]
+                else:
+                    logger.warning(f"잔여 탭 정리 실패: {fid}")
+        except Exception as e:
+            logger.debug(f"탭 확인 실패 ({fid}): {e}")
+    return closed
 
 
 class DailyCollectionJob:
@@ -123,7 +159,8 @@ class DailyCollectionJob:
     def run_optimized(
         self,
         run_auto_order: bool = True,
-        use_improved_predictor: bool = True
+        use_improved_predictor: bool = True,
+        target_dates: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """
         최적화된 전체 플로우 실행
@@ -132,24 +169,35 @@ class DailyCollectionJob:
         Args:
             run_auto_order: 자동 발주 실행 여부
             use_improved_predictor: True면 개선된 예측기 사용 (31일 데이터 기반)
+            target_dates: 발주할 날짜 목록 (YYYY-MM-DD). None이면 전체 발주
 
         Returns:
             실행 결과
         """
+        self._target_dates = target_dates
         today = datetime.now()
         yesterday = today - timedelta(days=1)
 
         today_str = today.strftime("%Y-%m-%d")
         yesterday_str = yesterday.strftime("%Y-%m-%d")
 
+        sid = set_session_id()
         logger.info(LOG_SEPARATOR_WIDE)
-        logger.info("Optimized flow started")
+        logger.info(f"Optimized flow started | session={sid}")
         logger.info(f"Dates: {yesterday_str}, {today_str}")
         logger.info(f"Auto-order: {run_auto_order}")
         logger.info(f"Predictor: {'Improved (31-day)' if use_improved_predictor else 'Legacy'}")
         logger.info(LOG_SEPARATOR_WIDE)
 
         start_time = time.time()
+
+        # Store DB 테이블 보장 (누락된 테이블 자동 생성)
+        try:
+            from src.infrastructure.database.schema import init_store_db
+            init_store_db(self.store_id)
+        except Exception as e:
+            logger.warning(f"Store DB 테이블 보장 실패 (계속 진행): {e}")
+
         self.collector = SalesCollector(store_id=self.store_id)
         collection_results = {}
         order_result = None
@@ -197,6 +245,101 @@ class DailyCollectionJob:
                 r.get("success") for r in collection_results.values()
             )
             logger.info(f"수집 결과: {list(collection_results.keys())}, 성공={collection_success}")
+
+            # ★ Phase 1.04: 시간대별 매출 수집 (STMB010 Direct API)
+            if collection_success:
+                try:
+                    logger.info("[Phase 1.04] Hourly Sales Collection (STMB010)")
+                    logger.info(LOG_SEPARATOR_THIN)
+                    driver = self.collector.get_driver()
+                    if driver:
+                        from src.collectors.hourly_sales_collector import HourlySalesCollector
+                        from src.infrastructure.database.repos.hourly_sales_repo import HourlySalesRepository
+                        hourly_collector = HourlySalesCollector(driver=driver)
+                        hourly_repo = HourlySalesRepository(store_id=self.store_id)
+                        hourly_repo.ensure_table()
+                        for date_str in [yesterday_str, today_str]:
+                            hourly_data = hourly_collector.collect(date_str.replace('-', ''))
+                            if hourly_data:
+                                saved = hourly_repo.save_hourly_sales(hourly_data, date_str)
+                                logger.info(f"[Phase 1.04] {date_str}: {saved}건 저장")
+                            else:
+                                logger.debug(f"[Phase 1.04] {date_str}: 데이터 없음")
+                    else:
+                        logger.debug("[Phase 1.04] 드라이버 없음, 건너뜀")
+                except Exception as e:
+                    logger.warning(f"[Phase 1.04] 시간대별 매출 수집 실패 (발주 플로우 계속): {e}")
+
+            # ★ Phase 1.05: 시간대별 매출 상세(품목별) 수집 (selPrdT3)
+            if collection_success:
+                try:
+                    logger.info("[Phase 1.05] Hourly Sales Detail Collection (selPrdT3)")
+                    logger.info(LOG_SEPARATOR_THIN)
+                    driver = self.collector.get_driver()
+                    if driver:
+                        from src.collectors.hourly_sales_detail_collector import HourlySalesDetailCollector
+                        from src.infrastructure.database.repos.hourly_sales_detail_repo import HourlySalesDetailRepository
+                        hsd_collector = HourlySalesDetailCollector(driver=driver)
+                        hsd_repo = HourlySalesDetailRepository(store_id=self.store_id)
+                        hsd_repo.ensure_table()
+                        for date_str in [yesterday_str, today_str]:
+                            # 미수집 시간대만 수집
+                            collected = hsd_repo.get_collected_hours(date_str)
+                            if date_str == today_str:
+                                from datetime import datetime as _dt
+                                target_hours = [h for h in range(0, _dt.now().hour) if h not in collected]
+                            else:
+                                target_hours = [h for h in range(24) if h not in collected]
+                            if not target_hours:
+                                logger.debug(f"[Phase 1.05] {date_str}: 이미 수집 완료")
+                                continue
+                            # Direct API 딜레이 축소: 0.5초 → 0.25초 (~10-15초 절약)
+                            results = hsd_collector.collect_all_hours(
+                                date_str.replace('-', ''), hours=target_hours, delay=0.25
+                            )
+                            total_items = 0
+                            for hour, items in results.items():
+                                if items:
+                                    hsd_repo.save_detail(date_str, hour, items)
+                                    total_items += len(items)
+                            logger.info(
+                                f"[Phase 1.05] {date_str}: "
+                                f"{len(results)}/{len(target_hours)}시간대, {total_items}품목"
+                            )
+                        # 재시도
+                        if hsd_collector.failed_count > 0:
+                            hsd_collector.retry_failed()
+                    else:
+                        logger.debug("[Phase 1.05] 드라이버 없음, 건너뜀")
+                except Exception as e:
+                    logger.warning(f"[Phase 1.05] 시간대별 매출 상세 수집 실패 (발주 플로우 계속): {e}")
+
+            # ★ Phase 1.01: 이상치 탐지 (D-2)
+            if collection_success:
+                try:
+                    logger.info("[Phase 1.01] Anomaly Detection (D-2)")
+                    logger.info(LOG_SEPARATOR_THIN)
+                    from src.analysis.anomaly_detector import run_anomaly_detection
+                    anomaly_result = run_anomaly_detection(self.store_id, today_str)
+                    if anomaly_result.has_alerts:
+                        try:
+                            from src.alert.kakao_notifier import KakaoNotifier
+                            from src.settings.constants import DEFAULT_REST_API_KEY
+                            notifier = KakaoNotifier(DEFAULT_REST_API_KEY)
+                            if notifier.access_token:
+                                notifier.send_message(anomaly_result.format_kakao())
+                        except Exception as e_kakao:
+                            logger.debug(f"[Phase 1.01] 카카오 알림 실패: {e_kakao}")
+                        logger.info(
+                            f"[Phase 1.01] 이상치 {len(anomaly_result.alerts)}건 감지 "
+                            f"(spike={anomaly_result.spike_count} "
+                            f"zero={anomaly_result.zero_count} "
+                            f"stock={anomaly_result.stock_count})"
+                        )
+                    else:
+                        logger.info("[Phase 1.01] 이상치 없음")
+                except Exception as e:
+                    logger.warning(f"[Phase 1.01] 이상치 탐지 실패 (발주 플로우 계속): {e}")
 
             # ★ Phase 1.1: 입고 데이터 수집 (센터매입 조회/확정)
             if collection_success:
@@ -273,6 +416,14 @@ class DailyCollectionJob:
                 except Exception as e:
                     logger.warning(f"폐기 전표 수집 실패 (발주 플로우 계속): {e}")
 
+                # 잔여 탭 강제 정리 (통합 전표 조회 탭이 남아있으면 이후 Phase 실패)
+                driver = self.collector.get_driver()
+                if driver:
+                    from src.settings.ui_config import FRAME_IDS
+                    _cleanup_dangling_tabs(driver, [
+                        FRAME_IDS.get("WASTE_SLIP", "STGJ020_M0"),
+                    ])
+
             # ★ Phase 1.16: 폐기전표 -> daily_sales.disuse_qty 동기화
             if waste_slip_stats and waste_slip_stats.get("success"):
                 try:
@@ -306,7 +457,7 @@ class DailyCollectionJob:
                     else:
                         logger.warning("드라이버 없음, 제외 상품 수집 건너뜀")
                 except Exception as e:
-                    logger.warning(f"제외 상품 수집 실패 (발주 플로우 계속): {e}")
+                    logger.warning(f"제외 상품 수집 실패 — Phase 2에서 사이트 재조회로 복구됩니다: {e}")
 
             # ★ Phase 1.3: 신상품 도입 현황 수집 (3일발주 후속 관리용)
             new_product_stats = None
@@ -322,6 +473,23 @@ class DailyCollectionJob:
                         logger.warning("드라이버 없음, 신상품 수집 건너뜀")
                 except Exception as e:
                     logger.warning(f"신상품 수집 실패 (발주 플로우 계속): {e}")
+
+            # ★ Phase 1.35: 신제품 라이프사이클 모니터링
+            if collection_success:
+                try:
+                    logger.info("[Phase 1.35] New Product Lifecycle Monitoring")
+                    logger.info(LOG_SEPARATOR_THIN)
+                    from src.application.services.new_product_monitor import NewProductMonitor
+                    monitor = NewProductMonitor(store_id=self.store_id)
+                    monitor_stats = monitor.run()
+                    if monitor_stats["active_items"] > 0:
+                        logger.info(
+                            f"[Phase 1.35] 모니터링: {monitor_stats['active_items']}건, "
+                            f"추적저장: {monitor_stats['tracking_saved']}건, "
+                            f"상태변경: {len(monitor_stats['status_changes'])}건"
+                        )
+                except Exception as e:
+                    logger.warning(f"신제품 모니터링 실패 (발주 플로우 계속): {e}")
 
             # ★ 사전 발주 평가 보정 (수집 성공 시)
             calibration_result = None
@@ -426,6 +594,22 @@ class DailyCollectionJob:
                 except Exception as e:
                     logger.warning(f"[Phase 1.57] Bayesian optimization 실패 (발주 플로우 계속): {e}")
 
+            # ★ Croston alpha/beta 최적화 (Phase 1.58 - 주 1회 일요일)
+            if collection_success and datetime.now().weekday() == 6:  # 일요일만
+                try:
+                    logger.info("[Phase 1.58] Croston Parameter Optimization (C-1)")
+                    logger.info(LOG_SEPARATOR_THIN)
+                    from src.analysis.croston_optimizer import run_optimization
+                    croston_result = run_optimization(self.store_id)
+                    logger.info(f"[Phase 1.58] Croston 최적화 완료: {croston_result}")
+
+                    # C-2: Stacking 메타 학습기 재학습
+                    from src.analysis.stacking_predictor import train_stacking_model
+                    stacking_result = train_stacking_model(self.store_id)
+                    logger.info(f"[C-2] Stacking 학습: {stacking_result}")
+                except Exception as e:
+                    logger.warning(f"[Phase 1.58] Croston/Stacking 최적화 실패 (발주 플로우 계속): {e}")
+
             # ★ 예측 실적 소급 (prediction_logs.actual_qty 채우기)
             if collection_success:
                 try:
@@ -440,6 +624,54 @@ class DailyCollectionJob:
                         logger.info(f"예측 실적 소급 보완: {backfilled}건 (최근 7일)")
                 except Exception as e:
                     logger.warning(f"예측 실적 소급 실패 (발주 플로우 계속): {e}")
+
+            # ★ 수요 패턴 분류 DB 갱신 (Phase 1.61 - prediction-redesign)
+            if collection_success:
+                try:
+                    logger.info("[Phase 1.61] Demand Pattern Classification")
+                    logger.info(LOG_SEPARATOR_THIN)
+                    from src.prediction.demand_classifier import DemandClassifier
+                    from src.infrastructure.database.repos.product_detail_repo import ProductDetailRepository
+                    from src.infrastructure.database.connection import DBRouter
+                    pd_repo = ProductDetailRepository()
+                    active_items = pd_repo.get_all_active_items(days=30, store_id=self.store_id)
+                    if active_items:
+                        classifier = DemandClassifier(store_id=self.store_id)
+                        # 벌크 쿼리로 mid_cd 일괄 조회 (get_detail 대신)
+                        conn = DBRouter.get_common_connection()
+                        try:
+                            cursor = conn.cursor()
+                            placeholders = ",".join("?" for _ in active_items)
+                            cursor.execute(
+                                f"SELECT item_cd, mid_cd FROM products WHERE item_cd IN ({placeholders})",
+                                active_items
+                            )
+                            mid_cd_map = {row[0]: row[1] for row in cursor.fetchall()}
+                        finally:
+                            conn.close()
+                        items_for_classify = [
+                            {"item_cd": ic, "mid_cd": mid_cd_map.get(ic, "")}
+                            for ic in active_items
+                            if ic in mid_cd_map
+                        ]
+                        if items_for_classify:
+                            batch_results = classifier.classify_batch(items_for_classify)
+                            patterns = {
+                                item_cd: result.pattern.value
+                                for item_cd, result in batch_results.items()
+                            }
+                            updated = pd_repo.bulk_update_demand_pattern(patterns)
+                            from collections import Counter
+                            counts = Counter(patterns.values())
+                            logger.info(
+                                f"수요 패턴 분류 완료: {updated}건 "
+                                f"(daily={counts.get('daily', 0)}, "
+                                f"frequent={counts.get('frequent', 0)}, "
+                                f"intermittent={counts.get('intermittent', 0)}, "
+                                f"slow={counts.get('slow', 0)})"
+                            )
+                except Exception as e:
+                    logger.warning(f"[Phase 1.61] 수요 패턴 분류 실패 (발주 플로우 계속): {e}")
 
             # ★ 유령 재고 정리 (Phase 1.65 - 예측 전 오래된 realtime_inventory stock 초기화)
             if collection_success:
@@ -459,11 +691,121 @@ class DailyCollectionJob:
                         )
                     else:
                         logger.info("유령 재고 없음 (정리 불필요)")
+                    # 만료 배치 remaining_qty 정리
+                    try:
+                        from fix_expired_batch_remaining import cleanup_expired_batches
+                        expired_cleaned = cleanup_expired_batches(self.store_id)
+                        if expired_cleaned > 0:
+                            logger.info(f"만료 배치 정리: {expired_cleaned}건")
+                    except Exception as e_batch:
+                        logger.debug(f"만료 배치 정리 실패 (비치명적): {e_batch}")
                 except Exception as e:
                     logger.warning(f"유령 재고 정리 실패 (발주 플로우 계속): {e}")
 
-            # ★ 예측 로깅 (prediction_logs 기록 - 자동발주와 독립)
+            # ★ 배치 FIFO 재동기화 + 푸드 유령재고 정리 (Phase 1.66)
+            # Phase 1.65 TTL 정리 후, active 배치 없는 푸드의 RI stock_qty → 0
+            # Phase 2 발주 전에 실행하여 정확한 재고 기반 발주 보장
             if collection_success:
+                try:
+                    logger.info("[Phase 1.66] Batch FIFO Sync + Food Ghost Cleanup")
+                    logger.info(LOG_SEPARATOR_THIN)
+                    from src.infrastructure.database.repos import InventoryBatchRepository
+
+                    batch_repo = InventoryBatchRepository(store_id=self.store_id)
+                    sync_result = batch_repo.sync_remaining_with_stock(
+                        store_id=self.store_id
+                    )
+                    adj = sync_result.get("adjusted", 0)
+                    ghost = sync_result.get("ghost_cleared", 0)
+                    if adj > 0 or ghost > 0:
+                        logger.info(
+                            f"배치 FIFO 동기화: 보정 {adj}건, "
+                            f"consumed {sync_result.get('consumed', 0)}건, "
+                            f"푸드 유령재고 정리 {ghost}건"
+                        )
+                    else:
+                        logger.info("배치 FIFO 정합성 양호 (보정 불필요)")
+                except Exception as e:
+                    logger.warning(f"[Phase 1.66] 배치 FIFO 동기화 실패 (발주 플로우 계속): {e}")
+
+            # ★ 데이터 무결성 검증 (Phase 1.67)
+            # Phase 1.66 FIFO 동기화 후, 남아있는 데이터 이상치 자동 감지
+            if collection_success:
+                try:
+                    logger.info("[Phase 1.67] Data Integrity Verification")
+                    logger.info(LOG_SEPARATOR_THIN)
+                    from src.application.services.data_integrity_service import DataIntegrityService
+
+                    integrity_svc = DataIntegrityService(store_id=self.store_id)
+                    integrity_result = integrity_svc.run_all_checks(self.store_id)
+                    anomalies = integrity_result.get("total_anomalies", 0)
+                    if anomalies > 0:
+                        logger.warning(
+                            f"데이터 무결성 이상 {anomalies}건 감지 "
+                            f"({', '.join(r['check_name'] + '=' + str(r['count']) for r in integrity_result['results'] if r['status'] != 'OK')})"
+                        )
+                    else:
+                        logger.info("데이터 무결성 검증 통과 (이상 없음)")
+                except Exception as e:
+                    logger.warning(f"[Phase 1.67] 무결성 검증 실패 (발주 플로우 계속): {e}")
+
+            # ★ Phase 1.68: DirectAPI 실시간 재고 갱신 (예측 전)
+            # stale RI 상품의 NOW_QTY를 BGF selSearch로 조회하여 RI 갱신
+            if run_auto_order and collection_success:
+                try:
+                    from src.infrastructure.database.repos.inventory_repo import (
+                        RealtimeInventoryRepository,
+                    )
+                    ri_repo = RealtimeInventoryRepository(store_id=self.store_id)
+                    stale_items = ri_repo.get_stale_stock_item_codes(store_id=self.store_id)
+
+                    if stale_items:
+                        logger.info(f"[Phase 1.68] DirectAPI Stock Refresh: {len(stale_items)}개 stale 상품")
+                        logger.info(LOG_SEPARATOR_THIN)
+                        driver = self.collector.get_driver()
+                        if driver:
+                            from src.collectors.order_prep_collector import OrderPrepCollector
+                            stock_collector = OrderPrepCollector(
+                                driver=driver,
+                                store_id=self.store_id,
+                                save_to_db=True,
+                            )
+                            try:
+                                api_results = stock_collector._collect_via_direct_api(stale_items)
+
+                                if api_results:
+                                    refreshed = len([
+                                        r for r in api_results.values()
+                                        if r and r.get('success')
+                                    ])
+                                    logger.info(
+                                        f"[Phase 1.68] RI 갱신 완료: "
+                                        f"{refreshed}/{len(stale_items)}건"
+                                    )
+                                else:
+                                    logger.info(
+                                        f"[Phase 1.68] DirectAPI 실패 → "
+                                        f"Selenium 폴백 생략 (Phase 2에서 수집)"
+                                    )
+                            finally:
+                                # ★ 반드시 탭 닫기 — 이후 Phase 2 발주 화면과 충돌 방지
+                                try:
+                                    stock_collector.close_menu()
+                                    logger.info("[Phase 1.68] 단품별 발주 탭 정리 완료")
+                                except Exception as close_err:
+                                    logger.debug(f"[Phase 1.68] 탭 닫기: {close_err}")
+                        else:
+                            logger.warning("[Phase 1.68] 드라이버 없음 — 스킵")
+                    else:
+                        logger.info("[Phase 1.68] stale 상품 없음 — 스킵")
+                except Exception as e:
+                    logger.warning(
+                        f"[Phase 1.68] 실시간 재고 갱신 실패 (발주 플로우 계속): {e}"
+                    )
+
+            # ★ 예측 로깅 (prediction_logs 기록 - 자동발주와 독립)
+            # auto-order 활성화 시 Phase 2에서 예측+로깅 수행하므로 스킵 (~5-10초 절약)
+            if collection_success and not run_auto_order:
                 try:
                     logger.info("[Phase 1.7] Prediction Logging")
                     logger.info(LOG_SEPARATOR_THIN)
@@ -479,12 +821,89 @@ class DailyCollectionJob:
                         logger.debug(f"푸드 예측 요약 로그 실패 (비치명적): {summary_err}")
                 except Exception as e:
                     logger.warning(f"예측 로깅 실패 (발주 플로우 계속): {e}")
+            elif collection_success and run_auto_order:
+                logger.info("[Phase 1.7] 스킵 (Phase 2에서 예측+로깅 수행)")
 
             # 카카오톡 리포트 발송
             if collection_results.get(today_str, {}).get("success"):
                 self._send_kakao_report(today_str, {"success": True})
             elif collection_results.get(yesterday_str, {}).get("success"):
                 self._send_kakao_report(yesterday_str, {"success": True})
+
+            # ★ Phase 1.95: 발주현황 → OT 동기화 (수동발주 pending 인식)
+            # Phase 1.2에서 이미 OT 동기화 완료 시 스킵 (~5-8초 절약)
+            ot_sync_done = (exclusion_stats or {}).get("ot_sync_done", False)
+            if run_auto_order and collection_success and not ot_sync_done:
+                try:
+                    logger.info("[Phase 1.95] Order Status -> OT Sync (Phase 1.2에서 미완료, 재시도)")
+                    logger.info(LOG_SEPARATOR_THIN)
+                    driver = self.collector.get_driver()
+                    if driver:
+                        from src.collectors.order_status_collector import OrderStatusCollector
+                        os_collector = OrderStatusCollector(
+                            driver=driver, store_id=self.store_id
+                        )
+
+                        # 만료된 pending 클리어 (최대 1일 유효)
+                        today_str_for_pending = datetime.now().strftime("%Y-%m-%d")
+                        try:
+                            clear_result = os_collector.clear_expired_pending(today_str_for_pending)
+                            if clear_result.get("cleared_ot", 0) > 0:
+                                logger.info(
+                                    f"[Phase 1.95] Expired pending cleared: "
+                                    f"OT={clear_result['cleared_ot']}, RI={clear_result['cleared_ri']}"
+                                )
+                        except Exception as e:
+                            logger.debug(f"[Phase 1.95] Pending 만료 클리어 실패 (무시): {e}")
+
+                        if os_collector.navigate_to_order_status_menu():
+                            sync_result = os_collector.sync_pending_to_order_tracking(
+                                days_back=7
+                            )
+                            logger.info(
+                                f"[Phase 1.95] 동기화 완료: "
+                                f"신규={sync_result['synced']}건, "
+                                f"스킵={sync_result['skipped']}건"
+                            )
+
+                            # ★ 발주 정합성 검증: 어제 발주현황 재수집 + order_tracking 대조
+                            # BGF에 있는 건 → pending_confirmed=1 (미입고 보정 근거)
+                            # BGF에 없는 건 → 무효화 (false positive 제거)
+                            try:
+                                from datetime import timedelta as _td
+                                yesterday_str = (datetime.now() - _td(days=1)).strftime("%Y-%m-%d")
+                                bgf_orders = os_collector.collect_yesterday_orders(yesterday_str)
+                                if bgf_orders is not None:
+                                    bgf_item_set = {o['item_cd'] for o in bgf_orders}
+                                    from src.infrastructure.database.repos.order_tracking_repo import OrderTrackingRepository
+                                    tracking_repo = OrderTrackingRepository(store_id=self.store_id)
+                                    result = tracking_repo.reconcile_with_bgf_orders(
+                                        order_date=yesterday_str,
+                                        bgf_confirmed_items=bgf_item_set,
+                                        store_id=self.store_id,
+                                    )
+                                    confirmed = result.get('confirmed', 0)
+                                    invalidated = result.get('invalidated', 0)
+                                    if confirmed > 0 or invalidated > 0:
+                                        logger.info(
+                                            f"[Phase 1.96] 발주정합성: "
+                                            f"BGF확인={confirmed}건, 무효화={invalidated}건"
+                                        )
+                                    else:
+                                        logger.info("[Phase 1.96] 발주정합성: 대조 대상 없음")
+                            except Exception as e:
+                                logger.warning(f"[Phase 1.96] 발주정합성 검증 실패 (무시): {e}")
+
+                            # 탭 닫기
+                            os_collector.close_menu()
+                        else:
+                            logger.warning("[Phase 1.95] 발주현황 메뉴 이동 실패, 동기화 건너뜀")
+                    else:
+                        logger.warning("[Phase 1.95] 드라이버 없음, 동기화 건너뜀")
+                except Exception as e:
+                    logger.warning(f"[Phase 1.95] 발주현황 동기화 실패 (발주 플로우 계속): {e}")
+            elif ot_sync_done:
+                logger.info("[Phase 1.95] 스킵 (Phase 1.2에서 OT 동기화 완료)")
 
             # 2. 자동 발주 (수집 성공 시)
             if run_auto_order and collection_success:
@@ -496,20 +915,60 @@ class DailyCollectionJob:
                 logger.info(f"매출분석 탭 닫기: {close_result}")
                 time.sleep(DAILY_JOB_AFTER_CLOSE_TAB)
 
+                # Phase 2 시작 전 잔여 탭 강제 정리 (이전 Phase 탭 잔류 방지)
+                driver = self.collector.get_driver()
+                if driver:
+                    from src.settings.ui_config import FRAME_IDS
+                    _cleanup_dangling_tabs(driver, [
+                        FRAME_IDS.get("WASTE_SLIP", "STGJ020_M0"),
+                        FRAME_IDS.get("ORDER_STATUS", "STBJ070_M0"),
+                        FRAME_IDS.get("NEW_PRODUCT_STATUS", "SS_STBJ460_M0"),
+                        FRAME_IDS.get("RECEIVING", "STGJ010_M0"),
+                        "STMB010_M0",  # 시간대별 매출 탭 (Phase 1.04/1.05 잔여)
+                    ])
+
                 # 드라이버 재사용하여 발주
                 driver = self.collector.get_driver()
                 if driver:
                     # Phase 1.2에서 DB 캐시 갱신 성공했으면 사이트 재조회 건너뜀
                     exclusion_cached = bool(exclusion_stats and exclusion_stats.get("success"))
+                    if not exclusion_cached:
+                        logger.info("[Phase 2] 제외 상품 캐시 없음 — 사이트 직접 조회")
                     order_result = self._run_auto_order_with_driver(
                         driver, use_improved_predictor,
-                        skip_exclusion_fetch=exclusion_cached
+                        skip_exclusion_fetch=exclusion_cached,
+                        target_dates=getattr(self, '_target_dates', None),
                     )
+
+                    # 2.5 Q5 만료 재고 처리 내역 카카오 알림
+                    q5_data = order_result.get("q5_expired_stock")
+                    if q5_data and q5_data.get("total_skus", 0) > 0:
+                        try:
+                            q5_lines = [
+                                f"[만료재고 처리] 만료 차감 발생: {q5_data['total_skus']}개 SKU"
+                            ]
+                            for qi in q5_data.get("applied_items", [])[:3]:
+                                q5_lines.append(
+                                    f"  {qi.get('item_nm', qi['item_cd'])[:15]} "
+                                    f"재고{qi['stock_before']}→{qi['stock_after']} "
+                                    f"(만료분 차감)"
+                                )
+                            q5_msg = "\n".join(q5_lines)
+                            logger.info(f"[Q5] 카카오 알림:\n{q5_msg}")
+
+                            from src.notification.kakao_notifier import KakaoNotifier
+                            from src.settings.constants import DEFAULT_REST_API_KEY
+                            _notifier = KakaoNotifier(DEFAULT_REST_API_KEY)
+                            if _notifier.access_token:
+                                _notifier.send_message(q5_msg)
+                        except Exception as e_q5:
+                            logger.debug(f"[Q5] 카카오 알림 실패: {e_q5}")
 
                     # 3. 발주 실패 사유 수집 (실패 건이 있을 때)
                     fail_count = order_result.get("fail_count", 0)
                     if fail_count > 0 and driver:
                         fail_reason_result = self._run_fail_reason_collection(driver)
+
                 else:
                     logger.warning("Driver not available, skipping auto-order")
             else:
@@ -547,6 +1006,7 @@ class DailyCollectionJob:
             }
 
         finally:
+            clear_session_id()
             if self.collector:
                 self.collector.close()
                 self.collector = None
@@ -567,29 +1027,89 @@ class DailyCollectionJob:
 
         collector = OrderStatusCollector(driver, store_id=self.store_id)
         try:
-            if not collector.navigate_to_order_status_menu():
-                logger.warning("발주 현황 조회 메뉴 이동 실패")
-                return result
+            nav_ok = collector.navigate_to_order_status_menu()
+            fallback_normal_only = False
 
-            # 자동발주
-            auto_detail = collector.collect_auto_order_items_detail()
-            if auto_detail is not None:
-                saved = AutoOrderItemRepository(store_id=self.store_id).refresh(auto_detail, store_id=self.store_id)
-                result["auto_count"] = saved
-                logger.info(f"자동발주 제외 상품 {len(auto_detail)}개 수집, DB {saved}건 갱신")
-            else:
-                logger.warning("자동발주 제외 상품 사이트 조회 실패")
+            if not nav_ok:
+                logger.warning("발주 현황 조회 메뉴 이동 실패 - 3초 후 수동발주 수집 위해 재시도")
+                time.sleep(3)
+                nav_ok = collector.navigate_to_order_status_menu()
+                if nav_ok:
+                    fallback_normal_only = True
+                    logger.info("메뉴 이동 재시도 성공 - 일반(수동) 발주만 수집")
+                else:
+                    logger.error("메뉴 이동 재시도 실패 - 수동발주 수집 불가")
+                    return result
 
-            # 스마트발주
-            smart_detail = collector.collect_smart_order_items_detail()
-            if smart_detail is not None:
-                saved = SmartOrderItemRepository(store_id=self.store_id).refresh(smart_detail, store_id=self.store_id)
-                result["smart_count"] = saved
-                logger.info(f"스마트발주 제외 상품 {len(smart_detail)}개 수집, DB {saved}건 갱신")
+            if not fallback_normal_only:
+                # 자동발주
+                auto_detail = collector.collect_auto_order_items_detail()
+                if auto_detail is not None:
+                    saved = AutoOrderItemRepository(store_id=self.store_id).refresh(auto_detail, store_id=self.store_id)
+                    result["auto_count"] = saved
+                    logger.info(f"자동발주 제외 상품 {len(auto_detail)}개 수집, DB {saved}건 갱신")
+                else:
+                    logger.warning("자동발주 제외 상품 사이트 조회 실패")
+
+                # 스마트발주
+                smart_detail = collector.collect_smart_order_items_detail()
+                if smart_detail is not None:
+                    saved = SmartOrderItemRepository(store_id=self.store_id).refresh(smart_detail, store_id=self.store_id)
+                    result["smart_count"] = saved
+                    logger.info(f"스마트발주 제외 상품 {len(smart_detail)}개 수집, DB {saved}건 갱신")
+                else:
+                    logger.warning("스마트발주 제외 상품 사이트 조회 실패")
+
+            # 일반(수동) 발주 수집 (푸드 차감용) — 항상 실행
+            from src.infrastructure.database.repos import ManualOrderItemRepository
+            normal_items = collector.collect_normal_order_items()
+            if normal_items is not None:
+                from datetime import datetime as _dt
+                today_str = _dt.now().strftime("%Y-%m-%d")
+                saved = ManualOrderItemRepository(store_id=self.store_id).refresh(
+                    normal_items, order_date=today_str, store_id=self.store_id
+                )
+                result["normal_count"] = saved
+                food_count = sum(
+                    1 for it in normal_items
+                    if it.get("mid_cd", "") in ("001", "002", "003", "004", "005", "012")
+                )
+                logger.info(
+                    f"일반(수동) 발주 {len(normal_items)}개 수집 "
+                    f"(푸드: {food_count}, 비푸드: {len(normal_items) - food_count}), "
+                    f"DB {saved}건 갱신"
+                )
             else:
-                logger.warning("스마트발주 제외 상품 사이트 조회 실패")
+                logger.warning("일반(수동) 발주 사이트 조회 실패")
 
             result["success"] = True
+
+            # ★ OT 동기화를 같은 메뉴 세션에서 수행 (~5-8초 절약)
+            # Phase 1.95의 로직을 여기서 실행하여 메뉴 중복 진입 방지
+            try:
+                # 만료된 pending 클리어 (최대 1일 유효)
+                today_str_for_pending = datetime.now().strftime("%Y-%m-%d")
+                try:
+                    clear_result = collector.clear_expired_pending(today_str_for_pending)
+                    if clear_result.get("cleared_ot", 0) > 0:
+                        logger.info(
+                            f"[Phase 1.2→OT] Expired pending cleared: "
+                            f"OT={clear_result['cleared_ot']}, RI={clear_result['cleared_ri']}"
+                        )
+                except Exception as e:
+                    logger.debug(f"[Phase 1.2→OT] Pending 만료 클리어 실패 (무시): {e}")
+
+                # 이미 메뉴가 열려 있으므로 navigate 없이 바로 동기화
+                sync_result = collector.sync_pending_to_order_tracking(days_back=7)
+                logger.info(
+                    f"[Phase 1.2→OT] 동기화 완료: "
+                    f"신규={sync_result['synced']}건, "
+                    f"스킵={sync_result['skipped']}건"
+                )
+                result["ot_sync_done"] = True
+            except Exception as e:
+                logger.warning(f"[Phase 1.2→OT] OT 동기화 실패 (Phase 1.95에서 재시도): {e}")
+                result["ot_sync_done"] = False
         finally:
             if not collector.close_menu():
                 from src.utils.nexacro_helpers import close_tab_by_frame_id
@@ -624,7 +1144,8 @@ class DailyCollectionJob:
 
     def _run_auto_order_with_driver(
         self, driver: Any, use_improved_predictor: bool = True,
-        skip_exclusion_fetch: bool = False
+        skip_exclusion_fetch: bool = False,
+        target_dates: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """
         기존 드라이버로 자동 발주 실행 (DailyOrderFlow 위임)
@@ -633,6 +1154,7 @@ class DailyCollectionJob:
             driver: Selenium WebDriver
             use_improved_predictor: True면 개선된 예측기 사용 (31일 데이터 기반)
             skip_exclusion_fetch: True면 자동/스마트발주 목록 사이트 재조회 건너뜀
+            target_dates: 발주할 날짜 목록 (YYYY-MM-DD). None이면 전체 발주
         """
         try:
             from src.application.use_cases.daily_order_flow import DailyOrderFlow
@@ -654,6 +1176,7 @@ class DailyCollectionJob:
                 prefetch_pending=True,
                 collect_fail_reasons=False,  # 실패 사유는 run_optimized에서 별도 수집
                 skip_exclusion_fetch=skip_exclusion_fetch,
+                target_dates=target_dates,
             )
 
             # DailyOrderFlow 결과에서 execution 결과 추출 (기존 인터페이스 호환)
@@ -834,14 +1357,17 @@ class DailyCollectionJob:
             logger.error(f"Expiry alert failed: {e}")
 
     def _save_weather_data(self, target_date: str, weather: Dict[str, Any]) -> None:
-        """날씨 데이터를 DB에 저장"""
+        """날씨 데이터를 DB에 저장 (매장별 store_id 격리)"""
         try:
+            sid = self.store_id  # 매장별 날씨 격리
+
             if weather.get("temperature") is not None:
                 self.weather_repo.save_factor(
                     factor_date=target_date,
                     factor_type="weather",
                     factor_key="temperature",
-                    factor_value=str(weather["temperature"])
+                    factor_value=str(weather["temperature"]),
+                    store_id=sid
                 )
 
             if weather.get("weather_type"):
@@ -849,7 +1375,8 @@ class DailyCollectionJob:
                     factor_date=target_date,
                     factor_type="weather",
                     factor_key="weather_type",
-                    factor_value=weather["weather_type"]
+                    factor_value=weather["weather_type"],
+                    store_id=sid
                 )
 
             if weather.get("day_of_week"):
@@ -876,9 +1403,76 @@ class DailyCollectionJob:
                         factor_date=fdate,
                         factor_type="weather",
                         factor_key="temperature_forecast",
-                        factor_value=str(ftemp)
+                        factor_value=str(ftemp),
+                        store_id=sid
                     )
                 logger.info(f"Forecast saved: {forecast_daily}")
+
+            # 강수 예보 저장 (강수확률/강수량/강수유형/날씨설명/눈여부)
+            forecast_precipitation = weather.get("forecast_precipitation", {})
+            if forecast_precipitation:
+                for fdate, precip in forecast_precipitation.items():
+                    if precip.get("rain_rate") is not None:
+                        self.weather_repo.save_factor(
+                            factor_date=fdate,
+                            factor_type="weather",
+                            factor_key="rain_rate_forecast",
+                            factor_value=str(precip["rain_rate"]),
+                            store_id=sid
+                        )
+                    if precip.get("rain_qty") is not None:
+                        self.weather_repo.save_factor(
+                            factor_date=fdate,
+                            factor_type="weather",
+                            factor_key="rain_qty_forecast",
+                            factor_value=str(precip["rain_qty"]),
+                            store_id=sid
+                        )
+                    if precip.get("rain_type_nm"):
+                        self.weather_repo.save_factor(
+                            factor_date=fdate,
+                            factor_type="weather",
+                            factor_key="rain_type_nm_forecast",
+                            factor_value=precip["rain_type_nm"],
+                            store_id=sid
+                        )
+                    if precip.get("weather_cd_nm"):
+                        self.weather_repo.save_factor(
+                            factor_date=fdate,
+                            factor_type="weather",
+                            factor_key="weather_cd_nm_forecast",
+                            factor_value=precip["weather_cd_nm"],
+                            store_id=sid
+                        )
+                    if precip.get("is_snow"):
+                        self.weather_repo.save_factor(
+                            factor_date=fdate,
+                            factor_type="weather",
+                            factor_key="is_snow_forecast",
+                            factor_value="1",
+                            store_id=sid
+                        )
+                    # Phase A-4: 미세먼지 등급 저장
+                    if precip.get("dust_grade"):
+                        self.weather_repo.save_factor(
+                            factor_date=fdate,
+                            factor_type="weather",
+                            factor_key="dust_grade_forecast",
+                            factor_value=precip["dust_grade"],
+                            store_id=sid
+                        )
+                    if precip.get("fine_dust_grade"):
+                        self.weather_repo.save_factor(
+                            factor_date=fdate,
+                            factor_type="weather",
+                            factor_key="fine_dust_grade_forecast",
+                            factor_value=precip["fine_dust_grade"],
+                            store_id=sid
+                        )
+                logger.info(
+                    f"Precipitation forecast saved: {list(forecast_precipitation.keys())} "
+                    f"(dust_src={weather.get('dust_source', '?')})"
+                )
 
             logger.info(f"Weather saved: {weather.get('temperature')}도")
 
@@ -962,6 +1556,82 @@ def run_daily_job_optimized(
         run_auto_order=run_auto_order,
         use_improved_predictor=use_improved_predictor
     )
+
+
+def run_second_delivery_adjustment(store_id: Optional[str] = None) -> Dict[str, Any]:
+    """
+    D-1: 2차 배송 보정 (14:00 실행)
+
+    Phase 1: DB 판단 (Selenium 없음) → 부스트 대상 결정
+    Phase 2: 부스트 대상 있을 때만 Selenium 세션 시작 → 추가 발주
+
+    Args:
+        store_id: 매장 코드 (None이면 전체 활성 매장)
+
+    Returns:
+        실행 결과
+    """
+    from src.analysis.second_delivery_adjuster import (
+        run_second_delivery_adjustment as _run_adjustment,
+        execute_boost_orders,
+    )
+
+    if store_id is None:
+        from src.settings.store_context import StoreContext
+        store_ids = [ctx.store_id for ctx in StoreContext.get_all_active()]
+    else:
+        store_ids = [store_id]
+
+    all_results = {}
+
+    for sid in store_ids:
+        set_session_id(f"D1_{sid}")
+        logger.info(LOG_SEPARATOR_WIDE)
+        logger.info(f"[D-1] 2차 배송 보정 시작 (store={sid})")
+
+        try:
+            # Phase 1: DB 판단 (Selenium 불필요)
+            result = _run_adjustment(sid)
+
+            # Phase 2: 부스트 대상 있을 때만 Selenium
+            if result.boost_orders:
+                logger.info(f"[D-1] 부스트 대상 {len(result.boost_orders)}개 → Selenium 세션 시작")
+                try:
+                    from src.collectors.bgf_collector import BGFCollector
+                    collector = BGFCollector(store_id=sid)
+                    driver = collector.login()
+                    if driver:
+                        exec_result = execute_boost_orders(result, driver)
+                        collector.close()
+                        all_results[sid] = {
+                            "success": True,
+                            "boost_targets": result.boost_targets,
+                            "executed": exec_result["executed"],
+                            "failed": exec_result["failed"],
+                            "reduce_logged": result.reduce_logged,
+                        }
+                    else:
+                        logger.warning(f"[D-1] 로그인 실패 (store={sid})")
+                        all_results[sid] = {"success": False, "error": "login failed"}
+                except Exception as e:
+                    logger.error(f"[D-1] Selenium 실행 실패 (store={sid}): {e}")
+                    all_results[sid] = {"success": False, "error": str(e)}
+            else:
+                logger.info(f"[D-1] 부스트 대상 없음 → Selenium 생략")
+                all_results[sid] = {
+                    "success": True,
+                    "boost_targets": 0,
+                    "reduce_logged": result.reduce_logged,
+                    "skipped": result.skipped,
+                }
+
+        except Exception as e:
+            logger.error(f"[D-1] 실행 실패 (store={sid}): {e}")
+            all_results[sid] = {"success": False, "error": str(e)}
+        finally:
+            clear_session_id()
+
+    return all_results
 
 
 def weekly_accuracy_report(store_id: Optional[str] = None) -> Dict[str, Any]:

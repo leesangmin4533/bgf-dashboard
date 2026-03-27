@@ -107,6 +107,11 @@ function onGlobalStoreChange() {
     // lazy-load 플래그 리셋 (탭 전환 시 새 매장 데이터로 다시 로드하도록)
     window._predAccuracyLoaded = false;
     window._weeklyLoaded = false;
+    if (typeof _invLoaded !== 'undefined') _invLoaded = false;
+    if (typeof _rcvLoaded !== 'undefined') _rcvLoaded = false;
+    if (typeof DessertDashboard !== 'undefined') DessertDashboard._loaded = false;
+    if (typeof BeverageDashboard !== 'undefined') BeverageDashboard._loaded = false;
+    if (typeof CategoryDashboard !== 'undefined') CategoryDashboard._activeSubTab = 'dessert';
     // 현재 활성 탭 데이터 재로드
     reloadActiveTab();
 }
@@ -143,6 +148,18 @@ function reloadActiveTab() {
     }
     if (tab === 'settings') {
         if (typeof loadUsersTab === 'function') loadUsersTab();
+        if (typeof loadSettingsData === 'function') loadSettingsData();
+    }
+    if (tab === 'food-monitor') {
+        if (typeof resetFoodMonitor === 'function') resetFoodMonitor();
+        if (typeof loadFoodMonitor === 'function') loadFoodMonitor();
+    }
+    if (tab === 'association') {
+        if (typeof resetAssociation === 'function') resetAssociation();
+        if (typeof loadAssociation === 'function') loadAssociation();
+    }
+    if (tab === 'category') {
+        if (typeof CategoryDashboard !== 'undefined') CategoryDashboard.init();
     }
 }
 
@@ -177,9 +194,22 @@ document.querySelectorAll('.nav-tab').forEach(tab => {
                 if (!window._predAccuracyLoaded && typeof loadAccuracyDetail === 'function') loadAccuracyDetail();
             }
         }
+        // 푸드 모니터 탭 활성화 시 데이터 로드
+        if (target === 'food-monitor' && typeof loadFoodMonitor === 'function') {
+            loadFoodMonitor();
+        }
+        // 연관분석 탭 활성화 시 데이터 로드
+        if (target === 'association' && typeof loadAssociation === 'function') {
+            loadAssociation();
+        }
+        // 카테고리 탭 활성화 시 데이터 로드
+        if (target === 'category' && typeof CategoryDashboard !== 'undefined') {
+            CategoryDashboard.init();
+        }
         // 설정 탭 활성화 시 데이터 로드
-        if (target === 'settings' && typeof loadUsersTab === 'function') {
-            loadUsersTab();
+        if (target === 'settings') {
+            if (typeof loadUsersTab === 'function') loadUsersTab();
+            if (typeof loadSettingsData === 'function') loadSettingsData();
         }
     });
 });
@@ -204,6 +234,15 @@ document.querySelectorAll('.analytics-tab-btn').forEach(function(tab) {
         if (target === 'accuracy' && typeof loadPredSummary === 'function') {
             loadPredSummary();
             if (!window._predAccuracyLoaded && typeof loadAccuracyDetail === 'function') loadAccuracyDetail();
+        }
+        if (target === 'waste' && typeof loadWasteAnalysis === 'function') {
+            loadWasteAnalysis(_wasteDays || 7);
+        }
+        if (target === 'inventory' && typeof loadInventoryDashboard === 'function') {
+            loadInventoryDashboard();
+        }
+        if (target === 'receiving' && typeof loadReceivingDashboard === 'function') {
+            loadReceivingDashboard();
         }
     });
 });

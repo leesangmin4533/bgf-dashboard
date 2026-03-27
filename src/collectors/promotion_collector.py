@@ -17,7 +17,8 @@ import sqlite3
 import time
 from typing import Any, Optional, List, Dict
 from dataclasses import dataclass
-from datetime import datetime, date
+import calendar
+from datetime import datetime, date, timedelta
 from pathlib import Path
 
 from selenium.webdriver.remote.webdriver import WebDriver
@@ -100,7 +101,8 @@ class PromotionCollector:
         """
         self.driver = driver
         if db_path is None:
-            db_path = Path(__file__).parent.parent.parent / "data" / "bgf_sales.db"
+            from src.infrastructure.database.connection import resolve_db_path
+            db_path = resolve_db_path(store_id=store_id)
         self.db_path = str(db_path)
         self.store_id = store_id
 
@@ -421,6 +423,216 @@ class PromotionCollector:
             logger.debug(f"팝업 닫기 실패: {e}")
 
     # =========================================================================
+    # 반월 행사 연장 사전 감지
+    # =========================================================================
+
+    def check_and_update_extensions(self) -> List[Dict[str, Any]]:
+        """행사 종료 D-5 이내 상품에 대해 연장 여부 사전 감지
+
+        반월 주기(1~15, 16~末) 경계에서 동일 행사가 다음 반월에도 계속되는지 확인.
+        연장 감지 시 promotions.end_date 갱신 + promotion_changes 'extended' 기록.
+
+        Returns:
+            연장 감지된 상품 리스트 [{item_cd, item_nm, old_end, new_end, promo_type}, ...]
+        """
+        today = date.today()
+
+        # 반월 경계 종료일 계산
+        if today.day <= 15:
+            boundary_end = today.replace(day=15)
+        else:
+            last_day = calendar.monthrange(today.year, today.month)[1]
+            boundary_end = today.replace(day=last_day)
+
+        boundary_str = boundary_end.strftime('%Y-%m-%d')
+        days_to_boundary = (boundary_end - today).days
+
+        # D-5 이내만 트리거
+        if days_to_boundary > 5:
+            logger.info(f"[행사연장] 반월 경계까지 {days_to_boundary}일 → 스킵")
+            return []
+
+        # DB에서 이번 반월 경계에 종료되는 행사 조회
+        conn = self._get_connection()
+        try:
+            cursor = conn.cursor()
+            today_str = today.strftime('%Y-%m-%d')
+            store_filter_sql = "AND store_id = ?" if self.store_id else ""
+            store_params = (self.store_id,) if self.store_id else ()
+
+            cursor.execute(f"""
+                SELECT item_cd, item_nm, promo_type, start_date, end_date
+                FROM promotions
+                WHERE end_date = ?
+                  AND is_active = 1
+                  AND start_date <= ?
+                  {store_filter_sql}
+            """, (boundary_str, today_str) + store_params)
+
+            candidates = [dict(row) for row in cursor.fetchall()]
+        finally:
+            conn.close()
+
+        if not candidates:
+            logger.info(f"[행사연장] 경계일({boundary_str}) 종료 행사 없음")
+            return []
+
+        logger.info(
+            f"[행사연장] D-{days_to_boundary} 경계일={boundary_str}, "
+            f"대상 {len(candidates)}건 조회 시작"
+        )
+
+        extensions = []
+        for item in candidates:
+            result = self._check_single_extension(item, boundary_end)
+            if result:
+                extensions.append(result)
+
+        if extensions:
+            logger.info(f"[행사연장] {len(extensions)}건 연장 감지 완료")
+            self._notify_extensions(extensions)
+
+        return extensions
+
+    def _check_single_extension(
+        self, item: Dict[str, Any], boundary_end: date
+    ) -> Optional[Dict[str, Any]]:
+        """단일 상품 연장 여부 확인 (BGF 재조회)
+
+        Args:
+            item: {item_cd, item_nm, promo_type, start_date, end_date}
+            boundary_end: 현재 반월 경계 종료일
+
+        Returns:
+            연장 정보 dict 또는 None
+        """
+        item_cd = item['item_cd']
+        current_promo_type = item['promo_type']
+
+        try:
+            # BGF 사이트에서 최신 행사 정보 조회
+            promo_info = self.get_item_promotion(item_cd)
+
+            if not promo_info:
+                logger.debug(f"[행사연장] {item_cd} BGF 조회 실패")
+                return None
+
+            # === Case A: 현재 행사 end_date가 이미 다음 반월로 갱신됨 ===
+            if (promo_info.end_date
+                    and promo_info.promo_type == current_promo_type):
+                fetched_end = datetime.strptime(promo_info.end_date, '%Y-%m-%d').date()
+                if fetched_end > boundary_end:
+                    new_end = promo_info.end_date
+                    self._apply_extension(item, new_end)
+                    return {
+                        'item_cd': item_cd,
+                        'item_nm': item.get('item_nm', ''),
+                        'promo_type': current_promo_type,
+                        'old_end': item['end_date'],
+                        'new_end': new_end,
+                        'detection': 'case_a_direct',
+                    }
+
+            # === Case B: 익월에 동일 행사가 다음날부터 시작 ===
+            if (promo_info.next_promo_type == current_promo_type
+                    and promo_info.next_start_date):
+                next_start = datetime.strptime(
+                    promo_info.next_start_date, '%Y-%m-%d'
+                ).date()
+                day_after_boundary = boundary_end + timedelta(days=1)
+
+                if next_start == day_after_boundary:
+                    new_end = promo_info.next_end_date or promo_info.next_start_date
+                    self._apply_extension(item, new_end)
+                    return {
+                        'item_cd': item_cd,
+                        'item_nm': item.get('item_nm', ''),
+                        'promo_type': current_promo_type,
+                        'old_end': item['end_date'],
+                        'new_end': new_end,
+                        'detection': 'case_b_next_half',
+                    }
+
+            time.sleep(0.3)  # BGF 요청 간격
+            return None
+
+        except Exception as e:
+            logger.warning(f"[행사연장] {item_cd} 확인 실패: {e}")
+            return None
+
+    def _apply_extension(self, item: Dict[str, Any], new_end: str) -> None:
+        """연장 감지 시 DB 갱신
+
+        1. promotions.end_date 갱신
+        2. promotion_changes에 'extended' 기록
+
+        Args:
+            item: 원본 행사 정보 {item_cd, promo_type, start_date, end_date, ...}
+            new_end: 새 종료일 (YYYY-MM-DD)
+        """
+        conn = self._get_connection()
+        try:
+            cursor = conn.cursor()
+            now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+            # 1. promotions end_date 갱신
+            store_filter_sql = "AND store_id = ?" if self.store_id else ""
+            store_params = (self.store_id,) if self.store_id else ()
+
+            cursor.execute(f"""
+                UPDATE promotions
+                SET end_date = ?, updated_at = ?
+                WHERE item_cd = ?
+                  AND promo_type = ?
+                  AND start_date = ?
+                  AND is_active = 1
+                  {store_filter_sql}
+            """, (new_end, now, item['item_cd'], item['promo_type'],
+                  item['start_date']) + store_params)
+
+            # 2. promotion_changes에 'extended' 기록
+            cursor.execute("""
+                INSERT OR IGNORE INTO promotion_changes
+                (item_cd, item_nm, change_type, change_date,
+                 prev_promo_type, next_promo_type, store_id, detected_at)
+                VALUES (?, ?, 'extended', ?, ?, ?, ?, ?)
+            """, (
+                item['item_cd'],
+                item.get('item_nm', ''),
+                new_end,                    # change_date = 새 종료일
+                item['promo_type'],         # prev = 현재 행사 유형
+                item['promo_type'],         # next = 동일 (연장)
+                self.store_id,
+                now,
+            ))
+
+            conn.commit()
+            logger.info(
+                f"[행사연장] {item['item_cd']} 연장 적용: "
+                f"{item['end_date']} → {new_end} ({item['promo_type']})"
+            )
+        except Exception as e:
+            conn.rollback()
+            logger.error(f"[행사연장] {item['item_cd']} DB 갱신 실패: {e}")
+        finally:
+            conn.close()
+
+    def _notify_extensions(self, extensions: List[Dict[str, Any]]) -> None:
+        """연장 감지 카카오 알림 (선택적)"""
+        try:
+            from src.notification.kakao_notifier import KakaoNotifier
+            notifier = KakaoNotifier()
+            lines = [f"[행사 연장 감지] {len(extensions)}건"]
+            for ext in extensions[:10]:  # 최대 10건
+                lines.append(
+                    f"  {ext['item_nm'][:12]}: {ext['promo_type']} "
+                    f"{ext['old_end']}→{ext['new_end']}"
+                )
+            notifier.send_text('\n'.join(lines))
+        except Exception as e:
+            logger.debug(f"[행사연장] 카카오 알림 실패 (무시): {e}")
+
+    # =========================================================================
     # 일괄 수집
     # =========================================================================
 
@@ -432,6 +644,8 @@ class PromotionCollector:
         """
         전체 상품 행사 정보 수집
 
+        Direct API 우선 → Selenium 폴백.
+
         Args:
             item_list: 수집할 상품코드 리스트 (None이면 전체)
             save_to_db: DB 저장 여부
@@ -442,12 +656,41 @@ class PromotionCollector:
         if item_list is None:
             item_list = self._get_all_item_codes()
 
-        results = []
         total = len(item_list)
-
         logger.info(f"행사 정보 수집 시작: {total}개 상품")
 
-        for idx, item_cd in enumerate(item_list):
+        results = []
+        api_done = set()
+
+        # ── Direct API 우선 시도 ──
+        try:
+            from src.collectors.direct_popup_fetcher import DirectPopupFetcher
+
+            fetcher = DirectPopupFetcher(
+                self.driver, concurrency=5, timeout_ms=8000
+            )
+            if fetcher.capture_template():
+                api_results = fetcher.fetch_promotions(item_list)
+                for item_cd, data in api_results.items():
+                    evt_text = data.get('evt_text', '')
+                    promo_info = self._parse_evt_text_to_promo(
+                        item_cd, data.get('item_nm', ''), evt_text
+                    )
+                    if promo_info:
+                        results.append(promo_info)
+                        if save_to_db:
+                            self._save_promotion(promo_info)
+                        api_done.add(item_cd)
+                logger.info(
+                    f"[Promo/API] {len(api_done)}건 성공, "
+                    f"{total - len(api_done)}건 폴백"
+                )
+        except (ImportError, Exception) as e:
+            logger.info(f"[Promo] Direct API 사용 불가: {e}")
+
+        # ── Selenium 폴백 ──
+        remaining = [c for c in item_list if c not in api_done]
+        for idx, item_cd in enumerate(remaining):
             try:
                 promo_info = self.get_item_promotion(item_cd)
 
@@ -459,9 +702,8 @@ class PromotionCollector:
 
                 # 진행률 로그
                 if (idx + 1) % 50 == 0:
-                    logger.info(f"진행률: {idx + 1}/{total}")
+                    logger.info(f"[Promo/Selenium] 진행률: {idx + 1}/{len(remaining)}")
 
-                # 요청 간 딜레이
                 time.sleep(0.3)
 
             except Exception as e:
@@ -471,6 +713,46 @@ class PromotionCollector:
         logger.info(f"행사 정보 수집 완료: {len(results)}/{total}")
 
         return results
+
+    def _parse_evt_text_to_promo(
+        self, item_cd: str, item_nm: str, evt_text: str
+    ) -> Optional[PromotionInfo]:
+        """EVT01 텍스트 → PromotionInfo 변환 (Direct API용)
+
+        EVT01 형식:
+            "당월 : 1+1 | 26.01.01~26.01.31 | 행사 요일 : 매일 | 방식 : 판촉비\\n"
+            "익월 : 2+1 | 26.02.01~26.02.28 | 행사 요일 : 매일 | 방식 : 행사원가"
+        """
+        if not evt_text:
+            return PromotionInfo(
+                item_cd=item_cd, item_nm=item_nm,
+                promo_type=None, start_date=None, end_date=None,
+                next_promo_type=None, next_start_date=None, next_end_date=None,
+            )
+
+        current = {}
+        next_promo = {}
+
+        lines = evt_text.strip().split('\n')
+        for line in lines:
+            parsed = self._parse_promotion_line(line)
+            if not parsed:
+                continue
+            if parsed['period'] == '당월' and not current:
+                current = parsed
+            elif parsed['period'] == '익월' and not next_promo:
+                next_promo = parsed
+
+        return PromotionInfo(
+            item_cd=item_cd,
+            item_nm=item_nm,
+            promo_type=current.get('promo_type'),
+            start_date=current.get('start_date'),
+            end_date=current.get('end_date'),
+            next_promo_type=next_promo.get('promo_type'),
+            next_start_date=next_promo.get('start_date'),
+            next_end_date=next_promo.get('end_date'),
+        )
 
     def _get_all_item_codes(self) -> List[str]:
         """전체 상품 코드 조회"""

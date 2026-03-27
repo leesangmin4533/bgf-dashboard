@@ -123,7 +123,7 @@ class OrderTrackingRepository(BaseRepository):
                 SELECT *
                 FROM order_tracking
                 WHERE expiry_time LIKE ?
-                AND status IN ('ordered', 'arrived', 'selling')
+                AND status IN ('ordered', 'arrived')
                 AND remaining_qty > 0
                 AND alert_sent = 0
                 {store_filter}
@@ -162,7 +162,7 @@ class OrderTrackingRepository(BaseRepository):
                 FROM order_tracking
                 WHERE datetime(expiry_time) <= datetime('now', '+' || ? || ' hours')
                 AND datetime(expiry_time) > datetime('now')
-                AND status IN ('ordered', 'arrived', 'selling')
+                AND status IN ('ordered', 'arrived')
                 AND remaining_qty > 0
                 {store_filter}
                 ORDER BY expiry_time
@@ -180,7 +180,7 @@ class OrderTrackingRepository(BaseRepository):
 
         Args:
             order_id: order_tracking 레코드 ID
-            status: 변경할 상태 (ordered, arrived, selling, expired, disposed)
+            status: 변경할 상태 (ordered, arrived, expired, disposed)
         """
         conn = self._get_conn()
         try:
@@ -334,7 +334,7 @@ class OrderTrackingRepository(BaseRepository):
                     SELECT *
                     FROM order_tracking
                     WHERE item_cd = ?
-                    AND status IN ('ordered', 'arrived', 'selling')
+                    AND status IN ('ordered', 'arrived')
                     AND remaining_qty > 0
                     {store_filter}
                     ORDER BY expiry_time
@@ -346,7 +346,7 @@ class OrderTrackingRepository(BaseRepository):
                     f"""
                     SELECT *
                     FROM order_tracking
-                    WHERE status IN ('ordered', 'arrived', 'selling')
+                    WHERE status IN ('ordered', 'arrived')
                     AND remaining_qty > 0
                     {store_filter}
                     ORDER BY expiry_time
@@ -397,7 +397,7 @@ class OrderTrackingRepository(BaseRepository):
         """
         상태 자동 업데이트
         - 도착 시간 지나면 ordered → arrived
-        - 폐기 시간 지나면 arrived/selling → expired
+        - 폐기 시간 지나면 arrived → expired
 
         Args:
             store_id: 매장 코드 (None이면 전체)
@@ -426,12 +426,12 @@ class OrderTrackingRepository(BaseRepository):
             )
             arrived_count = cursor.rowcount
 
-            # 폐기 시간 지난 상품: arrived/selling → expired
+            # 폐기 시간 지난 상품: arrived → expired
             cursor.execute(
                 f"""
                 UPDATE order_tracking
                 SET status = ?, updated_at = ?
-                WHERE status IN ('arrived', 'selling')
+                WHERE status = 'arrived'
                 AND datetime(expiry_time) <= datetime('now','localtime')
                 AND remaining_qty > 0
                 {store_filter}
@@ -526,6 +526,79 @@ class OrderTrackingRepository(BaseRepository):
             order_id = cursor.lastrowid
             conn.commit()
             return order_id
+        finally:
+            conn.close()
+
+    def get_existing_order(
+        self,
+        order_date: str,
+        item_cd: str,
+        order_source: Optional[str] = None,
+        store_id: Optional[str] = None
+    ) -> Optional[Dict[str, Any]]:
+        """특정 발주 조회 (중복 체크용)
+
+        Args:
+            order_date: 발주일 (YYYY-MM-DD)
+            item_cd: 상품코드
+            order_source: 'auto'|'site'|'manual' (None이면 전체)
+            store_id: 매장 코드 (None이면 전체)
+
+        Returns:
+            발주 정보 dict 또는 None
+        """
+        conn = self._get_conn()
+        try:
+            cursor = conn.cursor()
+
+            sql = """
+                SELECT id, order_date, item_cd, item_nm, mid_cd,
+                       order_qty, remaining_qty, order_source, status
+                FROM order_tracking
+                WHERE order_date = ? AND item_cd = ?
+            """
+            params: list = [order_date, item_cd]
+
+            if order_source:
+                sql += " AND order_source = ?"
+                params.append(order_source)
+
+            if store_id:
+                sql += " AND store_id = ?"
+                params.append(store_id)
+
+            sql += " ORDER BY id DESC LIMIT 1"
+
+            cursor.execute(sql, params)
+            row = cursor.fetchone()
+            return dict(row) if row else None
+        finally:
+            conn.close()
+
+    def get_site_ordered_items(self, order_date: str) -> Dict[str, int]:
+        """특정 날짜에 site 발주된 상품 목록 조회 (item_cd -> order_qty)
+
+        Phase 2 auto 발주에서 site 기발주 상품을 스킵하기 위해 사용.
+        BGF saveOrd가 UPSERT이므로, auto가 제출하면 site 수량을 덮어쓰게 됨.
+
+        Args:
+            order_date: 발주일 (YYYY-MM-DD)
+
+        Returns:
+            {item_cd: order_qty} dict
+        """
+        conn = self._get_conn()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT item_cd, order_qty
+                FROM order_tracking
+                WHERE order_date = ? AND order_source = 'site'
+            """, (order_date,))
+            return {row["item_cd"]: row["order_qty"] for row in cursor.fetchall()}
+        except Exception as e:
+            logger.warning(f"site 기발주 조회 실패: {e}")
+            return {}
         finally:
             conn.close()
 
@@ -650,6 +723,180 @@ class OrderTrackingRepository(BaseRepository):
             return result
         except Exception as e:
             logger.warning(f"[입고패턴] pending 경과일 조회 실패: {e}")
+            return {}
+        finally:
+            conn.close()
+
+    def get_pending_qty_sum_batch(
+        self,
+        store_id: Optional[str] = None
+    ) -> Dict[str, int]:
+        """
+        매장 전체 미입고 상품의 remaining_qty 합계 일괄 조회 (교차검증용)
+
+        realtime_inventory.pending_qty와 교차검증하여 phantom pending을 방지한다.
+        ordered/arrived 상태이고 remaining_qty > 0인 상품의 잔여 수량을 합산.
+
+        Args:
+            store_id: 매장 코드
+
+        Returns:
+            {item_cd: total_remaining_qty(int)}
+            pending 없는 상품은 dict에 포함하지 않음 (= pending 0)
+        """
+        conn = self._get_conn()
+        try:
+            cursor = conn.cursor()
+
+            store_filter = "AND store_id = ?" if store_id else ""
+            store_params = (store_id,) if store_id else ()
+
+            cursor.execute(
+                f"""
+                SELECT
+                    item_cd,
+                    SUM(remaining_qty) as total_pending
+                FROM order_tracking
+                WHERE status IN ('ordered', 'arrived')
+                    AND remaining_qty > 0
+                    {store_filter}
+                GROUP BY item_cd
+                """,
+                store_params
+            )
+
+            result = {}
+            for row in cursor.fetchall():
+                result[row[0]] = row[1] or 0
+
+            return result
+        except Exception as e:
+            logger.warning(f"[미입고교차검증] pending 합계 조회 실패: {e}")
+            return {}
+        finally:
+            conn.close()
+
+    def reconcile_with_bgf_orders(
+        self,
+        order_date: str,
+        bgf_confirmed_items: set,
+        store_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """BGF 발주현황과 order_tracking을 대조하여 정합성 보정
+
+        1. BGF에 있는 건 → pending_confirmed=1 (미입고 보정의 근거)
+        2. BGF에 없는 건 → remaining_qty=0, status='invalidated' (false positive 제거)
+
+        Args:
+            order_date: 대조 대상 날짜 ('YYYY-MM-DD')
+            bgf_confirmed_items: BGF 발주현황에서 확인된 item_cd set
+            store_id: 매장 코드
+
+        Returns:
+            {confirmed: N, invalidated: N, confirmed_items: [{item_cd, order_qty}, ...]}
+        """
+        sid = store_id or self.store_id
+        conn = self._get_conn(sid)
+        try:
+            cursor = conn.cursor()
+
+            # auto 발주 중 remaining_qty > 0 (미입고 상태)인 건만 대상
+            cursor.execute("""
+                SELECT id, item_cd, item_nm, order_qty, remaining_qty
+                FROM order_tracking
+                WHERE order_date = ?
+                  AND order_source = 'auto'
+                  AND remaining_qty > 0
+            """, (order_date,))
+            rows = cursor.fetchall()
+
+            confirmed_count = 0
+            invalidated_count = 0
+            confirmed_items = []
+
+            for row in rows:
+                track_id, item_cd, item_nm, order_qty, remaining_qty = row
+                if item_cd in bgf_confirmed_items:
+                    # BGF에 있음 → 발주 확인됨, pending_confirmed 마킹
+                    cursor.execute("""
+                        UPDATE order_tracking
+                        SET pending_confirmed = 1,
+                            pending_confirmed_at = datetime('now', 'localtime'),
+                            updated_at = datetime('now', 'localtime')
+                        WHERE id = ?
+                    """, (track_id,))
+                    confirmed_count += 1
+                    confirmed_items.append({
+                        'item_cd': item_cd,
+                        'item_nm': item_nm,
+                        'order_qty': order_qty,
+                    })
+                else:
+                    # BGF에 없음 → false positive, 무효화
+                    cursor.execute("""
+                        UPDATE order_tracking
+                        SET remaining_qty = 0, status = 'invalidated',
+                            updated_at = datetime('now', 'localtime')
+                        WHERE id = ?
+                    """, (track_id,))
+                    invalidated_count += 1
+                    logger.warning(
+                        f"[발주정합성] 무효화: {item_nm}({item_cd}) "
+                        f"qty={order_qty} (order_tracking에 있으나 BGF에 없음)"
+                    )
+
+            if confirmed_count > 0 or invalidated_count > 0:
+                conn.commit()
+                logger.info(
+                    f"[발주정합성] {order_date}: "
+                    f"BGF확인={confirmed_count}건, 무효화={invalidated_count}건 "
+                    f"(전체 {len(rows)}건 대조)"
+                )
+
+            return {
+                'confirmed': confirmed_count,
+                'invalidated': invalidated_count,
+                'confirmed_items': confirmed_items,
+            }
+        except Exception as e:
+            logger.warning(f"[발주정합성] 대조 처리 실패: {e}")
+            return {'confirmed': 0, 'invalidated': 0, 'confirmed_items': []}
+        finally:
+            conn.close()
+
+    def get_confirmed_pending(
+        self,
+        order_date: str,
+        store_id: Optional[str] = None,
+    ) -> Dict[str, int]:
+        """BGF 확인된 미입고 수량 조회 (adjuster pending 보정용)
+
+        pending_confirmed=1이고 remaining_qty>0인 항목의 수량을 반환.
+        order_prep_collector가 pending=0으로 잘못 반환했을 때
+        이 데이터로 보정하여 중복 발주를 방지한다.
+
+        Args:
+            order_date: 발주 날짜 ('YYYY-MM-DD')
+            store_id: 매장 코드
+
+        Returns:
+            {item_cd: remaining_qty, ...}
+        """
+        sid = store_id or self.store_id
+        conn = self._get_conn(sid)
+        try:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT item_cd, SUM(remaining_qty) as total_pending
+                FROM order_tracking
+                WHERE order_date = ?
+                  AND pending_confirmed = 1
+                  AND remaining_qty > 0
+                GROUP BY item_cd
+            """, (order_date,))
+            return {row[0]: row[1] for row in cursor.fetchall()}
+        except Exception as e:
+            logger.warning(f"[발주정합성] 확인 pending 조회 실패: {e}")
             return {}
         finally:
             conn.close()

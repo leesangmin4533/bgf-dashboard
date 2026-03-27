@@ -34,6 +34,29 @@ def get_category_group(mid_cd: str) -> str:
     return _GROUP_LOOKUP.get(mid_cd, "general_group")
 
 
+# 대분류(large_cd) 슈퍼그룹 매핑 (2026-03-01 추가)
+LARGE_CD_SUPERGROUPS = {
+    "lcd_food":      ["01", "02"],                              # 간편식사, 신선식품
+    "lcd_snack":     ["11", "12", "13", "14"],                  # 과자, 제과, 아이스크림, 빵
+    "lcd_grocery":   ["21", "22", "23"],                        # 가공식품, 조미료, 면류
+    "lcd_beverage":  ["31", "33", "34"],                        # 음료, 유제품, 커피
+    "lcd_non_food":  ["41", "42", "43", "44", "45", "91"],      # 생활용품, 잡화, 기타
+}
+
+# 역매핑 (large_cd → 슈퍼그룹명)
+_LARGE_CD_LOOKUP: Dict[str, str] = {}
+for _sg_name, _lg_codes in LARGE_CD_SUPERGROUPS.items():
+    for _lg_code in _lg_codes:
+        _LARGE_CD_LOOKUP[_lg_code] = _sg_name
+
+
+def get_large_cd_supergroup(large_cd: Optional[str]) -> Optional[str]:
+    """large_cd로 슈퍼그룹 반환 (없거나 매핑 없으면 None)"""
+    if not large_cd:
+        return None
+    return _LARGE_CD_LOOKUP.get(large_cd.zfill(2))
+
+
 class MLFeatureBuilder:
     """ML용 Feature 빌더"""
 
@@ -57,12 +80,8 @@ class MLFeatureBuilder:
         "is_holiday",       # 공휴일 여부
         # 행사
         "promo_active",     # 행사 여부
-        # 카테고리 그룹 원핫 (5개)
-        "is_food_group",
-        "is_alcohol_group",
-        "is_tobacco_group",
-        "is_perishable_group",
-        "is_general_group",
+        # 카테고리 그룹 원핫 — 제거 (ml-improvement Phase C)
+        # 그룹별 별도 모델이므로 항상 1.0 또는 0.0 → 정보 없음
         # 비즈니스 특성 (A-4 추가)
         "expiration_days",  # 유통기한 (일, 0=정보없음)
         "disuse_rate",      # 과거 30일 폐기율 (0.0~1.0)
@@ -86,6 +105,29 @@ class MLFeatureBuilder:
         "short_delivery_rate",  # 숏배송율 (0~1, 정규화 불필요)
         "delivery_frequency",   # 14일 입고 빈도 (정규화: /14.0)
         "pending_age_days",     # 미입고 경과일 (정규화: /5.0, cap 1.0)
+        # 대분류 슈퍼그룹 원핫 — 제거 (ml-improvement Phase C)
+        # 카테고리 그룹 원핫과 높은 상관 → 정보 중복
+        # 그룹 컨텍스트 (food-ml-dual-model)
+        "data_days_ratio",      # 데이터 충분도 (data_days/60, cap 1.0)
+        "smallcd_peer_avg",     # 동일 소분류 7일 평균 매출 (정규화: /10, cap 1.0)
+        "relative_position",    # 내 매출 / 피어 평균 (cap 3.0, 0=정보없음)
+        "lifecycle_stage",      # 라이프사이클 단계 (0=신제품, 0.5=모니터링, 1.0=안정)
+        # 외부 환경 계수 (35→39 피처 확장)
+        "rain_qty_level",       # [35] 0=없음 1=이슬비 2=보통 3=폭우
+        "sky_condition",        # [36] 0=맑음 1=구름많음 2=흐림 3=안개 4=황사
+        "is_payday",            # [37] 0/1 급여일 당일+다음날
+        "pm25_level",           # [38] 0=좋음 1=보통 2=나쁨 3=매우나쁨
+        # 시간대별 매출 패턴 (2026-03-15 추가, hourly_sales_detail 기반)
+        "morning_ratio",        # [39] 오전(6~11시) 매출 비중
+        "lunch_ratio",          # [40] 점심(11~14시) 매출 비중
+        "evening_ratio",        # [41] 저녁(17~21시) 매출 비중
+        "night_ratio",          # [42] 야간(21~24시) 매출 비중
+        "peak_hour_slot",       # [43] 주 피크 시간대 (0=아침/1=점심/2=저녁/3=야간)
+        "hour_cv",              # [44] 시간대별 변동계수
+        # 주류 특화 피처 (2026-03-18 추가, alcohol_group Acc@1 개선용)
+        "is_friday",            # [45] 금요일 여부 (맥주/소주 피크 요일)
+        "is_fri_or_sat",        # [46] 금~토 여부 (주말 음주 수요)
+        "temp_x_weekend",       # [47] 기온×주말 교호작용 (더운 주말 맥주 급증)
     ]
 
     @staticmethod
@@ -110,6 +152,17 @@ class MLFeatureBuilder:
         is_pre_holiday: bool = False,
         is_post_holiday: bool = False,
         receiving_stats: Optional[Dict[str, float]] = None,
+        large_cd: Optional[str] = None,
+        data_days: int = 0,
+        smallcd_peer_avg: float = 0.0,
+        lifecycle_stage: float = 1.0,
+        # 외부 환경 계수 (35→39 피처 확장)
+        rain_qty: float = 0.0,
+        sky_nm: str = "",
+        is_payday: int = 0,
+        pm25: float = 0.0,
+        # 시간대별 매출 패턴 (39→45 피처 확장)
+        hourly_ratios: Optional[Dict[str, float]] = None,
     ) -> Optional[np.ndarray]:
         """
         일별 판매 데이터에서 ML feature 배열 생성
@@ -130,6 +183,7 @@ class MLFeatureBuilder:
             lag_28: 28일 전 판매량 (None=정보없음)
             week_over_week: 전주 대비 변화율 (None=정보없음)
             is_holiday: 공휴일 여부
+            large_cd: 대분류 코드 (None=정보없음, 슈퍼그룹 원핫 all-zero)
 
         Returns:
             feature 배열 (1D numpy array) 또는 None
@@ -138,8 +192,41 @@ class MLFeatureBuilder:
             return None
 
         try:
-            # 판매량 배열 추출
-            sales = [float(d.get("sale_qty", 0) or 0) for d in daily_sales]
+            # 판매량 배열 추출 (품절일 imputation 포함)
+            from src.prediction.prediction_config import PREDICTION_PARAMS
+            _ml_so_cfg = PREDICTION_PARAMS.get("ml_stockout_filter", {})
+
+            if _ml_so_cfg.get("enabled", False):
+                _min_avail = _ml_so_cfg.get("min_available_days", 3)
+                # 최근 14일 → 30일 2단계 폴백으로 비품절 평균 계산
+                _avail_14 = [
+                    float(d.get("sale_qty", 0) or 0)
+                    for d in daily_sales[-14:]
+                    if d.get("stock_qty") is not None and d.get("stock_qty", 0) > 0
+                ]
+                if len(_avail_14) >= _min_avail:
+                    _so_avg = sum(_avail_14) / len(_avail_14)
+                else:
+                    _avail_30 = [
+                        float(d.get("sale_qty", 0) or 0)
+                        for d in daily_sales[-30:]
+                        if d.get("stock_qty") is not None and d.get("stock_qty", 0) > 0
+                    ]
+                    _so_avg = (sum(_avail_30) / len(_avail_30)) if len(_avail_30) >= _min_avail else None
+
+                if _so_avg is not None:
+                    sales = []
+                    for d in daily_sales:
+                        _sq = float(d.get("sale_qty", 0) or 0)
+                        _stk = d.get("stock_qty")
+                        if _stk is not None and _stk == 0 and _sq == 0:
+                            sales.append(_so_avg)
+                        else:
+                            sales.append(_sq)
+                else:
+                    sales = [float(d.get("sale_qty", 0) or 0) for d in daily_sales]
+            else:
+                sales = [float(d.get("sale_qty", 0) or 0) for d in daily_sales]
 
             # 일평균 계산
             daily_avg_7 = np.mean(sales[-7:]) if len(sales) >= 7 else np.mean(sales)
@@ -166,13 +253,8 @@ class MLFeatureBuilder:
             is_weekend = 1.0 if weekday >= 5 else 0.0
             holiday_flag = 1.0 if is_holiday else 0.0
 
-            # 카테고리 그룹 원핫
-            group = get_category_group(mid_cd)
-            is_food = 1.0 if group == "food_group" else 0.0
-            is_alcohol = 1.0 if group == "alcohol_group" else 0.0
-            is_tobacco = 1.0 if group == "tobacco_group" else 0.0
-            is_perishable = 1.0 if group == "perishable_group" else 0.0
-            is_general = 1.0 if group == "general_group" else 0.0
+            # 카테고리 그룹 원핫 — 제거 (ml-improvement Phase C)
+            # 그룹별 별도 모델이므로 항상 동일 값 → 정보 없음
 
             # 유통기한 정규화 (log 스케일, 0은 0 유지)
             norm_expiry = np.log1p(float(expiration_days)) if expiration_days > 0 else 0.0
@@ -195,6 +277,8 @@ class MLFeatureBuilder:
             norm_wow = 0.0
             if week_over_week is not None:
                 norm_wow = max(-1.0, min(3.0, float(week_over_week)))
+
+            # 대분류 슈퍼그룹 원핫 — 제거 (ml-improvement Phase C)
 
             # 입고 패턴 피처 정규화
             _recv = receiving_stats or {}
@@ -224,11 +308,7 @@ class MLFeatureBuilder:
                 is_weekend,
                 holiday_flag,
                 1.0 if promo_active else 0.0,
-                is_food,
-                is_alcohol,
-                is_tobacco,
-                is_perishable,
-                is_general,
+                # 카테고리 그룹 원핫 5개 제거 (ml-improvement Phase C)
                 # 비즈니스 특성 (A-4 추가)
                 norm_expiry,
                 float(disuse_rate),
@@ -252,6 +332,33 @@ class MLFeatureBuilder:
                 _norm_short_rate,
                 _norm_freq,
                 _norm_pending_age,
+                # 대분류 슈퍼그룹 원핫 5개 제거 (ml-improvement Phase C)
+                # 그룹 컨텍스트 (food-ml-dual-model)
+                min(float(data_days) / 60.0, 1.0),  # data_days_ratio
+                min(float(smallcd_peer_avg) / 10.0, 1.0),  # smallcd_peer_avg (정규화)
+                min(float(daily_avg_7) / float(smallcd_peer_avg), 3.0) if smallcd_peer_avg > 0 else 0.0,  # relative_position
+                float(lifecycle_stage),  # lifecycle_stage (0~1)
+                # 외부 환경 계수 (35→39 피처 확장)
+                float(
+                    0 if rain_qty < 0.1 else
+                    1 if rain_qty < 2 else
+                    2 if rain_qty < 15 else
+                    3
+                ),  # [35] rain_qty_level
+                float({"맑음": 0, "구름많음": 1, "흐림": 2, "안개": 3, "황사": 4}.get(sky_nm, 0)),  # [36] sky_condition
+                float(is_payday),  # [37] is_payday
+                float(
+                    0 if pm25 < 16 else
+                    1 if pm25 < 36 else
+                    2 if pm25 < 76 else
+                    3
+                ),  # [38] pm25_level
+                # 시간대별 매출 패턴 (2026-03-15 추가)
+                *MLFeatureBuilder._hourly_feature_values(hourly_ratios),
+                # 주류 특화 피처 (2026-03-18 추가)
+                1.0 if weekday == 4 else 0.0,  # [45] is_friday
+                1.0 if weekday in (4, 5) else 0.0,  # [46] is_fri_or_sat
+                ((temperature - 15.0) / 15.0 if temperature is not None else 0.0) * is_weekend,  # [47] temp_x_weekend
             ], dtype=np.float32)
 
             return features
@@ -259,6 +366,94 @@ class MLFeatureBuilder:
         except Exception as e:
             logger.warning(f"Feature 빌드 실패: {e}")
             return None
+
+    @staticmethod
+    def _hourly_feature_values(hourly_ratios: Optional[Dict[str, float]] = None) -> list:
+        """시간대 Feature 6개 값 반환 (데이터 없으면 균등 기본값)"""
+        _hr = hourly_ratios or {}
+        return [
+            float(_hr.get("morning_ratio", 0.25)),
+            float(_hr.get("lunch_ratio", 0.25)),
+            float(_hr.get("evening_ratio", 0.25)),
+            float(_hr.get("night_ratio", 0.25)),
+            float(_hr.get("peak_hour_slot", 1.0)),
+            float(_hr.get("hour_cv", 0.5)),
+        ]
+
+    @staticmethod
+    def calc_hourly_ratios(
+        store_id: str, item_cd: str,
+        base_date: str, days: int = 14
+    ) -> dict:
+        """hourly_sales_detail에서 최근 N일 시간대별 판매 비중 집계
+
+        Args:
+            store_id: 매장 ID
+            item_cd: 상품 코드
+            base_date: 기준 날짜 (YYYY-MM-DD)
+            days: 조회 기간 (일)
+
+        Returns:
+            {morning_ratio, lunch_ratio, evening_ratio, night_ratio,
+             peak_hour_slot, hour_cv} 또는 {} (데이터 없음)
+        """
+        try:
+            from src.infrastructure.database.connection import DBRouter
+            conn = DBRouter.get_store_connection(store_id)
+            try:
+                rows = conn.execute("""
+                    SELECT hour, SUM(sale_qty) as qty
+                    FROM hourly_sales_detail
+                    WHERE item_cd = ?
+                      AND sales_date >= date(?, ?)
+                      AND sales_date < ?
+                    GROUP BY hour
+                """, (item_cd, base_date,
+                      f"-{days} days", base_date)).fetchall()
+            finally:
+                conn.close()
+
+            if not rows:
+                return {}
+
+            # 시간대별 집계
+            slots = {"morning": 0, "lunch": 0, "evening": 0, "night": 0}
+            total = 0
+            for hour, qty in rows:
+                total += qty
+                if 6 <= hour < 11:
+                    slots["morning"] += qty
+                elif 11 <= hour < 14:
+                    slots["lunch"] += qty
+                elif 17 <= hour < 21:
+                    slots["evening"] += qty
+                else:
+                    slots["night"] += qty
+
+            if total == 0:
+                return {}
+
+            # 피크 슬롯 (0=아침/1=점심/2=저녁/3=야간)
+            slot_names = ["morning", "lunch", "evening", "night"]
+            peak_slot = slot_names.index(
+                max(slots, key=slots.get)
+            )
+
+            # 변동계수 (시간대별 수요 집중도)
+            slot_vals = list(slots.values())
+            _mean = np.mean(slot_vals)
+            hour_cv = (np.std(slot_vals) / _mean) if _mean > 0 else 0.5
+
+            return {
+                "morning_ratio": round(slots["morning"] / total, 4),
+                "lunch_ratio": round(slots["lunch"] / total, 4),
+                "evening_ratio": round(slots["evening"] / total, 4),
+                "night_ratio": round(slots["night"] / total, 4),
+                "peak_hour_slot": float(peak_slot),
+                "hour_cv": round(float(hour_cv), 4),
+            }
+        except Exception:
+            return {}
 
     @staticmethod
     def build_batch_features(
@@ -306,6 +501,15 @@ class MLFeatureBuilder:
                 is_pre_holiday=item.get("is_pre_holiday", False),
                 is_post_holiday=item.get("is_post_holiday", False),
                 receiving_stats=item.get("receiving_stats"),
+                large_cd=item.get("large_cd"),
+                data_days=item.get("data_days", 0),
+                smallcd_peer_avg=item.get("smallcd_peer_avg", 0.0),
+                lifecycle_stage=item.get("lifecycle_stage", 1.0),
+                rain_qty=item.get("rain_qty", 0.0),
+                sky_nm=item.get("sky_nm", ""),
+                is_payday=item.get("is_payday", 0),
+                pm25=item.get("pm25", 0.0),
+                hourly_ratios=item.get("hourly_ratios"),
             )
 
             if features is not None:

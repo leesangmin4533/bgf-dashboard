@@ -17,6 +17,20 @@ from typing import Any, Optional, List, Dict, Tuple
 from pathlib import Path
 
 
+class _NoCloseConnection:
+    """close() 호출을 무시하는 커넥션 래퍼 (persistent 모드용)"""
+    __slots__ = ('_conn',)
+
+    def __init__(self, conn: sqlite3.Connection):
+        self._conn = conn
+
+    def close(self):
+        pass
+
+    def __getattr__(self, name):
+        return getattr(self._conn, name)
+
+
 @dataclass
 class RollingFeatures:
     """Rolling Feature 결과"""
@@ -69,14 +83,30 @@ class RollingFeatureCalculator:
 
     def __init__(self, db_path: Optional[str] = None, store_id: Optional[str] = None) -> None:
         if db_path is None:
-            db_path = Path(__file__).parent.parent.parent.parent / "data" / "bgf_sales.db"
+            from src.infrastructure.database.connection import resolve_db_path
+            db_path = resolve_db_path(store_id=store_id)
         self.db_path = str(db_path)
         self.store_id = store_id
+        self._persistent_conn = None
 
     def _get_connection(self, timeout: int = 30) -> sqlite3.Connection:
+        if self._persistent_conn is not None:
+            return _NoCloseConnection(self._persistent_conn)
         conn = sqlite3.connect(self.db_path, timeout=timeout)
         conn.row_factory = sqlite3.Row
         return conn
+
+    def open_persistent_connection(self) -> None:
+        if self._persistent_conn is None:
+            self._persistent_conn = self._get_connection()
+
+    def close_persistent_connection(self) -> None:
+        if self._persistent_conn is not None:
+            try:
+                self._persistent_conn.close()
+            except Exception:
+                pass
+            self._persistent_conn = None
 
     def calculate(
         self,

@@ -168,8 +168,8 @@ class TestRamenNonOrderableSkip:
     """비발주일 발주 스킵 동작 확인"""
 
     @pytest.mark.unit
-    def test_skip_on_non_orderable_day(self):
-        """비발주일 → skip_order=True"""
+    def test_no_skip_on_non_orderable_day(self):
+        """비발주일에도 skip하지 않음 (orderable_day는 배송 스케줄)"""
         with patch("src.prediction.categories.ramen.sqlite3") as mock_sql, \
              patch("src.prediction.categories.snack_confection.datetime") as mock_dt:
             mock_dt.now.return_value = datetime(2026, 2, 22, 10, 0)  # 일요일
@@ -182,9 +182,9 @@ class TestRamenNonOrderableSkip:
                 "TEST004", db_path=":memory:", store_id="S001",
                 orderable_day="월화수목금토"
             )
-            assert result.skip_order is True
+            assert result.skip_order is False  # 비발주일에도 발주 진행
             assert result.is_orderable_today is False
-            assert "비발주일" in result.skip_reason
+            assert result.skip_reason == ""  # 스킵 사유 없음
 
     @pytest.mark.unit
     def test_no_skip_on_orderable_day(self):
@@ -206,8 +206,8 @@ class TestRamenNonOrderableSkip:
             assert result.skip_reason == ""
 
     @pytest.mark.unit
-    def test_skip_reason_contains_orderable_day(self):
-        """skip_reason에 orderable_day 문자열 포함"""
+    def test_non_orderable_day_no_skip_reason(self):
+        """비발주일에 skip_reason이 비어있음 (발주 차단 안 함)"""
         with patch("src.prediction.categories.ramen.sqlite3") as mock_sql, \
              patch("src.prediction.categories.snack_confection.datetime") as mock_dt:
             mock_dt.now.return_value = datetime(2026, 2, 22, 10, 0)  # 일요일
@@ -220,7 +220,8 @@ class TestRamenNonOrderableSkip:
                 "TEST006", db_path=":memory:", store_id="S001",
                 orderable_day="월화수목금토"
             )
-            assert "월화수목금토" in result.skip_reason
+            assert result.skip_reason == ""  # 비발주일이어도 스킵 사유 없음
+            assert result.skip_order is False
 
 
 # =============================================================================

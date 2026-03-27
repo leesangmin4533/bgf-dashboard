@@ -1,0 +1,6 @@
+﻿store_id,month,period,force_order_count,urgent_order_count,order_fail_count,total_stockout_events
+46513,2026-01,after,482,49,0,531
+46513,2026-02,after,4852,819,1062,5671
+46513,2026-03,after,658,93,100,751
+46704,2026-02,after,3064,310,852,3374
+46704,2026-03,after,942,88,100,1030

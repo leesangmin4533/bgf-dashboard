@@ -337,8 +337,8 @@ class TestGetSafetyStockWithFrozenIcePattern:
 
     @pytest.mark.unit
     def test_dynamic_config_max_stock_days(self):
-        """동적 안전재고 설정의 max_stock_days가 7.0"""
-        assert FROZEN_ICE_DYNAMIC_SAFETY_CONFIG["max_stock_days"] == 7.0
+        """동적 안전재고 설정의 max_stock_days가 14.0 (frozen-reorder: 7→14)"""
+        assert FROZEN_ICE_DYNAMIC_SAFETY_CONFIG["max_stock_days"] == 14.0
 
     @pytest.mark.unit
     def test_dynamic_config_enabled(self):

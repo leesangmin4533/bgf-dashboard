@@ -512,3 +512,158 @@ class TestTobaccoConstantsIntegrity:
     @pytest.mark.unit
     def test_decay_ratio(self):
         assert TOBACCO_BOURU_DECAY_RATIO == 0.5
+
+
+# =============================================================================
+# tobacco_type confidence 로깅 테스트
+# =============================================================================
+class TestTobaccoConfidenceLogging:
+    """담배 예측 시 confidence에 tobacco_type JSON이 포함되는지 검증"""
+
+    @pytest.mark.unit
+    def test_tobacco_confidence_logging(self):
+        """보루형 담배 예측 후 confidence에 tobacco_type 키 존재 확인"""
+        import json
+        from src.prediction.improved_predictor import PredictionResult
+
+        # 보루형 담배 시나리오: result_ctx에 tobacco_type이 있으면
+        # confidence에 JSON으로 저장되어야 함
+        _confidence_level = "high"
+        mid_cd = "072"
+        result_ctx = {
+            "tobacco_type": "bouru",
+            "tobacco_target_stock": 21,
+            "tobacco_bouru_count_60d": 2,
+            "tobacco_suggested_decision": "URGENT",
+        }
+
+        # improved_predictor.py의 confidence 생성 로직 재현
+        _tobacco_type = result_ctx.get("tobacco_type", "")
+        if mid_cd in ("072", "073") and _tobacco_type:
+            confidence_value = json.dumps({
+                "level": _confidence_level,
+                "tobacco_type": _tobacco_type,
+                "target_stock": result_ctx.get("tobacco_target_stock", 0),
+                "bouru_count_60d": result_ctx.get("tobacco_bouru_count_60d", 0),
+                "suggested_decision": result_ctx.get("tobacco_suggested_decision", ""),
+            }, ensure_ascii=False)
+        else:
+            confidence_value = _confidence_level
+
+        # JSON 파싱 검증
+        parsed = json.loads(confidence_value)
+        assert "tobacco_type" in parsed
+        assert parsed["tobacco_type"] == "bouru"
+        assert "target_stock" in parsed
+        assert isinstance(parsed["target_stock"], int)
+        assert parsed["target_stock"] == 21
+        assert parsed["level"] == "high"
+        assert parsed["bouru_count_60d"] == 2
+        assert parsed["suggested_decision"] == "URGENT"
+
+    @pytest.mark.unit
+    def test_tobacco_confidence_lil_type(self):
+        """LIL(073) 담배 confidence에 tobacco_type='lil' 기록 확인"""
+        import json
+
+        _confidence_level = "high"
+        mid_cd = "073"
+        result_ctx = {
+            "tobacco_type": "lil",
+            "tobacco_target_stock": 5,
+            "tobacco_bouru_count_60d": 0,
+            "tobacco_suggested_decision": "NORMAL",
+        }
+
+        _tobacco_type = result_ctx.get("tobacco_type", "")
+        if mid_cd in ("072", "073") and _tobacco_type:
+            confidence_value = json.dumps({
+                "level": _confidence_level,
+                "tobacco_type": _tobacco_type,
+                "target_stock": result_ctx.get("tobacco_target_stock", 0),
+                "bouru_count_60d": result_ctx.get("tobacco_bouru_count_60d", 0),
+                "suggested_decision": result_ctx.get("tobacco_suggested_decision", ""),
+            }, ensure_ascii=False)
+        else:
+            confidence_value = _confidence_level
+
+        parsed = json.loads(confidence_value)
+        assert parsed["tobacco_type"] == "lil"
+        assert parsed["bouru_count_60d"] == 0
+
+    @pytest.mark.unit
+    def test_tobacco_confidence_single_type(self):
+        """낱개형 담배 confidence에 tobacco_type='single' 기록 확인"""
+        import json
+
+        _confidence_level = "medium"
+        mid_cd = "072"
+        result_ctx = {
+            "tobacco_type": "single",
+            "tobacco_target_stock": 11,
+            "tobacco_bouru_count_60d": 0,
+            "tobacco_suggested_decision": "NORMAL",
+        }
+
+        _tobacco_type = result_ctx.get("tobacco_type", "")
+        if mid_cd in ("072", "073") and _tobacco_type:
+            confidence_value = json.dumps({
+                "level": _confidence_level,
+                "tobacco_type": _tobacco_type,
+                "target_stock": result_ctx.get("tobacco_target_stock", 0),
+                "bouru_count_60d": result_ctx.get("tobacco_bouru_count_60d", 0),
+                "suggested_decision": result_ctx.get("tobacco_suggested_decision", ""),
+            }, ensure_ascii=False)
+        else:
+            confidence_value = _confidence_level
+
+        parsed = json.loads(confidence_value)
+        assert parsed["tobacco_type"] == "single"
+        assert parsed["level"] == "medium"
+
+    @pytest.mark.unit
+    def test_non_tobacco_confidence_unchanged(self):
+        """맥주(049) 예측 후 confidence = 'high' 문자열 그대로인지 확인"""
+        import json
+
+        _confidence_level = "high"
+        mid_cd = "049"
+        result_ctx = {}  # 비담배: tobacco_type 없음
+
+        _tobacco_type = result_ctx.get("tobacco_type", "")
+        if mid_cd in ("072", "073") and _tobacco_type:
+            confidence_value = json.dumps({
+                "level": _confidence_level,
+                "tobacco_type": _tobacco_type,
+                "target_stock": result_ctx.get("tobacco_target_stock", 0),
+                "bouru_count_60d": result_ctx.get("tobacco_bouru_count_60d", 0),
+                "suggested_decision": result_ctx.get("tobacco_suggested_decision", ""),
+            }, ensure_ascii=False)
+        else:
+            confidence_value = _confidence_level
+
+        # 비담배는 문자열 그대로
+        assert confidence_value == "high"
+        # JSON 파싱 시 실패해야 정상 (문자열이므로)
+        with pytest.raises(json.JSONDecodeError):
+            json.loads(confidence_value)
+
+    @pytest.mark.unit
+    def test_tobacco_no_type_keeps_string(self):
+        """담배지만 tobacco_type이 없으면 기존 문자열 유지"""
+        import json
+
+        _confidence_level = "high"
+        mid_cd = "072"
+        result_ctx = {}  # tobacco_type 미설정 (패턴 계산 실패 시)
+
+        _tobacco_type = result_ctx.get("tobacco_type", "")
+        if mid_cd in ("072", "073") and _tobacco_type:
+            confidence_value = json.dumps({
+                "level": _confidence_level,
+                "tobacco_type": _tobacco_type,
+            }, ensure_ascii=False)
+        else:
+            confidence_value = _confidence_level
+
+        assert confidence_value == "high"

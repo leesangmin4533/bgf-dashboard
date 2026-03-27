@@ -1,0 +1,6548 @@
+{
+  "8801043015653": {
+    "datasets": {
+      "dsCheckMagam": {
+        "colCount": 5,
+        "columns": [
+          {
+            "id": "ORD_YMD",
+            "index": 0,
+            "sample": "20260227",
+            "type": "STRING"
+          },
+          {
+            "id": "S_ORD_TURN_HMS",
+            "index": 1,
+            "sample": "10:00",
+            "type": "STRING"
+          },
+          {
+            "id": "E_ORD_TURN_HMS",
+            "index": 2,
+            "sample": "11:00",
+            "type": "STRING"
+          },
+          {
+            "id": "SAVE_TIME_YN",
+            "index": 3,
+            "sample": "Y",
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_TURN_HMS",
+            "index": 4,
+            "sample": "100000",
+            "type": "STRING"
+          }
+        ],
+        "rowCount": 1
+      },
+      "dsItemDetail": {
+        "colCount": 98,
+        "columns": [
+          {
+            "id": "STORE_CD",
+            "index": 0,
+            "sample": "46513",
+            "type": "STRING"
+          },
+          {
+            "id": "ITEM_CD",
+            "index": 1,
+            "sample": "8801043015653",
+            "type": "STRING"
+          },
+          {
+            "id": "ITEM_NM",
+            "index": 2,
+            "sample": "농심)육개장사발면",
+            "type": "STRING"
+          },
+          {
+            "id": "ITEM_SNM",
+            "index": 3,
+            "sample": "농심)육개장사발면",
+            "type": "STRING"
+          },
+          {
+            "id": "EVT01",
+            "index": 4,
+            "sample": "당월 : 3+1 | 26.02.01~26.02.15 | 행사 요일 : 기간 | 방식 : 판촉비",
+            "type": "STRING"
+          },
+          {
+            "id": "EVT01_MOBI",
+            "index": 5,
+            "sample": "당월 : 3+1 | 26.02.01~26.02.15",
+            "type": "STRING"
+          },
+          {
+            "id": "PLU_ID",
+            "index": 6,
+            "sample": "00",
+            "type": "STRING"
+          },
+          {
+            "id": "ITEM_SPEC",
+            "index": 7,
+            "sample": "125G",
+            "type": "STRING"
+          },
+          {
+            "id": "SALE_UNIT",
+            "index": 8,
+            "sample": "1",
+            "type": "BIGDECIMAL"
+          },
+          {
+            "id": "ORD_MULT_ULMT",
+            "index": 9,
+            "sample": "99",
+            "type": "BIGDECIMAL"
+          },
+          {
+            "id": "ORD_MULT_LLMT",
+            "index": 10,
+            "sample": "1",
+            "type": "BIGDECIMAL"
+          },
+          {
+            "id": "SALE_UNIT_QTY",
+            "index": 11,
+            "sample": "1",
+            "type": "BIGDECIMAL"
+          },
+          {
+            "id": "BTL_ITEM_CD",
+            "index": 12,
+            "sample": "",
+            "type": "STRING"
+          },
+          {
+            "id": "BOX_ITEM_CD",
+            "index": 13,
+            "sample": "",
+            "type": "STRING"
+          },
+          {
+            "id": "UNIT_ITEM_CD",
+            "index": 14,
+            "sample": "",
+            "type": "STRING"
+          },
+          {
+            "id": "DAY_DC_YN",
+            "index": 15,
+            "sample": "0000000",
+            "type": "STRING"
+          },
+          {
+            "id": "TOT_ITEM_SPEC",
+            "index": 16,
+            "sample": "0",
+            "type": "BIGDECIMAL"
+          },
+          {
+            "id": "DISP_UNIT",
+            "index": 17,
+            "sample": "0",
+            "type": "STRING"
+          },
+          {
+            "id": "DISP_STD",
+            "index": 18,
+            "sample": "",
+            "type": "STRING"
+          },
+          {
+            "id": "JIP_ITEM_CD",
+            "index": 19,
+            "sample": "8801043015653",
+            "type": "STRING"
+          },
+          {
+            "id": "LARGE_CD",
+            "index": 20,
+            "sample": "22",
+            "type": "STRING"
+          },
+          {
+            "id": "MID_CD",
+            "index": 21,
+            "sample": "032",
+            "type": "STRING"
+          },
+          {
+            "id": "SMALL_CD",
+            "index": 22,
+            "sample": "095",
+            "type": "STRING"
+          },
+          {
+            "id": "LARGE_NM",
+            "index": 23,
+            "sample": "가공식사제품",
+            "type": "STRING"
+          },
+          {
+            "id": "MID_NM",
+            "index": 24,
+            "sample": "면류",
+            "type": "STRING"
+          },
+          {
+            "id": "SMALL_NM",
+            "index": 25,
+            "sample": "용기면",
+            "type": "STRING"
+          },
+          {
+            "id": "CLASS_NM",
+            "index": 26,
+            "sample": "가공식사제품 > 면류 > 용기면",
+            "type": "STRING"
+          },
+          {
+            "id": "ITEM_SW",
+            "index": 27,
+            "sample": "141",
+            "type": "BIGDECIMAL"
+          },
+          {
+            "id": "ITEM_SL",
+            "index": 28,
+            "sample": "141",
+            "type": "BIGDECIMAL"
+          },
+          {
+            "id": "ITEM_SH",
+            "index": 29,
+            "sample": "75",
+            "type": "BIGDECIMAL"
+          },
+          {
+            "id": "ITEM_SWLH",
+            "index": 30,
+            "sample": "141 * 141 * 75",
+            "type": "STRING"
+          },
+          {
+            "id": "ITEM_G",
+            "index": 31,
+            "sample": "125",
+            "type": "BIGDECIMAL"
+          },
+          {
+            "id": "ORD_UNIT",
+            "index": 32,
+            "sample": "03",
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_UNIT_NM",
+            "index": 33,
+            "sample": "BOX",
+            "type": "STRING"
+          },
+          {
+            "id": "CASE_UNIT_QTY",
+            "index": 34,
+            "sample": "24",
+            "type": "BIGDECIMAL"
+          },
+          {
+            "id": "ORD_UNIT_QTY",
+            "index": 35,
+            "sample": "24",
+            "type": "BIGDECIMAL"
+          },
+          {
+            "id": "EXPIRE_DAY",
+            "index": 36,
+            "sample": "117",
+            "type": "BIGDECIMAL"
+          },
+          {
+            "id": "EXPIRE_ID",
+            "index": 37,
+            "sample": "1",
+            "type": "STRING"
+          },
+          {
+            "id": "EXPIRE_NM",
+            "index": 38,
+            "sample": "제조일로부터 117일",
+            "type": "STRING"
+          },
+          {
+            "id": "HIGHLOW_ID",
+            "index": 39,
+            "sample": "1",
+            "type": "STRING"
+          },
+          {
+            "id": "PITEM_ID",
+            "index": 40,
+            "sample": "A",
+            "type": "STRING"
+          },
+          {
+            "id": "PITEM_ID_NM",
+            "index": 41,
+            "sample": "MUST",
+            "type": "STRING"
+          },
+          {
+            "id": "JIP_ITEM_NM",
+            "index": 42,
+            "sample": "농심)육개장사발면",
+            "type": "STRING"
+          },
+          {
+            "id": "ITEM_DESC",
+            "index": 43,
+            "sample": "① 용기타입 라면의 원조격 제품으로, 우리 입맛에 딱 어울리는 얼큰한 육개장 맛 용기면\n② 소고기를 주원료로 건파, 계란 후레이크, 각종 야채가 푸짐하게 들어있으며 깔끔한 국물 맛\n③ 소용돌이 맛살, 계란맛어포 등의 건더기가 특징\n끓는 물만 부으면 언제 어디서나 간편하게 먹을 수 있는 용기면의 대표제품으로 성인 층은 물론 중, 고등학생 및 수험생의 간식으로 매우 적당한 제품입니다.",
+            "type": "STRING"
+          },
+          {
+            "id": "BORD_STOP_YN",
+            "index": 44,
+            "sample": "0",
+            "type": "STRING"
+          },
+          {
+            "id": "DEEM_TAX_ID",
+            "index": 45,
+            "sample": "0",
+            "type": "STRING"
+          },
+          {
+            "id": "SET_DJ_TY_ID",
+            "index": 46,
+            "sample": "0",
+            "type": "STRING"
+          },
+          {
+            "id": "FUR_CD",
+            "index": 47,
+            "sample": "21",
+            "type": "STRING"
+          },
+          {
+            "id": "CUST_CD",
+            "index": 48,
+            "sample": "0306261",
+            "type": "STRING"
+          },
+          {
+            "id": "CUST_NM",
+            "index": 49,
+            "sample": "농심(용기면)",
+            "type": "STRING"
+          },
+          {
+            "id": "CENTER_NM",
+            "index": 50,
+            "sample": "BGF로지스곤지암공산품",
+            "type": "STRING"
+          },
+          {
+            "id": "MAEGA_CHG_EYMD",
+            "index": 51,
+            "sample": "",
+            "type": "STRING"
+          },
+          {
+            "id": "PYUNSU_ID",
+            "index": 52,
+            "sample": "0",
+            "type": "STRING"
+          },
+          {
+            "id": "RET_PSS_ID",
+            "index": 53,
+            "sample": "2",
+            "type": "STRING"
+          },
+          {
+            "id": "RET_PSS_ID_NM",
+            "index": 54,
+            "sample": "철수",
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_PSS_ID",
+            "index": 55,
+            "sample": "0",
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_PSS_ID_NM",
+            "index": 56,
+            "sample": "가능",
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_PSS_SYMD",
+            "index": 57,
+            "sample": "20050610",
+            "type": "STRING"
+          },
+          {
+            "id": "CUT_ITEM_YN",
+            "index": 58,
+            "sample": "0",
+            "type": "STRING"
+          },
+          {
+            "id": "ITEM_WONGA",
+            "index": 59,
+            "sample": "648",
+            "type": "BIGDECIMAL"
+          },
+          {
+            "id": "HQ_MAEGA_SET",
+            "index": 60,
+            "sample": "1100",
+            "type": "BIGDECIMAL"
+          },
+          {
+            "id": "STORE_MAEGA_SET",
+            "index": 61,
+            "sample": "",
+            "type": "BIGDECIMAL"
+          },
+          {
+            "id": "STORE_BASE_MAEGA_SET",
+            "index": 62,
+            "sample": "1100",
+            "type": "BIGDECIMAL"
+          },
+          {
+            "id": "ITEM_MAEGA",
+            "index": 63,
+            "sample": "1100",
+            "type": "BIGDECIMAL"
+          },
+          {
+            "id": "OD_MAEGA",
+            "index": 64,
+            "sample": "1100",
+            "type": "BIGDECIMAL"
+          },
+          {
+            "id": "PROFIT_RATE",
+            "index": 65,
+            "sample": "35.2",
+            "type": "BIGDECIMAL"
+          },
+          {
+            "id": "MAEGA_CHG_ID",
+            "index": 66,
+            "sample": "0",
+            "type": "STRING"
+          },
+          {
+            "id": "TAX_ID",
+            "index": 67,
+            "sample": "과세",
+            "type": "STRING"
+          },
+          {
+            "id": "SSR_ITEM_AGREE_ID",
+            "index": 68,
+            "sample": "",
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_STOP_SYMD",
+            "index": 69,
+            "sample": "",
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_STOP_EYMD",
+            "index": 70,
+            "sample": "",
+            "type": "STRING"
+          },
+          {
+            "id": "SALE_STOP_ID",
+            "index": 71,
+            "sample": "0",
+            "type": "STRING"
+          },
+          {
+            "id": "SALE_STOP_NM",
+            "index": 72,
+            "sample": "과세",
+            "type": "STRING"
+          },
+          {
+            "id": "CT_ITEM_YN",
+            "index": 73,
+            "sample": "0",
+            "type": "STRING"
+          },
+          {
+            "id": "SUM_UNIT_ID",
+            "index": 74,
+            "sample": "0",
+            "type": "STRING"
+          },
+          {
+            "id": "FIX_WONGA",
+            "index": 75,
+            "sample": "",
+            "type": "BIGDECIMAL"
+          },
+          {
+            "id": "BTL_ID",
+            "index": 76,
+            "sample": "0",
+            "type": "STRING"
+          },
+          {
+            "id": "DRINK_BTL_ID",
+            "index": 77,
+            "sample": "0",
+            "type": "BIGDECIMAL"
+          },
+          {
+            "id": "IMG_CHK",
+            "index": 78,
+            "sample": "1",
+            "type": "STRING"
+          },
+          {
+            "id": "IMAGE_DIR",
+            "index": 79,
+            "sample": "m",
+            "type": "STRING"
+          },
+          {
+            "id": "IMG_URL",
+            "index": 80,
+            "sample": "8801043015653_M.jpg",
+            "type": "STRING"
+          },
+          {
+            "id": "WMCHG_YN",
+            "index": 81,
+            "sample": "0",
+            "type": "STRING"
+          },
+          {
+            "id": "WMCHG_YMD",
+            "index": 82,
+            "sample": "",
+            "type": "STRING"
+          },
+          {
+            "id": "DC_DESC",
+            "index": 83,
+            "sample": "비대상",
+            "type": "STRING"
+          },
+          {
+            "id": "BONUS_DESC",
+            "index": 84,
+            "sample": "비대상",
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_STOP_PLAN_YMD",
+            "index": 85,
+            "sample": "",
+            "type": "STRING"
+          },
+          {
+            "id": "REASON_ID",
+            "index": 86,
+            "sample": "",
+            "type": "STRING"
+          },
+          {
+            "id": "CHG_ITEM_CD",
+            "index": 87,
+            "sample": "",
+            "type": "STRING"
+          },
+          {
+            "id": "RET_SYMD",
+            "index": 88,
+            "sample": "",
+            "type": "STRING"
+          },
+          {
+            "id": "RET_EYMD",
+            "index": 89,
+            "sample": "",
+            "type": "STRING"
+          },
+          {
+            "id": "RET_YMD",
+            "index": 90,
+            "sample": "",
+            "type": "STRING"
+          },
+          {
+            "id": "TOT_DISP_SEQ",
+            "index": 91,
+            "sample": "210950",
+            "type": "STRING"
+          },
+          {
+            "id": "DISUSE_GB",
+            "index": 92,
+            "sample": "가능",
+            "type": "STRING"
+          },
+          {
+            "id": "EVT_DC_YMD",
+            "index": 93,
+            "sample": "",
+            "type": "STRING"
+          },
+          {
+            "id": "EVT_DC_PROFIT_RATE",
+            "index": 94,
+            "sample": "",
+            "type": "STRING"
+          },
+          {
+            "id": "RB_AMT",
+            "index": 95,
+            "sample": "",
+            "type": "STRING"
+          },
+          {
+            "id": "RB_CON",
+            "index": 96,
+            "sample": "",
+            "type": "STRING"
+          },
+          {
+            "id": "RB_YMD",
+            "index": 97,
+            "sample": "",
+            "type": "STRING"
+          }
+        ],
+        "rowCount": 1
+      },
+      "dsItemDetailOrd": {
+        "colCount": 30,
+        "columns": [
+          {
+            "id": "HQ_MAEGA_SET",
+            "index": 0,
+            "sample": "1100",
+            "type": "STRING"
+          },
+          {
+            "id": "ITEM_CD",
+            "index": 1,
+            "sample": "8801043015653",
+            "type": "STRING"
+          },
+          {
+            "id": "ITEM_NM",
+            "index": 2,
+            "sample": "농심)육개장사발면",
+            "type": "STRING"
+          },
+          {
+            "id": "PYUN_ITEM_CD",
+            "index": 3,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "ITEM_MAEGA",
+            "index": 4,
+            "sample": "1100",
+            "type": "STRING"
+          },
+          {
+            "id": "JIP_ITEM_CD",
+            "index": 5,
+            "sample": "8801043015653",
+            "type": "STRING"
+          },
+          {
+            "id": "NEXT_ORD_YMD",
+            "index": 6,
+            "sample": "20260228",
+            "type": "STRING"
+          },
+          {
+            "id": "NOW_QTY",
+            "index": 7,
+            "sample": "19",
+            "type": "STRING"
+          },
+          {
+            "id": "OD_MAEGA",
+            "index": 8,
+            "sample": "1100",
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_ADAY",
+            "index": 9,
+            "sample": "월화수목금토",
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_LEADTIME",
+            "index": 10,
+            "sample": "1",
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_MUL_QTY",
+            "index": 11,
+            "sample": "",
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_MULT_LLMT",
+            "index": 12,
+            "sample": "1",
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_MULT_ULMT",
+            "index": 13,
+            "sample": "99",
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_PSS_ID",
+            "index": 14,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_PSS_CHK",
+            "index": 15,
+            "sample": "0",
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_PSS_CHK_NM",
+            "index": 16,
+            "sample": "가능",
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_PSS_SYMD",
+            "index": 17,
+            "sample": "20050610",
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_STOP_EYMD",
+            "index": 18,
+            "sample": "",
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_STOP_SYMD",
+            "index": 19,
+            "sample": "",
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_TURN_HMS",
+            "index": 20,
+            "sample": "100000",
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_UNIT_QTY",
+            "index": 21,
+            "sample": "24",
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_YMD",
+            "index": 22,
+            "sample": "20260227",
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_YMDHMS",
+            "index": 23,
+            "sample": "20260227100000",
+            "type": "STRING"
+          },
+          {
+            "id": "PYUN_ID",
+            "index": 24,
+            "sample": "0",
+            "type": "STRING"
+          },
+          {
+            "id": "PYUN_QTY",
+            "index": 25,
+            "sample": "",
+            "type": "STRING"
+          },
+          {
+            "id": "PRE_STORE_CD",
+            "index": 26,
+            "sample": "190623",
+            "type": "STRING"
+          },
+          {
+            "id": "STORE_BASE_MAEGA_SET",
+            "index": 27,
+            "sample": "1100",
+            "type": "STRING"
+          },
+          {
+            "id": "STORE_CD",
+            "index": 28,
+            "sample": "46513",
+            "type": "STRING"
+          },
+          {
+            "id": "STORE_MAEGA_SET",
+            "index": 29,
+            "sample": "",
+            "type": "STRING"
+          }
+        ],
+        "rowCount": 1
+      },
+      "dsOrderSale": {
+        "colCount": 8,
+        "columns": [
+          {
+            "id": "ORD_YMD",
+            "index": 0,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "JIP_ITEM_CD",
+            "index": 1,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "ITEM_CD",
+            "index": 2,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_QTY",
+            "index": 3,
+            "sample": null,
+            "type": "INT"
+          },
+          {
+            "id": "BUY_QTY",
+            "index": 4,
+            "sample": null,
+            "type": "INT"
+          },
+          {
+            "id": "SALE_QTY",
+            "index": 5,
+            "sample": null,
+            "type": "INT"
+          },
+          {
+            "id": "DISUSE_QTY",
+            "index": 6,
+            "sample": null,
+            "type": "INT"
+          },
+          {
+            "id": "SUM_UNIT_ID",
+            "index": 7,
+            "sample": null,
+            "type": "STRING"
+          }
+        ],
+        "rowCount": 0
+      },
+      "dsOrderSaleBind": {
+        "colCount": 92,
+        "columns": [
+          {
+            "id": "DAY1",
+            "index": 0,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY2",
+            "index": 1,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY3",
+            "index": 2,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY4",
+            "index": 3,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY5",
+            "index": 4,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY6",
+            "index": 5,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY7",
+            "index": 6,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY8",
+            "index": 7,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY9",
+            "index": 8,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY10",
+            "index": 9,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY11",
+            "index": 10,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY12",
+            "index": 11,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY13",
+            "index": 12,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY14",
+            "index": 13,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY15",
+            "index": 14,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY16",
+            "index": 15,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY17",
+            "index": 16,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY18",
+            "index": 17,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY19",
+            "index": 18,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY20",
+            "index": 19,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY21",
+            "index": 20,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY22",
+            "index": 21,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY23",
+            "index": 22,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY24",
+            "index": 23,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY25",
+            "index": 24,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY26",
+            "index": 25,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY27",
+            "index": 26,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY28",
+            "index": 27,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY29",
+            "index": 28,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY30",
+            "index": 29,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY31",
+            "index": 30,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY32",
+            "index": 31,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY33",
+            "index": 32,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY34",
+            "index": 33,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY35",
+            "index": 34,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY36",
+            "index": 35,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY37",
+            "index": 36,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY38",
+            "index": 37,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY39",
+            "index": 38,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY40",
+            "index": 39,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY41",
+            "index": 40,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY42",
+            "index": 41,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY43",
+            "index": 42,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY44",
+            "index": 43,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY45",
+            "index": 44,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY46",
+            "index": 45,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY47",
+            "index": 46,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY48",
+            "index": 47,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY49",
+            "index": 48,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY50",
+            "index": 49,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY51",
+            "index": 50,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY52",
+            "index": 51,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY53",
+            "index": 52,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY54",
+            "index": 53,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY55",
+            "index": 54,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY56",
+            "index": 55,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY57",
+            "index": 56,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY58",
+            "index": 57,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY59",
+            "index": 58,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY60",
+            "index": 59,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY61",
+            "index": 60,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY62",
+            "index": 61,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY63",
+            "index": 62,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY64",
+            "index": 63,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY65",
+            "index": 64,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY66",
+            "index": 65,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY67",
+            "index": 66,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY68",
+            "index": 67,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY69",
+            "index": 68,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY70",
+            "index": 69,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY71",
+            "index": 70,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY72",
+            "index": 71,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY73",
+            "index": 72,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY74",
+            "index": 73,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY75",
+            "index": 74,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY76",
+            "index": 75,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY77",
+            "index": 76,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY78",
+            "index": 77,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY79",
+            "index": 78,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY80",
+            "index": 79,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY81",
+            "index": 80,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY82",
+            "index": 81,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY83",
+            "index": 82,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY84",
+            "index": 83,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY85",
+            "index": 84,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY86",
+            "index": 85,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY87",
+            "index": 86,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY88",
+            "index": 87,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY89",
+            "index": 88,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY90",
+            "index": 89,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY91",
+            "index": 90,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "AVG",
+            "index": 91,
+            "sample": null,
+            "type": "BIGDECIMAL"
+          }
+        ],
+        "rowCount": 0
+      },
+      "dsSaveChk": {
+        "colCount": 6,
+        "columns": [
+          {
+            "id": "ITEM_CD",
+            "index": 0,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "ITEM_NM",
+            "index": 1,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "MID_NM",
+            "index": 2,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_YMD",
+            "index": 3,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_MUL_QTY",
+            "index": 4,
+            "sample": null,
+            "type": "INT"
+          },
+          {
+            "id": "ORD_INPUT_NM",
+            "index": 5,
+            "sample": null,
+            "type": "STRING"
+          }
+        ],
+        "rowCount": 0
+      },
+      "dsWeek": {
+        "colCount": 1,
+        "columns": [
+          {
+            "id": "ORD_YMD",
+            "index": 0,
+            "sample": "20251129",
+            "type": "STRING"
+          }
+        ],
+        "rowCount": 91
+      }
+    },
+    "divs": {
+      "divInfo": [
+        {
+          "name": "Static06",
+          "text": "상품명칭",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "stItemNm",
+          "text": "농심)육개장사발면",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "Static10",
+          "text": "과세구분",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "stTaxId",
+          "text": "과세",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "Static00",
+          "text": "등급",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "stPitemId",
+          "text": "MUST",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "Static01",
+          "text": "상품코드",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "stItemCd",
+          "text": "8801043015653",
+          "type": "unknown",
+          "value": "8801043015653"
+        },
+        {
+          "name": "Static02",
+          "text": "회차구분",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "stPyunsuId",
+          "text": "0",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "Static03",
+          "text": "가로*세로*높이",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "stWDH",
+          "text": "141 * 141 * 75",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "Static04",
+          "text": "분류",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "stClass",
+          "text": "가공식사제품 > 면류 > 용기면",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "Static05",
+          "text": "규격",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "stWDH00",
+          "text": "125G",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "stCenterNm",
+          "text": "BGF로지스곤지암공산품",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "Static08",
+          "text": "배송처",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "stCustNm",
+          "text": "농심(용기면)",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "Static07",
+          "text": "거래처",
+          "type": "unknown",
+          "value": null
+        }
+      ],
+      "divInfo01": [
+        {
+          "name": "Static06",
+          "text": "정지예정일",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "stStopPlanYmd",
+          "text": null,
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "Static00",
+          "text": "정지사유",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "stStopReason",
+          "text": null,
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "Static01",
+          "text": "발주정지일",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "stOrdStopYmd",
+          "text": null,
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "Static03",
+          "text": "대체상품",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "edReplItem",
+          "text": null,
+          "type": "unknown",
+          "value": null
+        }
+      ],
+      "divInfo02": [
+        {
+          "name": "Static06",
+          "text": "현재매가",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "Static10",
+          "text": "원가",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "Static00",
+          "text": "이익률",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "Static01",
+          "text": "CASE입수",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "stCaseUnitQty",
+          "text": "24",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "Static02",
+          "text": "차발주일",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "Static03",
+          "text": "납품소요",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "stLeadTm",
+          "text": "1",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "Static04",
+          "text": "발주단위",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "stOrdUnit",
+          "text": "BOX",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "Static05",
+          "text": "발주배수",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "Static07",
+          "text": "발주입수",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "Static08",
+          "text": "현재고",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "Static09",
+          "text": "본부매가",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "Static11",
+          "text": "유효기간",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "stExpireNm",
+          "text": "117",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "stOrdUnitQty",
+          "text": "24",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "edOrdMul",
+          "text": null,
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "meItemMaegaSet",
+          "text": "1,100",
+          "type": "unknown",
+          "value": {
+            "_getCVT": {},
+            "_getFormattedStringValue": {},
+            "_parse": {},
+            "_toScientificStr": {},
+            "_toStandardStr": {},
+            "_type_name": "Decimal",
+            "abs": {},
+            "addDecimal": {},
+            "addDouble": {},
+            "ceil": {},
+            "divDecimal": {},
+            "divDouble": {},
+            "floor": {},
+            "hi": 1100,
+            "isEqual": {},
+            "isInfinity": {},
+            "isNaN": {},
+            "isNaNOrInf": {},
+            "isNegative": {},
+            "isZero": {},
+            "lo": 0,
+            "modDecimal": {},
+            "modDouble": {},
+            "mulDecimal": {},
+            "mulDouble": {},
+            "round": {},
+            "setDecimal": {},
+            "setDouble": {},
+            "setString": {},
+            "sqr": {},
+            "subDecimal": {},
+            "subDouble": {},
+            "toExponential": {},
+            "toFixed": {},
+            "toFixedLocaleString": {},
+            "toLocaleCurrencyString": {},
+            "toLocaleString": {},
+            "toPrecision": {},
+            "toString": {},
+            "trunc": {},
+            "valueOf": {}
+          }
+        },
+        {
+          "name": "meHQMaegaSet",
+          "text": "1,100",
+          "type": "unknown",
+          "value": {
+            "_getCVT": {},
+            "_getFormattedStringValue": {},
+            "_parse": {},
+            "_toScientificStr": {},
+            "_toStandardStr": {},
+            "_type_name": "Decimal",
+            "abs": {},
+            "addDecimal": {},
+            "addDouble": {},
+            "ceil": {},
+            "divDecimal": {},
+            "divDouble": {},
+            "floor": {},
+            "hi": 1100,
+            "isEqual": {},
+            "isInfinity": {},
+            "isNaN": {},
+            "isNaNOrInf": {},
+            "isNegative": {},
+            "isZero": {},
+            "lo": 0,
+            "modDecimal": {},
+            "modDouble": {},
+            "mulDecimal": {},
+            "mulDouble": {},
+            "round": {},
+            "setDecimal": {},
+            "setDouble": {},
+            "setString": {},
+            "sqr": {},
+            "subDecimal": {},
+            "subDouble": {},
+            "toExponential": {},
+            "toFixed": {},
+            "toFixedLocaleString": {},
+            "toLocaleCurrencyString": {},
+            "toLocaleString": {},
+            "toPrecision": {},
+            "toString": {},
+            "trunc": {},
+            "valueOf": {}
+          }
+        },
+        {
+          "name": "meWonga",
+          "text": "648",
+          "type": "unknown",
+          "value": {
+            "_getCVT": {},
+            "_getFormattedStringValue": {},
+            "_parse": {},
+            "_toScientificStr": {},
+            "_toStandardStr": {},
+            "_type_name": "Decimal",
+            "abs": {},
+            "addDecimal": {},
+            "addDouble": {},
+            "ceil": {},
+            "divDecimal": {},
+            "divDouble": {},
+            "floor": {},
+            "hi": 648,
+            "isEqual": {},
+            "isInfinity": {},
+            "isNaN": {},
+            "isNaNOrInf": {},
+            "isNegative": {},
+            "isZero": {},
+            "lo": 0,
+            "modDecimal": {},
+            "modDouble": {},
+            "mulDecimal": {},
+            "mulDouble": {},
+            "round": {},
+            "setDecimal": {},
+            "setDouble": {},
+            "setString": {},
+            "sqr": {},
+            "subDecimal": {},
+            "subDouble": {},
+            "toExponential": {},
+            "toFixed": {},
+            "toFixedLocaleString": {},
+            "toLocaleCurrencyString": {},
+            "toLocaleString": {},
+            "toPrecision": {},
+            "toString": {},
+            "trunc": {},
+            "valueOf": {}
+          }
+        },
+        {
+          "name": "meProfitRate",
+          "text": "35.2",
+          "type": "unknown",
+          "value": {
+            "_getCVT": {},
+            "_getFormattedStringValue": {},
+            "_parse": {},
+            "_toScientificStr": {},
+            "_toStandardStr": {},
+            "_type_name": "Decimal",
+            "abs": {},
+            "addDecimal": {},
+            "addDouble": {},
+            "ceil": {},
+            "divDecimal": {},
+            "divDouble": {},
+            "floor": {},
+            "hi": 35.2,
+            "isEqual": {},
+            "isInfinity": {},
+            "isNaN": {},
+            "isNaNOrInf": {},
+            "isNegative": {},
+            "isZero": {},
+            "lo": -2.842170943040401e-15,
+            "modDecimal": {},
+            "modDouble": {},
+            "mulDecimal": {},
+            "mulDouble": {},
+            "round": {},
+            "setDecimal": {},
+            "setDouble": {},
+            "setString": {},
+            "sqr": {},
+            "subDecimal": {},
+            "subDouble": {},
+            "toExponential": {},
+            "toFixed": {},
+            "toFixedLocaleString": {},
+            "toLocaleCurrencyString": {},
+            "toLocaleString": {},
+            "toPrecision": {},
+            "toString": {},
+            "trunc": {},
+            "valueOf": {}
+          }
+        },
+        {
+          "name": "meNowQty",
+          "text": "19",
+          "type": "unknown",
+          "value": "19"
+        },
+        {
+          "name": "meNextOrdYmd",
+          "text": "2026-02-28",
+          "type": "unknown",
+          "value": "20260228"
+        }
+      ],
+      "divInfo03": [
+        {
+          "name": "Static06",
+          "text": "현재고수정",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "Static01",
+          "text": "자동/스마트발주 등록",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "Static00",
+          "text": "상품정보분석",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "btNowQtyChg",
+          "text": "수정",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "btAutoOrd",
+          "text": "등록",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "btn_ItemReport",
+          "text": "보기",
+          "type": "unknown",
+          "value": null
+        }
+      ]
+    },
+    "ui_components": [
+      {
+        "name": "btn_save",
+        "text": "저장",
+        "type": "unknown",
+        "value": null
+      },
+      {
+        "name": "btn_close",
+        "text": "닫기",
+        "type": "unknown",
+        "value": null
+      },
+      {
+        "name": "Static00",
+        "text": "상품 상세",
+        "type": "unknown",
+        "value": null
+      },
+      {
+        "name": "btn_x",
+        "text": null,
+        "type": "unknown",
+        "value": null
+      },
+      {
+        "name": "imgItemUrl",
+        "text": null,
+        "type": "unknown",
+        "value": null
+      },
+      {
+        "name": "divInfo",
+        "text": null,
+        "type": "unknown",
+        "value": null
+      },
+      {
+        "name": "taItemDesc",
+        "text": "① 용기타입 라면의 원조격 제품으로, 우리 입맛에 딱 어울리는 얼큰한 육개장 맛 용기면\n② 소고기를 주원료로 건파, 계란 후레이크, 각종 야채가 푸짐하게 들어있으며 깔끔한 국물 맛\n③ 소용돌이 맛살, 계란맛어포 등의 건더기가 특징\n끓는 물만 부으면 언제 어디서나 간편하게 먹을 수 있는 용기면의 대표제품으로 성인 층은 물론 중, 고등학생 및 수험생의 간식으로 매우 적당한 제품입니다.",
+        "type": "unknown",
+        "value": "① 용기타입 라면의 원조격 제품으로, 우리 입맛에 딱 어울리는 얼큰한 육개장 맛 용기면\n② 소고기를 주원료로 건파, 계란 후레이크, 각종 야채가 푸짐하게 들어있으며 깔끔한 국물 맛\n③ 소용돌이 맛살, 계란맛어포 등의 건더기가 특징\n끓는 물만 부으면 언제 어디서나 간편하게 먹을 수 있는 용기면의 대표제품으로 성인 층은 물론 중, 고등학생 및 수험생의 간식으로 매우 적당한 제품입니다."
+      },
+      {
+        "name": "divInfo00",
+        "text": null,
+        "type": "unknown",
+        "value": null
+      },
+      {
+        "name": "Static06",
+        "text": "행사",
+        "type": "unknown",
+        "value": null
+      },
+      {
+        "name": "divInfo01",
+        "text": null,
+        "type": "unknown",
+        "value": null
+      },
+      {
+        "name": "divInfo02",
+        "text": null,
+        "type": "unknown",
+        "value": null
+      },
+      {
+        "name": "divInfo04",
+        "text": null,
+        "type": "unknown",
+        "value": null
+      },
+      {
+        "name": "divInfo05",
+        "text": null,
+        "type": "unknown",
+        "value": null
+      },
+      {
+        "name": "Static07",
+        "text": "상품특징",
+        "type": "unknown",
+        "value": null
+      },
+      {
+        "name": "divInfo06",
+        "text": null,
+        "type": "unknown",
+        "value": null
+      },
+      {
+        "name": "divInfo07",
+        "text": null,
+        "type": "unknown",
+        "value": null
+      },
+      {
+        "name": "btn_search",
+        "text": "조회",
+        "type": "unknown",
+        "value": null
+      },
+      {
+        "name": "grd_summ",
+        "text": null,
+        "type": "unknown",
+        "value": null
+      },
+      {
+        "name": "Static03",
+        "text": "구분",
+        "type": "unknown",
+        "value": null
+      },
+      {
+        "name": "Static01",
+        "text": "발주",
+        "type": "unknown",
+        "value": null
+      },
+      {
+        "name": "Static02",
+        "text": "납품",
+        "type": "unknown",
+        "value": null
+      },
+      {
+        "name": "Static04",
+        "text": "판매",
+        "type": "unknown",
+        "value": null
+      },
+      {
+        "name": "Static05",
+        "text": "폐기",
+        "type": "unknown",
+        "value": null
+      },
+      {
+        "name": "divInfo03",
+        "text": null,
+        "type": "unknown",
+        "value": null
+      },
+      {
+        "name": "stEvt01",
+        "text": "당월 : 3+1 | 26.02.01~26.02.15 | 행사 요일 : 기간 | 방식 : 판촉비",
+        "type": "unknown",
+        "value": "당월 : 3+1 | 26.02.01~26.02.15 | 행사 요일 : 기간 | 방식 : 판촉비"
+      },
+      {
+        "name": "btEvtDetail",
+        "text": "상세",
+        "type": "unknown",
+        "value": null
+      },
+      {
+        "name": "stRebate",
+        "text": "비대상",
+        "type": "unknown",
+        "value": "비대상"
+      },
+      {
+        "name": "btGrantDetail",
+        "text": "상세",
+        "type": "unknown",
+        "value": null
+      }
+    ]
+  },
+  "8800279670889": {
+    "datasets": {
+      "dsCheckMagam": {
+        "colCount": 5,
+        "columns": [
+          {
+            "id": "ORD_YMD",
+            "index": 0,
+            "sample": "20260227",
+            "type": "STRING"
+          },
+          {
+            "id": "S_ORD_TURN_HMS",
+            "index": 1,
+            "sample": "10:00",
+            "type": "STRING"
+          },
+          {
+            "id": "E_ORD_TURN_HMS",
+            "index": 2,
+            "sample": "11:00",
+            "type": "STRING"
+          },
+          {
+            "id": "SAVE_TIME_YN",
+            "index": 3,
+            "sample": "Y",
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_TURN_HMS",
+            "index": 4,
+            "sample": "100000",
+            "type": "STRING"
+          }
+        ],
+        "rowCount": 1
+      },
+      "dsItemDetail": {
+        "colCount": 98,
+        "columns": [
+          {
+            "id": "STORE_CD",
+            "index": 0,
+            "sample": "46513",
+            "type": "STRING"
+          },
+          {
+            "id": "ITEM_CD",
+            "index": 1,
+            "sample": "8800279670889",
+            "type": "STRING"
+          },
+          {
+            "id": "ITEM_NM",
+            "index": 2,
+            "sample": "주)3XL베이컨햄마요김치1",
+            "type": "STRING"
+          },
+          {
+            "id": "ITEM_SNM",
+            "index": 3,
+            "sample": "주)3XL베이컨햄마요김",
+            "type": "STRING"
+          },
+          {
+            "id": "EVT01",
+            "index": 4,
+            "sample": "",
+            "type": "STRING"
+          },
+          {
+            "id": "EVT01_MOBI",
+            "index": 5,
+            "sample": "",
+            "type": "STRING"
+          },
+          {
+            "id": "PLU_ID",
+            "index": 6,
+            "sample": "00",
+            "type": "STRING"
+          },
+          {
+            "id": "ITEM_SPEC",
+            "index": 7,
+            "sample": "161G",
+            "type": "STRING"
+          },
+          {
+            "id": "SALE_UNIT",
+            "index": 8,
+            "sample": "1",
+            "type": "BIGDECIMAL"
+          },
+          {
+            "id": "ORD_MULT_ULMT",
+            "index": 9,
+            "sample": "99",
+            "type": "BIGDECIMAL"
+          },
+          {
+            "id": "ORD_MULT_LLMT",
+            "index": 10,
+            "sample": "1",
+            "type": "BIGDECIMAL"
+          },
+          {
+            "id": "SALE_UNIT_QTY",
+            "index": 11,
+            "sample": "1",
+            "type": "BIGDECIMAL"
+          },
+          {
+            "id": "BTL_ITEM_CD",
+            "index": 12,
+            "sample": "",
+            "type": "STRING"
+          },
+          {
+            "id": "BOX_ITEM_CD",
+            "index": 13,
+            "sample": "",
+            "type": "STRING"
+          },
+          {
+            "id": "UNIT_ITEM_CD",
+            "index": 14,
+            "sample": "",
+            "type": "STRING"
+          },
+          {
+            "id": "DAY_DC_YN",
+            "index": 15,
+            "sample": "0000000",
+            "type": "STRING"
+          },
+          {
+            "id": "TOT_ITEM_SPEC",
+            "index": 16,
+            "sample": "0",
+            "type": "BIGDECIMAL"
+          },
+          {
+            "id": "DISP_UNIT",
+            "index": 17,
+            "sample": "0",
+            "type": "STRING"
+          },
+          {
+            "id": "DISP_STD",
+            "index": 18,
+            "sample": "",
+            "type": "STRING"
+          },
+          {
+            "id": "JIP_ITEM_CD",
+            "index": 19,
+            "sample": "8800279670889",
+            "type": "STRING"
+          },
+          {
+            "id": "LARGE_CD",
+            "index": 20,
+            "sample": "01",
+            "type": "STRING"
+          },
+          {
+            "id": "MID_CD",
+            "index": 21,
+            "sample": "002",
+            "type": "STRING"
+          },
+          {
+            "id": "SMALL_CD",
+            "index": 22,
+            "sample": "004",
+            "type": "STRING"
+          },
+          {
+            "id": "LARGE_NM",
+            "index": 23,
+            "sample": "간편식사",
+            "type": "STRING"
+          },
+          {
+            "id": "MID_NM",
+            "index": 24,
+            "sample": "주먹밥",
+            "type": "STRING"
+          },
+          {
+            "id": "SMALL_NM",
+            "index": 25,
+            "sample": "삼각김밥",
+            "type": "STRING"
+          },
+          {
+            "id": "CLASS_NM",
+            "index": 26,
+            "sample": "간편식사 > 주먹밥 > 삼각김밥",
+            "type": "STRING"
+          },
+          {
+            "id": "ITEM_SW",
+            "index": 27,
+            "sample": "120",
+            "type": "BIGDECIMAL"
+          },
+          {
+            "id": "ITEM_SL",
+            "index": 28,
+            "sample": "140",
+            "type": "BIGDECIMAL"
+          },
+          {
+            "id": "ITEM_SH",
+            "index": 29,
+            "sample": "20",
+            "type": "BIGDECIMAL"
+          },
+          {
+            "id": "ITEM_SWLH",
+            "index": 30,
+            "sample": "120 * 140 * 20",
+            "type": "STRING"
+          },
+          {
+            "id": "ITEM_G",
+            "index": 31,
+            "sample": "161",
+            "type": "BIGDECIMAL"
+          },
+          {
+            "id": "ORD_UNIT",
+            "index": 32,
+            "sample": "01",
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_UNIT_NM",
+            "index": 33,
+            "sample": "낱개",
+            "type": "STRING"
+          },
+          {
+            "id": "CASE_UNIT_QTY",
+            "index": 34,
+            "sample": "50",
+            "type": "BIGDECIMAL"
+          },
+          {
+            "id": "ORD_UNIT_QTY",
+            "index": 35,
+            "sample": "1",
+            "type": "BIGDECIMAL"
+          },
+          {
+            "id": "EXPIRE_DAY",
+            "index": 36,
+            "sample": "1",
+            "type": "BIGDECIMAL"
+          },
+          {
+            "id": "EXPIRE_ID",
+            "index": 37,
+            "sample": "0",
+            "type": "STRING"
+          },
+          {
+            "id": "EXPIRE_NM",
+            "index": 38,
+            "sample": "1",
+            "type": "STRING"
+          },
+          {
+            "id": "HIGHLOW_ID",
+            "index": 39,
+            "sample": "0",
+            "type": "STRING"
+          },
+          {
+            "id": "PITEM_ID",
+            "index": 40,
+            "sample": "2",
+            "type": "STRING"
+          },
+          {
+            "id": "PITEM_ID_NM",
+            "index": 41,
+            "sample": "",
+            "type": "STRING"
+          },
+          {
+            "id": "JIP_ITEM_NM",
+            "index": 42,
+            "sample": "주)3XL베이컨햄마요김치",
+            "type": "STRING"
+          },
+          {
+            "id": "ITEM_DESC",
+            "index": 43,
+            "sample": "베이컨과 햄 그리고 마요네즈를 섞은 토핑을 김치볶음밥에 넣은 맛있는 조합의 빅 삼각김밥",
+            "type": "STRING"
+          },
+          {
+            "id": "BORD_STOP_YN",
+            "index": 44,
+            "sample": "0",
+            "type": "STRING"
+          },
+          {
+            "id": "DEEM_TAX_ID",
+            "index": 45,
+            "sample": "0",
+            "type": "STRING"
+          },
+          {
+            "id": "SET_DJ_TY_ID",
+            "index": 46,
+            "sample": "0",
+            "type": "STRING"
+          },
+          {
+            "id": "FUR_CD",
+            "index": 47,
+            "sample": "01",
+            "type": "STRING"
+          },
+          {
+            "id": "CUST_CD",
+            "index": 48,
+            "sample": "3471012",
+            "type": "STRING"
+          },
+          {
+            "id": "CUST_NM",
+            "index": 49,
+            "sample": "푸드진천주먹밥",
+            "type": "STRING"
+          },
+          {
+            "id": "CENTER_NM",
+            "index": 50,
+            "sample": "씨제이오산냉장1",
+            "type": "STRING"
+          },
+          {
+            "id": "MAEGA_CHG_EYMD",
+            "index": 51,
+            "sample": "",
+            "type": "STRING"
+          },
+          {
+            "id": "PYUNSU_ID",
+            "index": 52,
+            "sample": "1",
+            "type": "STRING"
+          },
+          {
+            "id": "RET_PSS_ID",
+            "index": 53,
+            "sample": "0",
+            "type": "STRING"
+          },
+          {
+            "id": "RET_PSS_ID_NM",
+            "index": 54,
+            "sample": "불가",
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_PSS_ID",
+            "index": 55,
+            "sample": "0",
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_PSS_ID_NM",
+            "index": 56,
+            "sample": "가능",
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_PSS_SYMD",
+            "index": 57,
+            "sample": "20241029",
+            "type": "STRING"
+          },
+          {
+            "id": "CUT_ITEM_YN",
+            "index": 58,
+            "sample": "0",
+            "type": "STRING"
+          },
+          {
+            "id": "ITEM_WONGA",
+            "index": 59,
+            "sample": "985",
+            "type": "BIGDECIMAL"
+          },
+          {
+            "id": "HQ_MAEGA_SET",
+            "index": 60,
+            "sample": "1700",
+            "type": "BIGDECIMAL"
+          },
+          {
+            "id": "STORE_MAEGA_SET",
+            "index": 61,
+            "sample": "",
+            "type": "BIGDECIMAL"
+          },
+          {
+            "id": "STORE_BASE_MAEGA_SET",
+            "index": 62,
+            "sample": "1700",
+            "type": "BIGDECIMAL"
+          },
+          {
+            "id": "ITEM_MAEGA",
+            "index": 63,
+            "sample": "1700",
+            "type": "BIGDECIMAL"
+          },
+          {
+            "id": "OD_MAEGA",
+            "index": 64,
+            "sample": "1700",
+            "type": "BIGDECIMAL"
+          },
+          {
+            "id": "PROFIT_RATE",
+            "index": 65,
+            "sample": "36.26",
+            "type": "BIGDECIMAL"
+          },
+          {
+            "id": "MAEGA_CHG_ID",
+            "index": 66,
+            "sample": "0",
+            "type": "STRING"
+          },
+          {
+            "id": "TAX_ID",
+            "index": 67,
+            "sample": "과세",
+            "type": "STRING"
+          },
+          {
+            "id": "SSR_ITEM_AGREE_ID",
+            "index": 68,
+            "sample": "",
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_STOP_SYMD",
+            "index": 69,
+            "sample": "",
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_STOP_EYMD",
+            "index": 70,
+            "sample": "",
+            "type": "STRING"
+          },
+          {
+            "id": "SALE_STOP_ID",
+            "index": 71,
+            "sample": "0",
+            "type": "STRING"
+          },
+          {
+            "id": "SALE_STOP_NM",
+            "index": 72,
+            "sample": "과세",
+            "type": "STRING"
+          },
+          {
+            "id": "CT_ITEM_YN",
+            "index": 73,
+            "sample": "0",
+            "type": "STRING"
+          },
+          {
+            "id": "SUM_UNIT_ID",
+            "index": 74,
+            "sample": "0",
+            "type": "STRING"
+          },
+          {
+            "id": "FIX_WONGA",
+            "index": 75,
+            "sample": "",
+            "type": "BIGDECIMAL"
+          },
+          {
+            "id": "BTL_ID",
+            "index": 76,
+            "sample": "0",
+            "type": "STRING"
+          },
+          {
+            "id": "DRINK_BTL_ID",
+            "index": 77,
+            "sample": "0",
+            "type": "BIGDECIMAL"
+          },
+          {
+            "id": "IMG_CHK",
+            "index": 78,
+            "sample": "1",
+            "type": "STRING"
+          },
+          {
+            "id": "IMAGE_DIR",
+            "index": 79,
+            "sample": "m",
+            "type": "STRING"
+          },
+          {
+            "id": "IMG_URL",
+            "index": 80,
+            "sample": "8800279670889_M.jpg",
+            "type": "STRING"
+          },
+          {
+            "id": "WMCHG_YN",
+            "index": 81,
+            "sample": "0",
+            "type": "STRING"
+          },
+          {
+            "id": "WMCHG_YMD",
+            "index": 82,
+            "sample": "",
+            "type": "STRING"
+          },
+          {
+            "id": "DC_DESC",
+            "index": 83,
+            "sample": "비대상",
+            "type": "STRING"
+          },
+          {
+            "id": "BONUS_DESC",
+            "index": 84,
+            "sample": "비대상",
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_STOP_PLAN_YMD",
+            "index": 85,
+            "sample": "2025-11-17 ~",
+            "type": "STRING"
+          },
+          {
+            "id": "REASON_ID",
+            "index": 86,
+            "sample": "운영종료",
+            "type": "STRING"
+          },
+          {
+            "id": "CHG_ITEM_CD",
+            "index": 87,
+            "sample": "8800336392136",
+            "type": "STRING"
+          },
+          {
+            "id": "RET_SYMD",
+            "index": 88,
+            "sample": "",
+            "type": "STRING"
+          },
+          {
+            "id": "RET_EYMD",
+            "index": 89,
+            "sample": "",
+            "type": "STRING"
+          },
+          {
+            "id": "RET_YMD",
+            "index": 90,
+            "sample": "",
+            "type": "STRING"
+          },
+          {
+            "id": "TOT_DISP_SEQ",
+            "index": 91,
+            "sample": "010041",
+            "type": "STRING"
+          },
+          {
+            "id": "DISUSE_GB",
+            "index": 92,
+            "sample": "가능",
+            "type": "STRING"
+          },
+          {
+            "id": "EVT_DC_YMD",
+            "index": 93,
+            "sample": "",
+            "type": "STRING"
+          },
+          {
+            "id": "EVT_DC_PROFIT_RATE",
+            "index": 94,
+            "sample": "",
+            "type": "STRING"
+          },
+          {
+            "id": "RB_AMT",
+            "index": 95,
+            "sample": "",
+            "type": "STRING"
+          },
+          {
+            "id": "RB_CON",
+            "index": 96,
+            "sample": "",
+            "type": "STRING"
+          },
+          {
+            "id": "RB_YMD",
+            "index": 97,
+            "sample": "",
+            "type": "STRING"
+          }
+        ],
+        "rowCount": 1
+      },
+      "dsItemDetailOrd": {
+        "colCount": 30,
+        "columns": [
+          {
+            "id": "HQ_MAEGA_SET",
+            "index": 0,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "ITEM_CD",
+            "index": 1,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "ITEM_NM",
+            "index": 2,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "PYUN_ITEM_CD",
+            "index": 3,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "ITEM_MAEGA",
+            "index": 4,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "JIP_ITEM_CD",
+            "index": 5,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "NEXT_ORD_YMD",
+            "index": 6,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "NOW_QTY",
+            "index": 7,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "OD_MAEGA",
+            "index": 8,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_ADAY",
+            "index": 9,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_LEADTIME",
+            "index": 10,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_MUL_QTY",
+            "index": 11,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_MULT_LLMT",
+            "index": 12,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_MULT_ULMT",
+            "index": 13,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_PSS_ID",
+            "index": 14,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_PSS_CHK",
+            "index": 15,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_PSS_CHK_NM",
+            "index": 16,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_PSS_SYMD",
+            "index": 17,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_STOP_EYMD",
+            "index": 18,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_STOP_SYMD",
+            "index": 19,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_TURN_HMS",
+            "index": 20,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_UNIT_QTY",
+            "index": 21,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_YMD",
+            "index": 22,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_YMDHMS",
+            "index": 23,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "PYUN_ID",
+            "index": 24,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "PYUN_QTY",
+            "index": 25,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "PRE_STORE_CD",
+            "index": 26,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "STORE_BASE_MAEGA_SET",
+            "index": 27,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "STORE_CD",
+            "index": 28,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "STORE_MAEGA_SET",
+            "index": 29,
+            "sample": null,
+            "type": "STRING"
+          }
+        ],
+        "rowCount": 0
+      },
+      "dsOrderSale": {
+        "colCount": 8,
+        "columns": [
+          {
+            "id": "ORD_YMD",
+            "index": 0,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "JIP_ITEM_CD",
+            "index": 1,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "ITEM_CD",
+            "index": 2,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_QTY",
+            "index": 3,
+            "sample": null,
+            "type": "INT"
+          },
+          {
+            "id": "BUY_QTY",
+            "index": 4,
+            "sample": null,
+            "type": "INT"
+          },
+          {
+            "id": "SALE_QTY",
+            "index": 5,
+            "sample": null,
+            "type": "INT"
+          },
+          {
+            "id": "DISUSE_QTY",
+            "index": 6,
+            "sample": null,
+            "type": "INT"
+          },
+          {
+            "id": "SUM_UNIT_ID",
+            "index": 7,
+            "sample": null,
+            "type": "STRING"
+          }
+        ],
+        "rowCount": 0
+      },
+      "dsOrderSaleBind": {
+        "colCount": 92,
+        "columns": [
+          {
+            "id": "DAY1",
+            "index": 0,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY2",
+            "index": 1,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY3",
+            "index": 2,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY4",
+            "index": 3,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY5",
+            "index": 4,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY6",
+            "index": 5,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY7",
+            "index": 6,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY8",
+            "index": 7,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY9",
+            "index": 8,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY10",
+            "index": 9,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY11",
+            "index": 10,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY12",
+            "index": 11,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY13",
+            "index": 12,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY14",
+            "index": 13,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY15",
+            "index": 14,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY16",
+            "index": 15,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY17",
+            "index": 16,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY18",
+            "index": 17,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY19",
+            "index": 18,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY20",
+            "index": 19,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY21",
+            "index": 20,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY22",
+            "index": 21,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY23",
+            "index": 22,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY24",
+            "index": 23,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY25",
+            "index": 24,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY26",
+            "index": 25,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY27",
+            "index": 26,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY28",
+            "index": 27,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY29",
+            "index": 28,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY30",
+            "index": 29,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY31",
+            "index": 30,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY32",
+            "index": 31,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY33",
+            "index": 32,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY34",
+            "index": 33,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY35",
+            "index": 34,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY36",
+            "index": 35,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY37",
+            "index": 36,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY38",
+            "index": 37,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY39",
+            "index": 38,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY40",
+            "index": 39,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY41",
+            "index": 40,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY42",
+            "index": 41,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY43",
+            "index": 42,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY44",
+            "index": 43,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY45",
+            "index": 44,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY46",
+            "index": 45,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY47",
+            "index": 46,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY48",
+            "index": 47,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY49",
+            "index": 48,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY50",
+            "index": 49,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY51",
+            "index": 50,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY52",
+            "index": 51,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY53",
+            "index": 52,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY54",
+            "index": 53,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY55",
+            "index": 54,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY56",
+            "index": 55,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY57",
+            "index": 56,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY58",
+            "index": 57,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY59",
+            "index": 58,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY60",
+            "index": 59,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY61",
+            "index": 60,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY62",
+            "index": 61,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY63",
+            "index": 62,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY64",
+            "index": 63,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY65",
+            "index": 64,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY66",
+            "index": 65,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY67",
+            "index": 66,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY68",
+            "index": 67,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY69",
+            "index": 68,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY70",
+            "index": 69,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY71",
+            "index": 70,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY72",
+            "index": 71,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY73",
+            "index": 72,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY74",
+            "index": 73,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY75",
+            "index": 74,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY76",
+            "index": 75,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY77",
+            "index": 76,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY78",
+            "index": 77,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY79",
+            "index": 78,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY80",
+            "index": 79,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY81",
+            "index": 80,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY82",
+            "index": 81,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY83",
+            "index": 82,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY84",
+            "index": 83,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY85",
+            "index": 84,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY86",
+            "index": 85,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY87",
+            "index": 86,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY88",
+            "index": 87,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY89",
+            "index": 88,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY90",
+            "index": 89,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY91",
+            "index": 90,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "AVG",
+            "index": 91,
+            "sample": null,
+            "type": "BIGDECIMAL"
+          }
+        ],
+        "rowCount": 0
+      },
+      "dsSaveChk": {
+        "colCount": 6,
+        "columns": [
+          {
+            "id": "ITEM_CD",
+            "index": 0,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "ITEM_NM",
+            "index": 1,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "MID_NM",
+            "index": 2,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_YMD",
+            "index": 3,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_MUL_QTY",
+            "index": 4,
+            "sample": null,
+            "type": "INT"
+          },
+          {
+            "id": "ORD_INPUT_NM",
+            "index": 5,
+            "sample": null,
+            "type": "STRING"
+          }
+        ],
+        "rowCount": 0
+      },
+      "dsWeek": {
+        "colCount": 1,
+        "columns": [
+          {
+            "id": "ORD_YMD",
+            "index": 0,
+            "sample": null,
+            "type": "STRING"
+          }
+        ],
+        "rowCount": 0
+      }
+    },
+    "divs": {
+      "divInfo": [
+        {
+          "name": "Static06",
+          "text": "상품명칭",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "stItemNm",
+          "text": "주)3XL베이컨햄마요김치1",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "Static10",
+          "text": "과세구분",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "stTaxId",
+          "text": "과세",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "Static00",
+          "text": "등급",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "stPitemId",
+          "text": null,
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "Static01",
+          "text": "상품코드",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "stItemCd",
+          "text": "8800279670889",
+          "type": "unknown",
+          "value": "8800279670889"
+        },
+        {
+          "name": "Static02",
+          "text": "회차구분",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "stPyunsuId",
+          "text": "1",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "Static03",
+          "text": "가로*세로*높이",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "stWDH",
+          "text": "120 * 140 * 20",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "Static04",
+          "text": "분류",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "stClass",
+          "text": "간편식사 > 주먹밥 > 삼각김밥",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "Static05",
+          "text": "규격",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "stWDH00",
+          "text": "161G",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "stCenterNm",
+          "text": "씨제이오산냉장1",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "Static08",
+          "text": "배송처",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "stCustNm",
+          "text": "푸드진천주먹밥",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "Static07",
+          "text": "거래처",
+          "type": "unknown",
+          "value": null
+        }
+      ],
+      "divInfo01": [
+        {
+          "name": "Static06",
+          "text": "정지예정일",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "stStopPlanYmd",
+          "text": "2025-11-17 ~",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "Static00",
+          "text": "정지사유",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "stStopReason",
+          "text": "운영종료",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "Static01",
+          "text": "발주정지일",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "stOrdStopYmd",
+          "text": null,
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "Static03",
+          "text": "대체상품",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "edReplItem",
+          "text": "8800336392136",
+          "type": "unknown",
+          "value": "8800336392136"
+        }
+      ],
+      "divInfo02": [
+        {
+          "name": "Static06",
+          "text": "현재매가",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "Static10",
+          "text": "원가",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "Static00",
+          "text": "이익률",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "Static01",
+          "text": "CASE입수",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "stCaseUnitQty",
+          "text": "50",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "Static02",
+          "text": "차발주일",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "Static03",
+          "text": "납품소요",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "stLeadTm",
+          "text": null,
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "Static04",
+          "text": "발주단위",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "stOrdUnit",
+          "text": "낱개",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "Static05",
+          "text": "발주배수",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "Static07",
+          "text": "발주입수",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "Static08",
+          "text": "현재고",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "Static09",
+          "text": "본부매가",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "Static11",
+          "text": "유효기간",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "stExpireNm",
+          "text": "1",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "stOrdUnitQty",
+          "text": "1",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "edOrdMul",
+          "text": null,
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "meItemMaegaSet",
+          "text": "1,700",
+          "type": "unknown",
+          "value": {
+            "_getCVT": {},
+            "_getFormattedStringValue": {},
+            "_parse": {},
+            "_toScientificStr": {},
+            "_toStandardStr": {},
+            "_type_name": "Decimal",
+            "abs": {},
+            "addDecimal": {},
+            "addDouble": {},
+            "ceil": {},
+            "divDecimal": {},
+            "divDouble": {},
+            "floor": {},
+            "hi": 1700,
+            "isEqual": {},
+            "isInfinity": {},
+            "isNaN": {},
+            "isNaNOrInf": {},
+            "isNegative": {},
+            "isZero": {},
+            "lo": 0,
+            "modDecimal": {},
+            "modDouble": {},
+            "mulDecimal": {},
+            "mulDouble": {},
+            "round": {},
+            "setDecimal": {},
+            "setDouble": {},
+            "setString": {},
+            "sqr": {},
+            "subDecimal": {},
+            "subDouble": {},
+            "toExponential": {},
+            "toFixed": {},
+            "toFixedLocaleString": {},
+            "toLocaleCurrencyString": {},
+            "toLocaleString": {},
+            "toPrecision": {},
+            "toString": {},
+            "trunc": {},
+            "valueOf": {}
+          }
+        },
+        {
+          "name": "meHQMaegaSet",
+          "text": "1,700",
+          "type": "unknown",
+          "value": {
+            "_getCVT": {},
+            "_getFormattedStringValue": {},
+            "_parse": {},
+            "_toScientificStr": {},
+            "_toStandardStr": {},
+            "_type_name": "Decimal",
+            "abs": {},
+            "addDecimal": {},
+            "addDouble": {},
+            "ceil": {},
+            "divDecimal": {},
+            "divDouble": {},
+            "floor": {},
+            "hi": 1700,
+            "isEqual": {},
+            "isInfinity": {},
+            "isNaN": {},
+            "isNaNOrInf": {},
+            "isNegative": {},
+            "isZero": {},
+            "lo": 0,
+            "modDecimal": {},
+            "modDouble": {},
+            "mulDecimal": {},
+            "mulDouble": {},
+            "round": {},
+            "setDecimal": {},
+            "setDouble": {},
+            "setString": {},
+            "sqr": {},
+            "subDecimal": {},
+            "subDouble": {},
+            "toExponential": {},
+            "toFixed": {},
+            "toFixedLocaleString": {},
+            "toLocaleCurrencyString": {},
+            "toLocaleString": {},
+            "toPrecision": {},
+            "toString": {},
+            "trunc": {},
+            "valueOf": {}
+          }
+        },
+        {
+          "name": "meWonga",
+          "text": "985",
+          "type": "unknown",
+          "value": {
+            "_getCVT": {},
+            "_getFormattedStringValue": {},
+            "_parse": {},
+            "_toScientificStr": {},
+            "_toStandardStr": {},
+            "_type_name": "Decimal",
+            "abs": {},
+            "addDecimal": {},
+            "addDouble": {},
+            "ceil": {},
+            "divDecimal": {},
+            "divDouble": {},
+            "floor": {},
+            "hi": 985,
+            "isEqual": {},
+            "isInfinity": {},
+            "isNaN": {},
+            "isNaNOrInf": {},
+            "isNegative": {},
+            "isZero": {},
+            "lo": 0,
+            "modDecimal": {},
+            "modDouble": {},
+            "mulDecimal": {},
+            "mulDouble": {},
+            "round": {},
+            "setDecimal": {},
+            "setDouble": {},
+            "setString": {},
+            "sqr": {},
+            "subDecimal": {},
+            "subDouble": {},
+            "toExponential": {},
+            "toFixed": {},
+            "toFixedLocaleString": {},
+            "toLocaleCurrencyString": {},
+            "toLocaleString": {},
+            "toPrecision": {},
+            "toString": {},
+            "trunc": {},
+            "valueOf": {}
+          }
+        },
+        {
+          "name": "meProfitRate",
+          "text": "36.26",
+          "type": "unknown",
+          "value": {
+            "_getCVT": {},
+            "_getFormattedStringValue": {},
+            "_parse": {},
+            "_toScientificStr": {},
+            "_toStandardStr": {},
+            "_type_name": "Decimal",
+            "abs": {},
+            "addDecimal": {},
+            "addDouble": {},
+            "ceil": {},
+            "divDecimal": {},
+            "divDouble": {},
+            "floor": {},
+            "hi": 36.26,
+            "isEqual": {},
+            "isInfinity": {},
+            "isNaN": {},
+            "isNaNOrInf": {},
+            "isNegative": {},
+            "isZero": {},
+            "lo": 1.9895196601282807e-15,
+            "modDecimal": {},
+            "modDouble": {},
+            "mulDecimal": {},
+            "mulDouble": {},
+            "round": {},
+            "setDecimal": {},
+            "setDouble": {},
+            "setString": {},
+            "sqr": {},
+            "subDecimal": {},
+            "subDouble": {},
+            "toExponential": {},
+            "toFixed": {},
+            "toFixedLocaleString": {},
+            "toLocaleCurrencyString": {},
+            "toLocaleString": {},
+            "toPrecision": {},
+            "toString": {},
+            "trunc": {},
+            "valueOf": {}
+          }
+        },
+        {
+          "name": "meNowQty",
+          "text": "0",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "meNextOrdYmd",
+          "text": "____-__-__",
+          "type": "unknown",
+          "value": null
+        }
+      ],
+      "divInfo03": [
+        {
+          "name": "Static06",
+          "text": "현재고수정",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "Static01",
+          "text": "자동/스마트발주 등록",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "Static00",
+          "text": "상품정보분석",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "btNowQtyChg",
+          "text": "수정",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "btAutoOrd",
+          "text": "등록",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "btn_ItemReport",
+          "text": "보기",
+          "type": "unknown",
+          "value": null
+        }
+      ]
+    },
+    "ui_components": [
+      {
+        "name": "btn_save",
+        "text": "저장",
+        "type": "unknown",
+        "value": null
+      },
+      {
+        "name": "btn_close",
+        "text": "닫기",
+        "type": "unknown",
+        "value": null
+      },
+      {
+        "name": "Static00",
+        "text": "상품 상세",
+        "type": "unknown",
+        "value": null
+      },
+      {
+        "name": "btn_x",
+        "text": null,
+        "type": "unknown",
+        "value": null
+      },
+      {
+        "name": "imgItemUrl",
+        "text": null,
+        "type": "unknown",
+        "value": null
+      },
+      {
+        "name": "divInfo",
+        "text": null,
+        "type": "unknown",
+        "value": null
+      },
+      {
+        "name": "taItemDesc",
+        "text": "베이컨과 햄 그리고 마요네즈를 섞은 토핑을 김치볶음밥에 넣은 맛있는 조합의 빅 삼각김밥",
+        "type": "unknown",
+        "value": "베이컨과 햄 그리고 마요네즈를 섞은 토핑을 김치볶음밥에 넣은 맛있는 조합의 빅 삼각김밥"
+      },
+      {
+        "name": "divInfo00",
+        "text": null,
+        "type": "unknown",
+        "value": null
+      },
+      {
+        "name": "Static06",
+        "text": "행사",
+        "type": "unknown",
+        "value": null
+      },
+      {
+        "name": "divInfo01",
+        "text": null,
+        "type": "unknown",
+        "value": null
+      },
+      {
+        "name": "divInfo02",
+        "text": null,
+        "type": "unknown",
+        "value": null
+      },
+      {
+        "name": "divInfo04",
+        "text": null,
+        "type": "unknown",
+        "value": null
+      },
+      {
+        "name": "divInfo05",
+        "text": null,
+        "type": "unknown",
+        "value": null
+      },
+      {
+        "name": "Static07",
+        "text": "상품특징",
+        "type": "unknown",
+        "value": null
+      },
+      {
+        "name": "divInfo06",
+        "text": null,
+        "type": "unknown",
+        "value": null
+      },
+      {
+        "name": "divInfo07",
+        "text": null,
+        "type": "unknown",
+        "value": null
+      },
+      {
+        "name": "btn_search",
+        "text": "조회",
+        "type": "unknown",
+        "value": null
+      },
+      {
+        "name": "grd_summ",
+        "text": null,
+        "type": "unknown",
+        "value": null
+      },
+      {
+        "name": "Static03",
+        "text": "구분",
+        "type": "unknown",
+        "value": null
+      },
+      {
+        "name": "Static01",
+        "text": "발주",
+        "type": "unknown",
+        "value": null
+      },
+      {
+        "name": "Static02",
+        "text": "납품",
+        "type": "unknown",
+        "value": null
+      },
+      {
+        "name": "Static04",
+        "text": "판매",
+        "type": "unknown",
+        "value": null
+      },
+      {
+        "name": "Static05",
+        "text": "폐기",
+        "type": "unknown",
+        "value": null
+      },
+      {
+        "name": "divInfo03",
+        "text": null,
+        "type": "unknown",
+        "value": null
+      },
+      {
+        "name": "stEvt01",
+        "text": null,
+        "type": "unknown",
+        "value": null
+      },
+      {
+        "name": "btEvtDetail",
+        "text": "상세",
+        "type": "unknown",
+        "value": null
+      },
+      {
+        "name": "stRebate",
+        "text": "비대상",
+        "type": "unknown",
+        "value": "비대상"
+      },
+      {
+        "name": "btGrantDetail",
+        "text": "상세",
+        "type": "unknown",
+        "value": null
+      }
+    ]
+  },
+  "0000088014463": {
+    "datasets": {
+      "dsCheckMagam": {
+        "colCount": 5,
+        "columns": [
+          {
+            "id": "ORD_YMD",
+            "index": 0,
+            "sample": "20260227",
+            "type": "STRING"
+          },
+          {
+            "id": "S_ORD_TURN_HMS",
+            "index": 1,
+            "sample": "10:00",
+            "type": "STRING"
+          },
+          {
+            "id": "E_ORD_TURN_HMS",
+            "index": 2,
+            "sample": "11:00",
+            "type": "STRING"
+          },
+          {
+            "id": "SAVE_TIME_YN",
+            "index": 3,
+            "sample": "Y",
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_TURN_HMS",
+            "index": 4,
+            "sample": "100000",
+            "type": "STRING"
+          }
+        ],
+        "rowCount": 1
+      },
+      "dsItemDetail": {
+        "colCount": 98,
+        "columns": [
+          {
+            "id": "STORE_CD",
+            "index": 0,
+            "sample": "46513",
+            "type": "STRING"
+          },
+          {
+            "id": "ITEM_CD",
+            "index": 1,
+            "sample": "0000088014463",
+            "type": "STRING"
+          },
+          {
+            "id": "ITEM_NM",
+            "index": 2,
+            "sample": "팔리아멘트아쿠아3mg",
+            "type": "STRING"
+          },
+          {
+            "id": "ITEM_SNM",
+            "index": 3,
+            "sample": "팔리아멘트아쿠아3mg",
+            "type": "STRING"
+          },
+          {
+            "id": "EVT01",
+            "index": 4,
+            "sample": "",
+            "type": "STRING"
+          },
+          {
+            "id": "EVT01_MOBI",
+            "index": 5,
+            "sample": "",
+            "type": "STRING"
+          },
+          {
+            "id": "PLU_ID",
+            "index": 6,
+            "sample": "00",
+            "type": "STRING"
+          },
+          {
+            "id": "ITEM_SPEC",
+            "index": 7,
+            "sample": "28G",
+            "type": "STRING"
+          },
+          {
+            "id": "SALE_UNIT",
+            "index": 8,
+            "sample": "1",
+            "type": "BIGDECIMAL"
+          },
+          {
+            "id": "ORD_MULT_ULMT",
+            "index": 9,
+            "sample": "99",
+            "type": "BIGDECIMAL"
+          },
+          {
+            "id": "ORD_MULT_LLMT",
+            "index": 10,
+            "sample": "1",
+            "type": "BIGDECIMAL"
+          },
+          {
+            "id": "SALE_UNIT_QTY",
+            "index": 11,
+            "sample": "1",
+            "type": "BIGDECIMAL"
+          },
+          {
+            "id": "BTL_ITEM_CD",
+            "index": 12,
+            "sample": "",
+            "type": "STRING"
+          },
+          {
+            "id": "BOX_ITEM_CD",
+            "index": 13,
+            "sample": "",
+            "type": "STRING"
+          },
+          {
+            "id": "UNIT_ITEM_CD",
+            "index": 14,
+            "sample": "",
+            "type": "STRING"
+          },
+          {
+            "id": "DAY_DC_YN",
+            "index": 15,
+            "sample": "0000000",
+            "type": "STRING"
+          },
+          {
+            "id": "TOT_ITEM_SPEC",
+            "index": 16,
+            "sample": "0",
+            "type": "BIGDECIMAL"
+          },
+          {
+            "id": "DISP_UNIT",
+            "index": 17,
+            "sample": "0",
+            "type": "STRING"
+          },
+          {
+            "id": "DISP_STD",
+            "index": 18,
+            "sample": "",
+            "type": "STRING"
+          },
+          {
+            "id": "JIP_ITEM_CD",
+            "index": 19,
+            "sample": "0000088014463",
+            "type": "STRING"
+          },
+          {
+            "id": "LARGE_CD",
+            "index": 20,
+            "sample": "45",
+            "type": "STRING"
+          },
+          {
+            "id": "MID_CD",
+            "index": 21,
+            "sample": "072",
+            "type": "STRING"
+          },
+          {
+            "id": "SMALL_CD",
+            "index": 22,
+            "sample": "220",
+            "type": "STRING"
+          },
+          {
+            "id": "LARGE_NM",
+            "index": 23,
+            "sample": "담배",
+            "type": "STRING"
+          },
+          {
+            "id": "MID_NM",
+            "index": 24,
+            "sample": "담배",
+            "type": "STRING"
+          },
+          {
+            "id": "SMALL_NM",
+            "index": 25,
+            "sample": "외산담배",
+            "type": "STRING"
+          },
+          {
+            "id": "CLASS_NM",
+            "index": 26,
+            "sample": "담배 > 담배 > 외산담배",
+            "type": "STRING"
+          },
+          {
+            "id": "ITEM_SW",
+            "index": 27,
+            "sample": "88",
+            "type": "BIGDECIMAL"
+          },
+          {
+            "id": "ITEM_SL",
+            "index": 28,
+            "sample": "23",
+            "type": "BIGDECIMAL"
+          },
+          {
+            "id": "ITEM_SH",
+            "index": 29,
+            "sample": "55",
+            "type": "BIGDECIMAL"
+          },
+          {
+            "id": "ITEM_SWLH",
+            "index": 30,
+            "sample": "88 * 23 * 55",
+            "type": "STRING"
+          },
+          {
+            "id": "ITEM_G",
+            "index": 31,
+            "sample": "28",
+            "type": "BIGDECIMAL"
+          },
+          {
+            "id": "ORD_UNIT",
+            "index": 32,
+            "sample": "02",
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_UNIT_NM",
+            "index": 33,
+            "sample": "묶음",
+            "type": "STRING"
+          },
+          {
+            "id": "CASE_UNIT_QTY",
+            "index": 34,
+            "sample": "500",
+            "type": "BIGDECIMAL"
+          },
+          {
+            "id": "ORD_UNIT_QTY",
+            "index": 35,
+            "sample": "10",
+            "type": "BIGDECIMAL"
+          },
+          {
+            "id": "EXPIRE_DAY",
+            "index": 36,
+            "sample": "260",
+            "type": "BIGDECIMAL"
+          },
+          {
+            "id": "EXPIRE_ID",
+            "index": 37,
+            "sample": "0",
+            "type": "STRING"
+          },
+          {
+            "id": "EXPIRE_NM",
+            "index": 38,
+            "sample": "260",
+            "type": "STRING"
+          },
+          {
+            "id": "HIGHLOW_ID",
+            "index": 39,
+            "sample": "0",
+            "type": "STRING"
+          },
+          {
+            "id": "PITEM_ID",
+            "index": 40,
+            "sample": "7",
+            "type": "STRING"
+          },
+          {
+            "id": "PITEM_ID_NM",
+            "index": 41,
+            "sample": "결품주의",
+            "type": "STRING"
+          },
+          {
+            "id": "JIP_ITEM_NM",
+            "index": 42,
+            "sample": "팔리아멘트아쿠아3mg",
+            "type": "STRING"
+          },
+          {
+            "id": "ITEM_DESC",
+            "index": 43,
+            "sample": ".",
+            "type": "STRING"
+          },
+          {
+            "id": "BORD_STOP_YN",
+            "index": 44,
+            "sample": "0",
+            "type": "STRING"
+          },
+          {
+            "id": "DEEM_TAX_ID",
+            "index": 45,
+            "sample": "0",
+            "type": "STRING"
+          },
+          {
+            "id": "SET_DJ_TY_ID",
+            "index": 46,
+            "sample": "0",
+            "type": "STRING"
+          },
+          {
+            "id": "FUR_CD",
+            "index": 47,
+            "sample": "71",
+            "type": "STRING"
+          },
+          {
+            "id": "CUST_CD",
+            "index": 48,
+            "sample": "3423800",
+            "type": "STRING"
+          },
+          {
+            "id": "CUST_NM",
+            "index": 49,
+            "sample": "(주)한국필립모리스",
+            "type": "STRING"
+          },
+          {
+            "id": "CENTER_NM",
+            "index": 50,
+            "sample": "BGF로지스곤지암담배",
+            "type": "STRING"
+          },
+          {
+            "id": "MAEGA_CHG_EYMD",
+            "index": 51,
+            "sample": "",
+            "type": "STRING"
+          },
+          {
+            "id": "PYUNSU_ID",
+            "index": 52,
+            "sample": "0",
+            "type": "STRING"
+          },
+          {
+            "id": "RET_PSS_ID",
+            "index": 53,
+            "sample": "0",
+            "type": "STRING"
+          },
+          {
+            "id": "RET_PSS_ID_NM",
+            "index": 54,
+            "sample": "불가",
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_PSS_ID",
+            "index": 55,
+            "sample": "0",
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_PSS_ID_NM",
+            "index": 56,
+            "sample": "가능",
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_PSS_SYMD",
+            "index": 57,
+            "sample": "20090806",
+            "type": "STRING"
+          },
+          {
+            "id": "CUT_ITEM_YN",
+            "index": 58,
+            "sample": "0",
+            "type": "STRING"
+          },
+          {
+            "id": "ITEM_WONGA",
+            "index": 59,
+            "sample": "3709.09",
+            "type": "BIGDECIMAL"
+          },
+          {
+            "id": "HQ_MAEGA_SET",
+            "index": 60,
+            "sample": "4500",
+            "type": "BIGDECIMAL"
+          },
+          {
+            "id": "STORE_MAEGA_SET",
+            "index": 61,
+            "sample": "",
+            "type": "BIGDECIMAL"
+          },
+          {
+            "id": "STORE_BASE_MAEGA_SET",
+            "index": 62,
+            "sample": "4500",
+            "type": "BIGDECIMAL"
+          },
+          {
+            "id": "ITEM_MAEGA",
+            "index": 63,
+            "sample": "4500",
+            "type": "BIGDECIMAL"
+          },
+          {
+            "id": "OD_MAEGA",
+            "index": 64,
+            "sample": "4500",
+            "type": "BIGDECIMAL"
+          },
+          {
+            "id": "PROFIT_RATE",
+            "index": 65,
+            "sample": "9.33",
+            "type": "BIGDECIMAL"
+          },
+          {
+            "id": "MAEGA_CHG_ID",
+            "index": 66,
+            "sample": "0",
+            "type": "STRING"
+          },
+          {
+            "id": "TAX_ID",
+            "index": 67,
+            "sample": "과세",
+            "type": "STRING"
+          },
+          {
+            "id": "SSR_ITEM_AGREE_ID",
+            "index": 68,
+            "sample": "",
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_STOP_SYMD",
+            "index": 69,
+            "sample": "",
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_STOP_EYMD",
+            "index": 70,
+            "sample": "",
+            "type": "STRING"
+          },
+          {
+            "id": "SALE_STOP_ID",
+            "index": 71,
+            "sample": "0",
+            "type": "STRING"
+          },
+          {
+            "id": "SALE_STOP_NM",
+            "index": 72,
+            "sample": "과세",
+            "type": "STRING"
+          },
+          {
+            "id": "CT_ITEM_YN",
+            "index": 73,
+            "sample": "0",
+            "type": "STRING"
+          },
+          {
+            "id": "SUM_UNIT_ID",
+            "index": 74,
+            "sample": "0",
+            "type": "STRING"
+          },
+          {
+            "id": "FIX_WONGA",
+            "index": 75,
+            "sample": "",
+            "type": "BIGDECIMAL"
+          },
+          {
+            "id": "BTL_ID",
+            "index": 76,
+            "sample": "0",
+            "type": "STRING"
+          },
+          {
+            "id": "DRINK_BTL_ID",
+            "index": 77,
+            "sample": "0",
+            "type": "BIGDECIMAL"
+          },
+          {
+            "id": "IMG_CHK",
+            "index": 78,
+            "sample": "1",
+            "type": "STRING"
+          },
+          {
+            "id": "IMAGE_DIR",
+            "index": 79,
+            "sample": "m",
+            "type": "STRING"
+          },
+          {
+            "id": "IMG_URL",
+            "index": 80,
+            "sample": "0000088014463_M.jpg",
+            "type": "STRING"
+          },
+          {
+            "id": "WMCHG_YN",
+            "index": 81,
+            "sample": "0",
+            "type": "STRING"
+          },
+          {
+            "id": "WMCHG_YMD",
+            "index": 82,
+            "sample": "",
+            "type": "STRING"
+          },
+          {
+            "id": "DC_DESC",
+            "index": 83,
+            "sample": "비대상",
+            "type": "STRING"
+          },
+          {
+            "id": "BONUS_DESC",
+            "index": 84,
+            "sample": "비대상",
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_STOP_PLAN_YMD",
+            "index": 85,
+            "sample": "",
+            "type": "STRING"
+          },
+          {
+            "id": "REASON_ID",
+            "index": 86,
+            "sample": "",
+            "type": "STRING"
+          },
+          {
+            "id": "CHG_ITEM_CD",
+            "index": 87,
+            "sample": "",
+            "type": "STRING"
+          },
+          {
+            "id": "RET_SYMD",
+            "index": 88,
+            "sample": "",
+            "type": "STRING"
+          },
+          {
+            "id": "RET_EYMD",
+            "index": 89,
+            "sample": "",
+            "type": "STRING"
+          },
+          {
+            "id": "RET_YMD",
+            "index": 90,
+            "sample": "",
+            "type": "STRING"
+          },
+          {
+            "id": "TOT_DISP_SEQ",
+            "index": 91,
+            "sample": "712200",
+            "type": "STRING"
+          },
+          {
+            "id": "DISUSE_GB",
+            "index": 92,
+            "sample": "가능",
+            "type": "STRING"
+          },
+          {
+            "id": "EVT_DC_YMD",
+            "index": 93,
+            "sample": "",
+            "type": "STRING"
+          },
+          {
+            "id": "EVT_DC_PROFIT_RATE",
+            "index": 94,
+            "sample": "",
+            "type": "STRING"
+          },
+          {
+            "id": "RB_AMT",
+            "index": 95,
+            "sample": "",
+            "type": "STRING"
+          },
+          {
+            "id": "RB_CON",
+            "index": 96,
+            "sample": "",
+            "type": "STRING"
+          },
+          {
+            "id": "RB_YMD",
+            "index": 97,
+            "sample": "",
+            "type": "STRING"
+          }
+        ],
+        "rowCount": 1
+      },
+      "dsItemDetailOrd": {
+        "colCount": 30,
+        "columns": [
+          {
+            "id": "HQ_MAEGA_SET",
+            "index": 0,
+            "sample": "4500",
+            "type": "STRING"
+          },
+          {
+            "id": "ITEM_CD",
+            "index": 1,
+            "sample": "0000088014463",
+            "type": "STRING"
+          },
+          {
+            "id": "ITEM_NM",
+            "index": 2,
+            "sample": "팔리아멘트아쿠아3mg",
+            "type": "STRING"
+          },
+          {
+            "id": "PYUN_ITEM_CD",
+            "index": 3,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "ITEM_MAEGA",
+            "index": 4,
+            "sample": "4500",
+            "type": "STRING"
+          },
+          {
+            "id": "JIP_ITEM_CD",
+            "index": 5,
+            "sample": "0000088014463",
+            "type": "STRING"
+          },
+          {
+            "id": "NEXT_ORD_YMD",
+            "index": 6,
+            "sample": "20260228",
+            "type": "STRING"
+          },
+          {
+            "id": "NOW_QTY",
+            "index": 7,
+            "sample": "13",
+            "type": "STRING"
+          },
+          {
+            "id": "OD_MAEGA",
+            "index": 8,
+            "sample": "4500",
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_ADAY",
+            "index": 9,
+            "sample": "월화수목금토",
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_LEADTIME",
+            "index": 10,
+            "sample": "1",
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_MUL_QTY",
+            "index": 11,
+            "sample": "",
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_MULT_LLMT",
+            "index": 12,
+            "sample": "1",
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_MULT_ULMT",
+            "index": 13,
+            "sample": "99",
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_PSS_ID",
+            "index": 14,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_PSS_CHK",
+            "index": 15,
+            "sample": "0",
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_PSS_CHK_NM",
+            "index": 16,
+            "sample": "가능",
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_PSS_SYMD",
+            "index": 17,
+            "sample": "20090806",
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_STOP_EYMD",
+            "index": 18,
+            "sample": "",
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_STOP_SYMD",
+            "index": 19,
+            "sample": "",
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_TURN_HMS",
+            "index": 20,
+            "sample": "100000",
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_UNIT_QTY",
+            "index": 21,
+            "sample": "10",
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_YMD",
+            "index": 22,
+            "sample": "20260227",
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_YMDHMS",
+            "index": 23,
+            "sample": "20260227100000",
+            "type": "STRING"
+          },
+          {
+            "id": "PYUN_ID",
+            "index": 24,
+            "sample": "0",
+            "type": "STRING"
+          },
+          {
+            "id": "PYUN_QTY",
+            "index": 25,
+            "sample": "",
+            "type": "STRING"
+          },
+          {
+            "id": "PRE_STORE_CD",
+            "index": 26,
+            "sample": "190623",
+            "type": "STRING"
+          },
+          {
+            "id": "STORE_BASE_MAEGA_SET",
+            "index": 27,
+            "sample": "4500",
+            "type": "STRING"
+          },
+          {
+            "id": "STORE_CD",
+            "index": 28,
+            "sample": "46513",
+            "type": "STRING"
+          },
+          {
+            "id": "STORE_MAEGA_SET",
+            "index": 29,
+            "sample": "",
+            "type": "STRING"
+          }
+        ],
+        "rowCount": 1
+      },
+      "dsOrderSale": {
+        "colCount": 8,
+        "columns": [
+          {
+            "id": "ORD_YMD",
+            "index": 0,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "JIP_ITEM_CD",
+            "index": 1,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "ITEM_CD",
+            "index": 2,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_QTY",
+            "index": 3,
+            "sample": null,
+            "type": "INT"
+          },
+          {
+            "id": "BUY_QTY",
+            "index": 4,
+            "sample": null,
+            "type": "INT"
+          },
+          {
+            "id": "SALE_QTY",
+            "index": 5,
+            "sample": null,
+            "type": "INT"
+          },
+          {
+            "id": "DISUSE_QTY",
+            "index": 6,
+            "sample": null,
+            "type": "INT"
+          },
+          {
+            "id": "SUM_UNIT_ID",
+            "index": 7,
+            "sample": null,
+            "type": "STRING"
+          }
+        ],
+        "rowCount": 0
+      },
+      "dsOrderSaleBind": {
+        "colCount": 92,
+        "columns": [
+          {
+            "id": "DAY1",
+            "index": 0,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY2",
+            "index": 1,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY3",
+            "index": 2,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY4",
+            "index": 3,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY5",
+            "index": 4,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY6",
+            "index": 5,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY7",
+            "index": 6,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY8",
+            "index": 7,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY9",
+            "index": 8,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY10",
+            "index": 9,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY11",
+            "index": 10,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY12",
+            "index": 11,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY13",
+            "index": 12,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY14",
+            "index": 13,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY15",
+            "index": 14,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY16",
+            "index": 15,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY17",
+            "index": 16,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY18",
+            "index": 17,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY19",
+            "index": 18,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY20",
+            "index": 19,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY21",
+            "index": 20,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY22",
+            "index": 21,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY23",
+            "index": 22,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY24",
+            "index": 23,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY25",
+            "index": 24,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY26",
+            "index": 25,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY27",
+            "index": 26,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY28",
+            "index": 27,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY29",
+            "index": 28,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY30",
+            "index": 29,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY31",
+            "index": 30,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY32",
+            "index": 31,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY33",
+            "index": 32,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY34",
+            "index": 33,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY35",
+            "index": 34,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY36",
+            "index": 35,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY37",
+            "index": 36,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY38",
+            "index": 37,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY39",
+            "index": 38,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY40",
+            "index": 39,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY41",
+            "index": 40,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY42",
+            "index": 41,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY43",
+            "index": 42,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY44",
+            "index": 43,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY45",
+            "index": 44,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY46",
+            "index": 45,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY47",
+            "index": 46,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY48",
+            "index": 47,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY49",
+            "index": 48,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY50",
+            "index": 49,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY51",
+            "index": 50,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY52",
+            "index": 51,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY53",
+            "index": 52,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY54",
+            "index": 53,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY55",
+            "index": 54,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY56",
+            "index": 55,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY57",
+            "index": 56,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY58",
+            "index": 57,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY59",
+            "index": 58,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY60",
+            "index": 59,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY61",
+            "index": 60,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY62",
+            "index": 61,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY63",
+            "index": 62,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY64",
+            "index": 63,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY65",
+            "index": 64,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY66",
+            "index": 65,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY67",
+            "index": 66,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY68",
+            "index": 67,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY69",
+            "index": 68,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY70",
+            "index": 69,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY71",
+            "index": 70,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY72",
+            "index": 71,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY73",
+            "index": 72,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY74",
+            "index": 73,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY75",
+            "index": 74,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY76",
+            "index": 75,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY77",
+            "index": 76,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY78",
+            "index": 77,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY79",
+            "index": 78,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY80",
+            "index": 79,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY81",
+            "index": 80,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY82",
+            "index": 81,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY83",
+            "index": 82,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY84",
+            "index": 83,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY85",
+            "index": 84,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY86",
+            "index": 85,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY87",
+            "index": 86,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY88",
+            "index": 87,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY89",
+            "index": 88,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY90",
+            "index": 89,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "DAY91",
+            "index": 90,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "AVG",
+            "index": 91,
+            "sample": null,
+            "type": "BIGDECIMAL"
+          }
+        ],
+        "rowCount": 0
+      },
+      "dsSaveChk": {
+        "colCount": 6,
+        "columns": [
+          {
+            "id": "ITEM_CD",
+            "index": 0,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "ITEM_NM",
+            "index": 1,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "MID_NM",
+            "index": 2,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_YMD",
+            "index": 3,
+            "sample": null,
+            "type": "STRING"
+          },
+          {
+            "id": "ORD_MUL_QTY",
+            "index": 4,
+            "sample": null,
+            "type": "INT"
+          },
+          {
+            "id": "ORD_INPUT_NM",
+            "index": 5,
+            "sample": null,
+            "type": "STRING"
+          }
+        ],
+        "rowCount": 0
+      },
+      "dsWeek": {
+        "colCount": 1,
+        "columns": [
+          {
+            "id": "ORD_YMD",
+            "index": 0,
+            "sample": "20251129",
+            "type": "STRING"
+          }
+        ],
+        "rowCount": 91
+      }
+    },
+    "divs": {
+      "divInfo": [
+        {
+          "name": "Static06",
+          "text": "상품명칭",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "stItemNm",
+          "text": "팔리아멘트아쿠아3mg",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "Static10",
+          "text": "과세구분",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "stTaxId",
+          "text": "과세",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "Static00",
+          "text": "등급",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "stPitemId",
+          "text": "결품주의",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "Static01",
+          "text": "상품코드",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "stItemCd",
+          "text": "0000088014463",
+          "type": "unknown",
+          "value": "0000088014463"
+        },
+        {
+          "name": "Static02",
+          "text": "회차구분",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "stPyunsuId",
+          "text": "0",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "Static03",
+          "text": "가로*세로*높이",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "stWDH",
+          "text": "88 * 23 * 55",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "Static04",
+          "text": "분류",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "stClass",
+          "text": "담배 > 담배 > 외산담배",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "Static05",
+          "text": "규격",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "stWDH00",
+          "text": "28G",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "stCenterNm",
+          "text": "BGF로지스곤지암담배",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "Static08",
+          "text": "배송처",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "stCustNm",
+          "text": "(주)한국필립모리스",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "Static07",
+          "text": "거래처",
+          "type": "unknown",
+          "value": null
+        }
+      ],
+      "divInfo01": [
+        {
+          "name": "Static06",
+          "text": "정지예정일",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "stStopPlanYmd",
+          "text": null,
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "Static00",
+          "text": "정지사유",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "stStopReason",
+          "text": null,
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "Static01",
+          "text": "발주정지일",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "stOrdStopYmd",
+          "text": null,
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "Static03",
+          "text": "대체상품",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "edReplItem",
+          "text": null,
+          "type": "unknown",
+          "value": null
+        }
+      ],
+      "divInfo02": [
+        {
+          "name": "Static06",
+          "text": "현재매가",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "Static10",
+          "text": "원가",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "Static00",
+          "text": "이익률",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "Static01",
+          "text": "CASE입수",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "stCaseUnitQty",
+          "text": "500",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "Static02",
+          "text": "차발주일",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "Static03",
+          "text": "납품소요",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "stLeadTm",
+          "text": "1",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "Static04",
+          "text": "발주단위",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "stOrdUnit",
+          "text": "묶음",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "Static05",
+          "text": "발주배수",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "Static07",
+          "text": "발주입수",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "Static08",
+          "text": "현재고",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "Static09",
+          "text": "본부매가",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "Static11",
+          "text": "유효기간",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "stExpireNm",
+          "text": "260",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "stOrdUnitQty",
+          "text": "10",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "edOrdMul",
+          "text": null,
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "meItemMaegaSet",
+          "text": "4,500",
+          "type": "unknown",
+          "value": {
+            "_getCVT": {},
+            "_getFormattedStringValue": {},
+            "_parse": {},
+            "_toScientificStr": {},
+            "_toStandardStr": {},
+            "_type_name": "Decimal",
+            "abs": {},
+            "addDecimal": {},
+            "addDouble": {},
+            "ceil": {},
+            "divDecimal": {},
+            "divDouble": {},
+            "floor": {},
+            "hi": 4500,
+            "isEqual": {},
+            "isInfinity": {},
+            "isNaN": {},
+            "isNaNOrInf": {},
+            "isNegative": {},
+            "isZero": {},
+            "lo": 0,
+            "modDecimal": {},
+            "modDouble": {},
+            "mulDecimal": {},
+            "mulDouble": {},
+            "round": {},
+            "setDecimal": {},
+            "setDouble": {},
+            "setString": {},
+            "sqr": {},
+            "subDecimal": {},
+            "subDouble": {},
+            "toExponential": {},
+            "toFixed": {},
+            "toFixedLocaleString": {},
+            "toLocaleCurrencyString": {},
+            "toLocaleString": {},
+            "toPrecision": {},
+            "toString": {},
+            "trunc": {},
+            "valueOf": {}
+          }
+        },
+        {
+          "name": "meHQMaegaSet",
+          "text": "4,500",
+          "type": "unknown",
+          "value": {
+            "_getCVT": {},
+            "_getFormattedStringValue": {},
+            "_parse": {},
+            "_toScientificStr": {},
+            "_toStandardStr": {},
+            "_type_name": "Decimal",
+            "abs": {},
+            "addDecimal": {},
+            "addDouble": {},
+            "ceil": {},
+            "divDecimal": {},
+            "divDouble": {},
+            "floor": {},
+            "hi": 4500,
+            "isEqual": {},
+            "isInfinity": {},
+            "isNaN": {},
+            "isNaNOrInf": {},
+            "isNegative": {},
+            "isZero": {},
+            "lo": 0,
+            "modDecimal": {},
+            "modDouble": {},
+            "mulDecimal": {},
+            "mulDouble": {},
+            "round": {},
+            "setDecimal": {},
+            "setDouble": {},
+            "setString": {},
+            "sqr": {},
+            "subDecimal": {},
+            "subDouble": {},
+            "toExponential": {},
+            "toFixed": {},
+            "toFixedLocaleString": {},
+            "toLocaleCurrencyString": {},
+            "toLocaleString": {},
+            "toPrecision": {},
+            "toString": {},
+            "trunc": {},
+            "valueOf": {}
+          }
+        },
+        {
+          "name": "meWonga",
+          "text": "3,709",
+          "type": "unknown",
+          "value": {
+            "_getCVT": {},
+            "_getFormattedStringValue": {},
+            "_parse": {},
+            "_toScientificStr": {},
+            "_toStandardStr": {},
+            "_type_name": "Decimal",
+            "abs": {},
+            "addDecimal": {},
+            "addDouble": {},
+            "ceil": {},
+            "divDecimal": {},
+            "divDouble": {},
+            "floor": {},
+            "hi": 3709.09,
+            "isEqual": {},
+            "isInfinity": {},
+            "isNaN": {},
+            "isNaNOrInf": {},
+            "isNegative": {},
+            "isZero": {},
+            "lo": -1.4551915228366852e-13,
+            "modDecimal": {},
+            "modDouble": {},
+            "mulDecimal": {},
+            "mulDouble": {},
+            "round": {},
+            "setDecimal": {},
+            "setDouble": {},
+            "setString": {},
+            "sqr": {},
+            "subDecimal": {},
+            "subDouble": {},
+            "toExponential": {},
+            "toFixed": {},
+            "toFixedLocaleString": {},
+            "toLocaleCurrencyString": {},
+            "toLocaleString": {},
+            "toPrecision": {},
+            "toString": {},
+            "trunc": {},
+            "valueOf": {}
+          }
+        },
+        {
+          "name": "meProfitRate",
+          "text": "9.33",
+          "type": "unknown",
+          "value": {
+            "_getCVT": {},
+            "_getFormattedStringValue": {},
+            "_parse": {},
+            "_toScientificStr": {},
+            "_toStandardStr": {},
+            "_type_name": "Decimal",
+            "abs": {},
+            "addDecimal": {},
+            "addDouble": {},
+            "ceil": {},
+            "divDecimal": {},
+            "divDouble": {},
+            "floor": {},
+            "hi": 9.33,
+            "isEqual": {},
+            "isInfinity": {},
+            "isNaN": {},
+            "isNaNOrInf": {},
+            "isNegative": {},
+            "isZero": {},
+            "lo": -7.105427357601001e-17,
+            "modDecimal": {},
+            "modDouble": {},
+            "mulDecimal": {},
+            "mulDouble": {},
+            "round": {},
+            "setDecimal": {},
+            "setDouble": {},
+            "setString": {},
+            "sqr": {},
+            "subDecimal": {},
+            "subDouble": {},
+            "toExponential": {},
+            "toFixed": {},
+            "toFixedLocaleString": {},
+            "toLocaleCurrencyString": {},
+            "toLocaleString": {},
+            "toPrecision": {},
+            "toString": {},
+            "trunc": {},
+            "valueOf": {}
+          }
+        },
+        {
+          "name": "meNowQty",
+          "text": "13",
+          "type": "unknown",
+          "value": "13"
+        },
+        {
+          "name": "meNextOrdYmd",
+          "text": "2026-02-28",
+          "type": "unknown",
+          "value": "20260228"
+        }
+      ],
+      "divInfo03": [
+        {
+          "name": "Static06",
+          "text": "현재고수정",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "Static01",
+          "text": "자동/스마트발주 등록",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "Static00",
+          "text": "상품정보분석",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "btNowQtyChg",
+          "text": "수정",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "btAutoOrd",
+          "text": "등록",
+          "type": "unknown",
+          "value": null
+        },
+        {
+          "name": "btn_ItemReport",
+          "text": "보기",
+          "type": "unknown",
+          "value": null
+        }
+      ]
+    },
+    "ui_components": [
+      {
+        "name": "btn_save",
+        "text": "저장",
+        "type": "unknown",
+        "value": null
+      },
+      {
+        "name": "btn_close",
+        "text": "닫기",
+        "type": "unknown",
+        "value": null
+      },
+      {
+        "name": "Static00",
+        "text": "상품 상세",
+        "type": "unknown",
+        "value": null
+      },
+      {
+        "name": "btn_x",
+        "text": null,
+        "type": "unknown",
+        "value": null
+      },
+      {
+        "name": "imgItemUrl",
+        "text": null,
+        "type": "unknown",
+        "value": null
+      },
+      {
+        "name": "divInfo",
+        "text": null,
+        "type": "unknown",
+        "value": null
+      },
+      {
+        "name": "taItemDesc",
+        "text": ".",
+        "type": "unknown",
+        "value": "."
+      },
+      {
+        "name": "divInfo00",
+        "text": null,
+        "type": "unknown",
+        "value": null
+      },
+      {
+        "name": "Static06",
+        "text": "행사",
+        "type": "unknown",
+        "value": null
+      },
+      {
+        "name": "divInfo01",
+        "text": null,
+        "type": "unknown",
+        "value": null
+      },
+      {
+        "name": "divInfo02",
+        "text": null,
+        "type": "unknown",
+        "value": null
+      },
+      {
+        "name": "divInfo04",
+        "text": null,
+        "type": "unknown",
+        "value": null
+      },
+      {
+        "name": "divInfo05",
+        "text": null,
+        "type": "unknown",
+        "value": null
+      },
+      {
+        "name": "Static07",
+        "text": "상품특징",
+        "type": "unknown",
+        "value": null
+      },
+      {
+        "name": "divInfo06",
+        "text": null,
+        "type": "unknown",
+        "value": null
+      },
+      {
+        "name": "divInfo07",
+        "text": null,
+        "type": "unknown",
+        "value": null
+      },
+      {
+        "name": "btn_search",
+        "text": "조회",
+        "type": "unknown",
+        "value": null
+      },
+      {
+        "name": "grd_summ",
+        "text": null,
+        "type": "unknown",
+        "value": null
+      },
+      {
+        "name": "Static03",
+        "text": "구분",
+        "type": "unknown",
+        "value": null
+      },
+      {
+        "name": "Static01",
+        "text": "발주",
+        "type": "unknown",
+        "value": null
+      },
+      {
+        "name": "Static02",
+        "text": "납품",
+        "type": "unknown",
+        "value": null
+      },
+      {
+        "name": "Static04",
+        "text": "판매",
+        "type": "unknown",
+        "value": null
+      },
+      {
+        "name": "Static05",
+        "text": "폐기",
+        "type": "unknown",
+        "value": null
+      },
+      {
+        "name": "divInfo03",
+        "text": null,
+        "type": "unknown",
+        "value": null
+      },
+      {
+        "name": "stEvt01",
+        "text": null,
+        "type": "unknown",
+        "value": null
+      },
+      {
+        "name": "btEvtDetail",
+        "text": "상세",
+        "type": "unknown",
+        "value": null
+      },
+      {
+        "name": "stRebate",
+        "text": "비대상",
+        "type": "unknown",
+        "value": "비대상"
+      },
+      {
+        "name": "btGrantDetail",
+        "text": "상세",
+        "type": "unknown",
+        "value": null
+      }
+    ]
+  }
+}

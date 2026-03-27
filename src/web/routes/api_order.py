@@ -153,16 +153,14 @@ def categories():
         return jsonify(cached["data"])
 
     try:
-        # daily_sales는 store DB에 있음 → DBRouter 사용
+        # daily_sales는 store DB에 있음 → DBRouter 사용 (per-store DB이므로 store_id 필터 불필요)
         conn = DBRouter.get_store_connection(store_id)
         cursor = conn.cursor()
-        store_filter_sql = "AND store_id = ?" if store_id else ""
-        store_params = (store_id,) if store_id else ()
-        cursor.execute(f"""
+        cursor.execute("""
             SELECT DISTINCT mid_cd FROM daily_sales
-            WHERE sales_date >= date('now', '-30 days') {store_filter_sql}
+            WHERE sales_date >= date('now', '-30 days')
             ORDER BY mid_cd
-        """, store_params)
+        """)
         rows = cursor.fetchall()
         conn.close()
     except Exception as e:
@@ -696,7 +694,11 @@ def get_exclusions():
             "count": smart_repo.get_count(store_id=store_id),
             "last_updated": smart_repo.get_last_updated(store_id=store_id),
             "items": smart_repo.get_all_detail(store_id=store_id),
-        }
+        },
+        "smart_order_override": {
+            "enabled": settings_repo.get("SMART_ORDER_OVERRIDE", False),
+            "description": "스마트발주 상품을 예측 기반으로 단품별발주 제출 (스마트→수동 전환)",
+        },
     })
 
 
@@ -711,6 +713,8 @@ def toggle_exclusion():
     settings_repo = AppSettingsRepository(store_id=store_id)
     if kind == "smart":
         settings_repo.set("EXCLUDE_SMART_ORDER", enabled)
+    elif kind == "smart_override":
+        settings_repo.set("SMART_ORDER_OVERRIDE", enabled)
     else:
         settings_repo.set("EXCLUDE_AUTO_ORDER", enabled)
 

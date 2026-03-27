@@ -39,6 +39,18 @@ from src.settings.timing import (
 )
 from src.utils.logger import get_logger
 
+# 푸드류 배송차수별 폐기시간 설정
+# mid_cd: {delivery_type: (days_offset, expiry_hour)}
+# 1차: 저녁 20시 도착, 다다음날 새벽 02시 폐기
+# 2차: 아침 07시 도착, 다음날 14시 폐기
+FOOD_EXPIRY_CONFIG = {
+    '001': {'1차': (2, 2),  '2차': (1, 14)},  # 도시락
+    '002': {'1차': (2, 2),  '2차': (1, 14)},  # 주먹밥
+    '003': {'1차': (2, 2),  '2차': (1, 14)},  # 김밥
+    '004': {'1차': (3, 22), '2차': (2, 10)},  # 샌드위치
+    '005': {'1차': (3, 22), '2차': (2, 10)},  # 햄버거
+}
+
 logger = get_logger(__name__)
 
 
@@ -57,6 +69,7 @@ class ReceivingCollector:
         self.driver = driver
         self.store_id = store_id
         self.repo = ReceivingRepository(store_id=self.store_id)
+        self._new_product_candidates: List[Dict] = []  # 신제품 후보 축적용
 
     @staticmethod
     def _to_int(value) -> int:
@@ -272,7 +285,8 @@ class ReceivingCollector:
 
         if result and result.get('success'):
             # XHR 트랜잭션 완료 대기 (서버 응답 + 데이터셋 갱신)
-            time.sleep(RECEIVING_DATE_SELECT_WAIT + 2.0)
+            # 대기 시간 축소: 4.0초 → 2.5초 (서버 응답 충분, 추가 여유분 최소화)
+            time.sleep(RECEIVING_DATE_SELECT_WAIT + 0.5)
             return True
 
         if result and result.get('error'):
@@ -280,30 +294,30 @@ class ReceivingCollector:
 
         return False
 
-    def _determine_delivery_type(self, center_nm: str, item_nm: str) -> str:
+    def _determine_delivery_type(self, center_nm: str, item_nm: str, mid_cd: str = '') -> str:
         """
-        배송 타입 결정
+        배송 타입 결정 (1차/2차 판별: item_nm 끝자리 우선)
+
+        mid_cd가 푸드류(001~005,012)인 경우만 1차/2차 구분.
+        비푸드류는 'ambient' 반환.
 
         Args:
             center_nm: 센터명 (예: 수도권이온저온2)
             item_nm: 상품명
+            mid_cd: 중분류 코드
 
         Returns:
-            배송타입 (cold_1, cold_2, ambient)
+            배송타입 ('1차', '2차', 'ambient')
         """
-        center_nm_lower = (center_nm or "").lower()
+        FOOD_MID_CDS = {'001', '002', '003', '004', '005', '012'}
 
-        # 센터명에서 저온/상온 구분
-        is_cold = "저온" in center_nm or "cold" in center_nm_lower
-
-        if is_cold:
-            # 상품명 끝자리로 1차/2차 구분
+        if mid_cd in FOOD_MID_CDS:
             if item_nm and item_nm.strip().endswith('2'):
-                return 'cold_2'  # 저온 2차
-            else:
-                return 'cold_1'  # 저온 1차
-        else:
-            return 'ambient'  # 상온
+                return '2차'
+            elif item_nm and item_nm.strip().endswith('1'):
+                return '1차'
+
+        return 'ambient'
 
     def _format_receiving_time(self, ais_hms: str) -> str:
         """
@@ -343,6 +357,8 @@ class ReceivingCollector:
         """
         입고 데이터 수집 (모든 전표의 상품 수집)
 
+        Direct API 우선 시도 → 실패 시 Selenium 폴백.
+
         Args:
             dgfw_ymd: 입고일 (YYYYMMDD 형식, None이면 현재 선택된 날짜)
 
@@ -352,12 +368,15 @@ class ReceivingCollector:
         if not self.driver:
             return []
 
+        # 인터셉터 설치 (select_date의 XHR 캡처용)
+        self._install_interceptor()
+
         # 날짜 선택
         if dgfw_ymd:
             if not self.select_date(dgfw_ymd):
                 logger.warning(f"날짜 선택 실패: {dgfw_ymd}")
 
-        # dsListPopup에서 전표 정보 조회
+        # dsListPopup에서 전표 정보 조회 (Selenium - 이미 로딩됨)
         popup_data = self.driver.execute_script(f"""
             try {{
                 const app = nexacro.getApplication();
@@ -393,7 +412,125 @@ class ReceivingCollector:
         chit_list = popup_data['popup']
         logger.info(f"전표 수: {len(chit_list)}개")
 
-        # 모든 전표의 상품 데이터 수집
+        # ★ Direct API로 전표별 상품 일괄 조회 시도
+        direct_data = self._try_direct_api_items(chit_list, dgfw_ymd)
+        if direct_data is not None:
+            return direct_data
+
+        # ═══ Selenium 폴백: 전표별 순차 조회 ═══
+        return self._collect_items_via_selenium(chit_list, dgfw_ymd)
+
+    def _install_interceptor(self) -> None:
+        """XHR 인터셉터 설치 (Direct API 캡처용)"""
+        try:
+            from src.collectors.direct_frame_fetcher import install_interceptor
+            install_interceptor(self.driver)
+        except Exception as e:
+            logger.debug(f"인터셉터 설치 실패 (무시): {e}")
+
+    def _try_direct_api_items(
+        self,
+        chit_list: List[Dict],
+        dgfw_ymd: Optional[str],
+    ) -> Optional[List[Dict[str, Any]]]:
+        """Direct API로 전표별 상품 일괄 조회
+
+        Returns:
+            성공 시 입고 데이터 리스트, 실패 시 None (Selenium 폴백)
+        """
+        try:
+            from src.collectors.direct_frame_fetcher import DirectReceivingFetcher
+
+            fetcher = DirectReceivingFetcher(self.driver)
+            if not fetcher.capture_templates():
+                logger.debug("[ReceivingAPI] 템플릿 캡처 실패, Selenium 폴백")
+                return None
+
+            chit_nos = [c['CHIT_NO'] for c in chit_list if c.get('CHIT_NO')]
+            if not chit_nos:
+                return None
+
+            date_str = dgfw_ymd or ''
+            results = fetcher.fetch_items_for_chits(chit_nos, date_str)
+            if not results:
+                logger.debug("[ReceivingAPI] API 조회 결과 없음, Selenium 폴백")
+                return None
+
+            # SSV 딕셔너리 → 입고 레코드 변환
+            all_data = []
+            for chit in chit_list:
+                chit_no = chit.get('CHIT_NO')
+                items = results.get(chit_no, [])
+
+                for item in items:
+                    record = self._build_receiving_record(chit, item, dgfw_ymd)
+                    all_data.append(record)
+
+            logger.info(
+                f"[ReceivingAPI] Direct API 성공: "
+                f"{len(chit_nos)}전표, {len(all_data)}건"
+            )
+            return all_data
+
+        except Exception as e:
+            logger.warning(f"[ReceivingAPI] Direct API 실패, Selenium 폴백: {e}")
+            return None
+
+    def _build_receiving_record(
+        self,
+        chit: Dict,
+        item: Dict[str, str],
+        dgfw_ymd: Optional[str],
+    ) -> Dict[str, Any]:
+        """전표 헤더 + 상품 SSV → 입고 레코드 변환"""
+        chit_no = chit.get('CHIT_NO', '')
+
+        dgfw_raw = chit.get('DGFW_YMD') or dgfw_ymd
+        if dgfw_raw and len(dgfw_raw) == 8:
+            receiving_date = f"{dgfw_raw[:4]}-{dgfw_raw[4:6]}-{dgfw_raw[6:8]}"
+        else:
+            receiving_date = datetime.now().strftime("%Y-%m-%d")
+
+        ais_hms = chit.get('AIS_HMS', '')
+        receiving_time = self._format_receiving_time(ais_hms)
+
+        ord_ymd = chit.get('ORD_YMD', '')
+        order_date = self._format_order_date(ord_ymd)
+
+        center_nm = chit.get('CENTER_NM', '')
+
+        mid_cd = self._get_mid_cd(
+            item.get('ITEM_CD'),
+            item.get('CUST_NM', ''),
+            item.get('ITEM_NM', '')
+        )
+
+        delivery_type = self._determine_delivery_type(
+            center_nm, item.get('ITEM_NM', ''), mid_cd
+        )
+
+        return {
+            'receiving_date': receiving_date,
+            'receiving_time': receiving_time,
+            'chit_no': chit_no,
+            'item_cd': item.get('ITEM_CD'),
+            'item_nm': item.get('ITEM_NM'),
+            'mid_cd': mid_cd,
+            'order_date': order_date,
+            'order_qty': self._to_int(item.get('ORD_QTY', 0)),
+            'plan_qty': self._to_int(item.get('NAP_PLAN_QTY', 0)),
+            'receiving_qty': self._to_int(item.get('NAP_QTY', 0)),
+            'delivery_type': delivery_type,
+            'center_nm': center_nm,
+            'center_cd': item.get('CENTER_CD')
+        }
+
+    def _collect_items_via_selenium(
+        self,
+        chit_list: List[Dict],
+        dgfw_ymd: Optional[str],
+    ) -> List[Dict[str, Any]]:
+        """Selenium으로 전표별 상품 순차 수집 (기존 로직)"""
         all_receiving_data = []
 
         for chit_idx, chit in enumerate(chit_list):
@@ -410,7 +547,6 @@ class ReceivingCollector:
                     const ds = wf?.dsListPopup;
                     if (!ds) return {{error: 'dsListPopup not found'}};
 
-                    // 전표 선택
                     ds.set_rowposition({chit['ROW_INDEX']});
 
                     return {{success: true, row: {chit['ROW_INDEX']}}};
@@ -423,7 +559,6 @@ class ReceivingCollector:
                 logger.warning(f"전표 선택 실패: {chit_no}")
                 continue
 
-            # 데이터 로딩 대기
             time.sleep(RECEIVING_DATA_LOAD_WAIT)
 
             # dsList에서 선택된 전표의 상품 데이터 조회
@@ -438,7 +573,6 @@ class ReceivingCollector:
 
                     const rows = [];
                     for (let i = 0; i < ds.getRowCount(); i++) {{
-                        // Decimal 타입 처리
                         let wonga = ds.getColumn(i, 'ITEM_WONGA');
                         if (wonga && typeof wonga === 'object' && wonga.hi !== undefined) {{
                             wonga = wonga.hi;
@@ -472,52 +606,8 @@ class ReceivingCollector:
             item_count = len(list_data['list'])
             logger.info(f"전표 {chit_no}: {item_count}개 상품 수집")
 
-            # 데이터 조합
             for item in list_data['list']:
-                # 입고일 (YYYY-MM-DD 형식)
-                dgfw_raw = chit.get('DGFW_YMD') or dgfw_ymd
-                if dgfw_raw and len(dgfw_raw) == 8:
-                    receiving_date = f"{dgfw_raw[:4]}-{dgfw_raw[4:6]}-{dgfw_raw[6:8]}"
-                else:
-                    receiving_date = datetime.now().strftime("%Y-%m-%d")
-
-                # 도착시간
-                ais_hms = chit.get('AIS_HMS', '')
-                receiving_time = self._format_receiving_time(ais_hms)
-
-                # 발주일
-                ord_ymd = chit.get('ORD_YMD', '')
-                order_date = self._format_order_date(ord_ymd)
-
-                # 센터명
-                center_nm = chit.get('CENTER_NM', '')
-
-                # 배송타입
-                delivery_type = self._determine_delivery_type(center_nm, item.get('ITEM_NM', ''))
-
-                # 중분류 코드 조회 (products 테이블 우선, 실패 시 추정)
-                mid_cd = self._get_mid_cd(
-                    item.get('ITEM_CD'),
-                    item.get('CUST_NM', ''),
-                    item.get('ITEM_NM', '')
-                )
-
-                record = {
-                    'receiving_date': receiving_date,
-                    'receiving_time': receiving_time,
-                    'chit_no': chit_no,
-                    'item_cd': item.get('ITEM_CD'),
-                    'item_nm': item.get('ITEM_NM'),
-                    'mid_cd': mid_cd,
-                    'order_date': order_date,
-                    'order_qty': self._to_int(item.get('ORD_QTY', 0)),
-                    'plan_qty': self._to_int(item.get('NAP_PLAN_QTY', 0)),
-                    'receiving_qty': self._to_int(item.get('NAP_QTY', 0)),
-                    'delivery_type': delivery_type,
-                    'center_nm': center_nm,
-                    'center_cd': item.get('CENTER_CD')
-                }
-
+                record = self._build_receiving_record(chit, item, dgfw_ymd)
                 all_receiving_data.append(record)
 
         logger.info(f"총 {len(all_receiving_data)}개 상품 수집 완료")
@@ -559,8 +649,16 @@ class ReceivingCollector:
         except Exception as e:
             logger.debug(f"products 테이블 조회 실패 ({item_cd}): {e}")
 
-        # 조회 실패 시 추정
-        return self._fallback_mid_cd(cust_nm, item_nm)
+        # products 미등록 → 신제품 후보로 축적 + mid_cd 추정
+        estimated_mid = self._fallback_mid_cd(cust_nm, item_nm)
+        self._new_product_candidates.append({
+            "item_cd": item_cd,
+            "item_nm": item_nm,
+            "cust_nm": cust_nm,
+            "mid_cd": estimated_mid,
+            "mid_cd_source": "fallback" if estimated_mid else "unknown",
+        })
+        return estimated_mid
 
     def _fallback_mid_cd(self, cust_nm: str, item_nm: str) -> str:
         """
@@ -625,6 +723,35 @@ class ReceivingCollector:
         else:
             return DEFAULT_EXPIRY_DAYS_NON_FOOD
 
+    def _calc_expiry_datetime(
+        self, recv_date: str, recv_time: str,
+        mid_cd: str, delivery_type: str
+    ) -> Optional[str]:
+        """mid_cd + delivery_type 기반 정확한 폐기시간 계산
+
+        FOOD_EXPIRY_CONFIG에 매핑이 있으면 차수별 정밀 시간 반환.
+        없으면 None → 기존 date 기반 expiry_date 사용.
+
+        Args:
+            recv_date: 입고일 (YYYY-MM-DD)
+            recv_time: 입고 시간 (HH:MM)
+            mid_cd: 중분류 코드
+            delivery_type: '1차'/'2차'/'ambient'
+
+        Returns:
+            'YYYY-MM-DD HH:MM:SS' 또는 None (폴백 시)
+        """
+        config = FOOD_EXPIRY_CONFIG.get(mid_cd, {})
+        dt_config = config.get(delivery_type)
+
+        if dt_config:
+            days_offset, expiry_hour = dt_config
+            recv_dt = datetime.strptime(recv_date, '%Y-%m-%d')
+            expiry_dt = recv_dt + timedelta(days=days_offset)
+            return expiry_dt.strftime('%Y-%m-%d') + f' {expiry_hour:02d}:00:00'
+
+        return None
+
     def collect_and_save(self, dgfw_ymd: Optional[str] = None) -> Dict[str, int]:
         """
         입고 데이터 수집 및 DB 저장
@@ -635,6 +762,8 @@ class ReceivingCollector:
         Returns:
             저장 통계 {"total", "new", "updated", "batches_created"}
         """
+        self._new_product_candidates = []  # 매 호출마다 초기화
+
         data = self.collect_receiving_data(dgfw_ymd)
 
         if not data:
@@ -643,6 +772,13 @@ class ReceivingCollector:
         stats = self.repo.save_bulk_receiving(data, store_id=self.store_id)
 
         logger.info(f"저장 완료: 총 {stats['total']}건 (신규 {stats['new']}, 업데이트 {stats['updated']})")
+
+        # ★ 신제품 감지 및 등록 (입고 확정 상품만)
+        try:
+            new_product_stats = self._detect_and_register_new_products(data)
+            stats.update(new_product_stats)
+        except Exception as e:
+            logger.warning(f"신제품 감지/등록 실패 (입고 플로우 계속): {e}")
 
         # 입고 데이터 기반으로 배치/추적 레코드 자동 생성
         batches_created = self._create_batches_from_receiving(data)
@@ -688,17 +824,16 @@ class ReceivingCollector:
         """
         입고 데이터 기반 realtime_inventory.stock_qty 갱신
 
-        판매 수집에서 이미 반영된 상품(queried_at이 오늘)은 스킵하여
-        이중 반영을 방지하고, 판매 없이 입고만 된 상품의 재고를 보정한다.
+        입고 확정된 상품의 재고를 무조건 반영한다.
+        Phase 2 prefetch가 BGF 실재고로 덮어쓰므로 이중 반영 우려 없음.
 
         Args:
             receiving_data: collect_receiving_data() 반환값
 
         Returns:
-            {"updated": N, "skipped_fresh": N, "skipped_no_data": N}
+            {"updated": N, "skipped_no_data": N}
         """
         inventory_repo = RealtimeInventoryRepository(store_id=self.store_id)
-        today_str = datetime.now().strftime("%Y-%m-%d")
 
         stats = {"updated": 0, "skipped_fresh": 0, "skipped_no_data": 0, "pending_set": 0}
 
@@ -721,19 +856,13 @@ class ReceivingCollector:
                 # 검수 미확정 + 납품예정 있음 → 미입고
                 item_pending_qty[item_cd] = item_pending_qty.get(item_cd, 0) + plan_qty
 
-        # 1) 검수 확정 상품: stock_qty 갱신
+        # 1) 검수 확정 상품: stock_qty 갱신 (항상 반영)
         for item_cd, total_recv_qty in item_receiving_qty.items():
             try:
                 current = inventory_repo.get(item_cd, store_id=store_id)
 
                 if not current:
                     stats["skipped_no_data"] += 1
-                    continue
-
-                # queried_at이 오늘이면 판매 수집에서 이미 최신 재고가 반영됨 → 스킵
-                queried_at = current.get("queried_at", "")
-                if queried_at and queried_at[:10] == today_str:
-                    stats["skipped_fresh"] += 1
                     continue
 
                 # 재고 갱신: stock_qty += receiving_qty
@@ -842,6 +971,17 @@ class ReceivingCollector:
                 # 유통기한 조회 (카테고리별) — 공통으로 사용
                 expiration_days = self._get_expiration_days(mid_cd)
 
+                # 1차/2차 판별
+                center_nm = record.get('center_nm', '')
+                delivery_type = self._determine_delivery_type(
+                    center_nm, item_nm, mid_cd
+                )
+
+                # 정확한 폐기시간 계산 (차수별 시간 반영)
+                expiry_datetime = self._calc_expiry_datetime(
+                    recv_date, recv_time or '', mid_cd, delivery_type
+                )
+
                 # 푸드류 처리: order_tracking + inventory_batches 모두 생성
                 if mid_cd in FOOD_CATEGORIES:
                     # 1) order_tracking 갱신 또는 생성
@@ -864,23 +1004,27 @@ class ReceivingCollector:
                             # 새 레코드 생성 (수동 발주 또는 누락된 자동 발주)
                             arrival_time = f"{recv_date} {recv_time}" if recv_time else recv_date
 
-                            recv_dt = datetime.strptime(recv_date, '%Y-%m-%d')
-                            expiry_dt = recv_dt + timedelta(days=expiration_days)
-                            expiry_time = expiry_dt.strftime('%Y-%m-%d 23:59:59')
+                            # 차수별 정밀 폐기시간 사용, 없으면 기존 방식
+                            if expiry_datetime:
+                                expiry_time = expiry_datetime
+                            else:
+                                recv_dt = datetime.strptime(recv_date, '%Y-%m-%d')
+                                expiry_dt = recv_dt + timedelta(days=expiration_days)
+                                expiry_time = expiry_dt.strftime('%Y-%m-%d 23:59:59')
 
                             tracking_repo.save_order(
                                 order_date=effective_order_date,
                                 item_cd=item_cd,
                                 item_nm=item_nm,
                                 mid_cd=mid_cd,
-                                delivery_type='센터',
+                                delivery_type=delivery_type,
                                 order_qty=recv_qty,
                                 arrival_time=arrival_time,
                                 expiry_time=expiry_time,
                                 store_id=self.store_id,
                                 order_source='receiving'
                             )
-                            logger.debug(f"order_tracking 생성: {item_nm} (입고: {recv_date})")
+                            logger.debug(f"order_tracking 생성: {item_nm} ({delivery_type}, 입고: {recv_date})")
 
                     except Exception as e:
                         logger.warning(f"order_tracking 처리 실패 ({item_nm}): {e}")
@@ -900,10 +1044,12 @@ class ReceivingCollector:
                                 receiving_date=recv_date,
                                 expiration_days=expiration_days,
                                 initial_qty=recv_qty,
-                                store_id=self.store_id
+                                store_id=self.store_id,
+                                delivery_type=delivery_type,
+                                expiry_datetime=expiry_datetime,
                             )
                             created_count += 1
-                            logger.debug(f"inventory_batches 생성 (푸드): {item_nm} (입고: {recv_date}, {recv_qty}개)")
+                            logger.debug(f"inventory_batches 생성 (푸드): {item_nm} ({delivery_type}, 입고: {recv_date}, {recv_qty}개)")
                     except Exception as e:
                         logger.warning(f"inventory_batches 생성 실패 (푸드 {item_nm}): {e}")
 
@@ -928,11 +1074,12 @@ class ReceivingCollector:
                             receiving_date=recv_date,
                             expiration_days=expiration_days,
                             initial_qty=recv_qty,
-                            store_id=self.store_id
+                            store_id=self.store_id,
+                            delivery_type=delivery_type,
                         )
 
                         created_count += 1
-                        logger.debug(f"inventory_batches 생성: {item_nm} (입고: {recv_date}, {recv_qty}개)")
+                        logger.debug(f"inventory_batches 생성: {item_nm} ({delivery_type}, 입고: {recv_date}, {recv_qty}개)")
 
                     except Exception as e:
                         logger.warning(f"inventory_batches 생성 실패 ({item_nm}): {e}")
@@ -1037,6 +1184,179 @@ class ReceivingCollector:
 
         logger.info(f"order_tracking 업데이트: {updated_count}건")
         return updated_count
+
+    # ═══════════════════════════════════════════════════════
+    # 신제품 감지 및 등록
+    # ═══════════════════════════════════════════════════════
+
+    def _detect_and_register_new_products(self, receiving_data: List[Dict]) -> Dict[str, int]:
+        """입고 확정 상품 중 DB 미등록 상품을 신제품으로 감지 및 등록
+
+        핵심 규칙:
+        - receiving_qty > 0 (입고 확정)인 후보만 신제품으로 확정
+        - plan_qty만 있는 미확정(입고 예정) 상품은 무시
+
+        Args:
+            receiving_data: collect_receiving_data() 반환값
+
+        Returns:
+            {"new_products_detected": N, "new_products_registered": N}
+        """
+        stats = {"new_products_detected": 0, "new_products_registered": 0}
+
+        if not self._new_product_candidates:
+            return stats
+
+        # 입고 확정된 item_cd → 해당 레코드 매핑
+        confirmed_items: Dict[str, Dict] = {}
+        for record in receiving_data:
+            item_cd = record.get("item_cd")
+            recv_qty = self._to_int(record.get("receiving_qty", 0))
+            if item_cd and recv_qty > 0:
+                if item_cd not in confirmed_items:
+                    confirmed_items[item_cd] = record
+
+        # 후보 중 입고 확정 + products 미등록만 필터
+        new_products: List[Dict] = []
+        seen: set = set()
+        for candidate in self._new_product_candidates:
+            item_cd = candidate["item_cd"]
+            if item_cd in seen:
+                continue
+            if item_cd not in confirmed_items:
+                continue  # 입고 예정/미확정 → 무시
+            seen.add(item_cd)
+            # 입고 데이터 병합
+            recv_record = confirmed_items[item_cd]
+            candidate["receiving_qty"] = self._to_int(recv_record.get("receiving_qty", 0))
+            candidate["receiving_date"] = recv_record.get("receiving_date")
+            candidate["order_unit_qty"] = self._to_int(recv_record.get("order_unit_qty", 1)) or 1
+            candidate["center_cd"] = recv_record.get("center_cd")
+            candidate["center_nm"] = recv_record.get("center_nm")
+            new_products.append(candidate)
+
+        if not new_products:
+            return stats
+
+        stats["new_products_detected"] = len(new_products)
+        logger.info(f"[신제품 감지] {len(new_products)}건 (입고 확정 기준)")
+
+        # 일괄 등록
+        for product in new_products:
+            try:
+                self._register_single_new_product(product)
+                stats["new_products_registered"] += 1
+            except Exception as e:
+                logger.warning(f"신제품 등록 실패 ({product['item_cd']}): {e}")
+
+        logger.info(
+            f"[신제품 등록] {stats['new_products_registered']}/{stats['new_products_detected']}건 완료"
+        )
+        return stats
+
+    def _get_expiry_days(self, mid_cd: str) -> int:
+        """mid_cd 기반 유통기한 추정"""
+        from src.settings.constants import (
+            CATEGORY_EXPIRY_DAYS, DEFAULT_EXPIRY_DAYS_FOOD,
+            DEFAULT_EXPIRY_DAYS_NON_FOOD, FOOD_CATEGORIES,
+        )
+        if mid_cd and mid_cd in CATEGORY_EXPIRY_DAYS:
+            return CATEGORY_EXPIRY_DAYS[mid_cd]
+        if mid_cd and mid_cd in FOOD_CATEGORIES:
+            return DEFAULT_EXPIRY_DAYS_FOOD
+        return DEFAULT_EXPIRY_DAYS_NON_FOOD
+
+    def _register_single_new_product(self, product: Dict) -> None:
+        """신제품 1건을 products + product_details + realtime_inventory에 등록
+
+        Args:
+            product: 신제품 후보 정보
+        """
+        item_cd = product["item_cd"]
+        item_nm = product.get("item_nm", "")
+        mid_cd = product.get("mid_cd", "")
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        store_id = self.store_id or DEFAULT_STORE_ID
+
+        registered = {"products": False, "details": False, "inventory": False}
+
+        # 1) products 테이블 (common.db)
+        try:
+            from src.infrastructure.database.connection import DBRouter
+            conn = DBRouter.get_common_connection()
+            try:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """INSERT OR IGNORE INTO products (item_cd, item_nm, mid_cd, created_at, updated_at)
+                       VALUES (?, ?, ?, ?, ?)""",
+                    (item_cd, item_nm, mid_cd or "999", now, now)
+                )
+                conn.commit()
+                registered["products"] = cursor.rowcount > 0
+            finally:
+                conn.close()
+        except Exception as e:
+            logger.warning(f"products 등록 실패 ({item_cd}): {e}")
+
+        # 2) product_details 테이블 (common.db) — 기본값
+        try:
+            from src.infrastructure.database.repos import ProductDetailRepository
+            detail_repo = ProductDetailRepository()
+            expiry_days = self._get_expiry_days(mid_cd)
+            detail_repo.save(item_cd, {
+                "item_nm": item_nm,
+                "expiration_days": expiry_days,
+                "order_unit_qty": product.get("order_unit_qty", 1),
+            })
+            registered["details"] = True
+        except Exception as e:
+            logger.warning(f"product_details 등록 실패 ({item_cd}): {e}")
+
+        # 3) realtime_inventory (store DB) — 입고 수량으로 초기 재고
+        try:
+            inventory_repo = RealtimeInventoryRepository(store_id=self.store_id)
+            inventory_repo.save(
+                item_cd=item_cd,
+                stock_qty=product.get("receiving_qty", 0),
+                pending_qty=0,
+                order_unit_qty=product.get("order_unit_qty", 1),
+                is_available=True,
+                item_nm=item_nm,
+                store_id=store_id,
+            )
+            registered["inventory"] = True
+        except Exception as e:
+            logger.warning(f"realtime_inventory 등록 실패 ({item_cd}): {e}")
+
+        # 4) detected_new_products (store DB) — 이력 기록
+        try:
+            from src.infrastructure.database.repos import DetectedNewProductRepository
+            detect_repo = DetectedNewProductRepository(store_id=self.store_id)
+            detect_repo.save(
+                item_cd=item_cd,
+                item_nm=item_nm,
+                mid_cd=mid_cd,
+                mid_cd_source=product.get("mid_cd_source", "unknown"),
+                first_receiving_date=product.get("receiving_date", now[:10]),
+                receiving_qty=product.get("receiving_qty", 0),
+                order_unit_qty=product.get("order_unit_qty", 1),
+                center_cd=product.get("center_cd"),
+                center_nm=product.get("center_nm"),
+                cust_nm=product.get("cust_nm"),
+                registered_to_products=registered["products"],
+                registered_to_details=registered["details"],
+                registered_to_inventory=registered["inventory"],
+                store_id=store_id,
+            )
+        except Exception as e:
+            logger.warning(f"detected_new_products 기록 실패 ({item_cd}): {e}")
+
+        logger.info(
+            f"[신제품] {item_cd} ({item_nm}) mid_cd={mid_cd}: "
+            f"products={'O' if registered['products'] else 'X'}, "
+            f"details={'O' if registered['details'] else 'X'}, "
+            f"inventory={'O' if registered['inventory'] else 'X'}"
+        )
 
     def close_receiving_menu(self) -> bool:
         """센터매입 조회/확정 메뉴 탭 닫기

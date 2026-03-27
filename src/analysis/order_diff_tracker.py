@@ -68,6 +68,11 @@ class OrderDiffTracker:
             저장된 건수 (실패 시 0)
         """
         try:
+            # 날짜 포맷 통일 (YYYYMMDD → YYYY-MM-DD)
+            od = str(order_date)
+            if len(od) == 8 and '-' not in od:
+                order_date = f"{od[:4]}-{od[4:6]}-{od[6:]}"
+
             # results를 item_cd 기준으로 인덱싱
             result_map: Dict[str, Dict] = {}
             for r in (results or []):
@@ -102,7 +107,7 @@ class OrderDiffTracker:
                 mid_cd = item.get("mid_cd", "")
                 item_nm = item.get("item_nm", "")
                 if mid_cd in ALERT_CATEGORIES:
-                    delivery_type = get_delivery_type(item_nm) or "1차"
+                    delivery_type = get_delivery_type(item_nm, item_cd=item_cd) or "1차"
                 else:
                     delivery_type = "일반"
 

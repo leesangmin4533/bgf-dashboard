@@ -25,7 +25,11 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from src.utils.logger import get_logger
 from src.utils.screenshot import save_screenshot
 from src.infrastructure.database.repos import FailReasonRepository
-from src.settings.constants import FAIL_REASON_UNKNOWN, FAIL_REASON_MAX_ITEMS
+from src.settings.constants import (
+    FAIL_REASON_UNKNOWN,
+    FAIL_REASON_MAX_ITEMS,
+    FAIL_REASON_STOP_DATE_INFER,
+)
 from src.settings.timing import (
     FR_BARCODE_INPUT_WAIT,
     FR_POPUP_OPEN_WAIT,
@@ -99,12 +103,42 @@ class FailReasonCollector:
         success_count = 0
         fail_count = 0
 
-        for idx, item in enumerate(items):
+        # ── Direct API 우선 시도 ──
+        item_codes = [it["item_cd"] for it in items]
+        item_map = {it["item_cd"]: it for it in items}
+        api_done = set()
+
+        try:
+            from src.collectors.direct_popup_fetcher import DirectPopupFetcher
+
+            fetcher = DirectPopupFetcher(
+                self.driver, concurrency=5, timeout_ms=8000
+            )
+            if fetcher.capture_template():
+                api_results = fetcher.fetch_fail_reasons(item_codes)
+                for item_cd, data in api_results.items():
+                    orig = item_map.get(item_cd, {})
+                    data["item_nm"] = orig.get("item_nm") or data.get("item_nm", "")
+                    data["mid_cd"] = orig.get("mid_cd", "")
+                    results.append(data)
+                    success_count += 1
+                    api_done.add(item_cd)
+                logger.info(
+                    f"[FailReason/API] {len(api_done)}건 성공, "
+                    f"{len(item_codes) - len(api_done)}건 폴백"
+                )
+        except (ImportError, Exception) as e:
+            logger.info(f"[FailReason] Direct API 사용 불가: {e}")
+
+        # ── Selenium 폴백 (Direct API 미처리 건) ──
+        remaining = [it for it in items if it["item_cd"] not in api_done]
+
+        for idx, item in enumerate(remaining):
             item_cd = item["item_cd"]
             item_nm = item.get("item_nm", "")
             mid_cd = item.get("mid_cd", "")
 
-            logger.info(f"[FailReason] ({idx+1}/{len(items)}) {item_cd} {item_nm}")
+            logger.info(f"[FailReason/Selenium] ({idx+1}/{len(remaining)}) {item_cd} {item_nm}")
 
             try:
                 result = self.lookup_stop_reason(item_cd)
@@ -138,7 +172,7 @@ class FailReasonCollector:
                 fail_count += 1
 
             # 상품 간 대기
-            if idx < len(items) - 1:
+            if idx < len(remaining) - 1:
                 time.sleep(FR_BETWEEN_ITEMS)
 
         # 일괄 DB 저장
@@ -574,7 +608,8 @@ class FailReasonCollector:
             }
 
             var r = {item_cd: itemCd, stop_reason: null, item_nm: null,
-                     orderable_status: null, orderable_day: null};
+                     orderable_status: null, orderable_day: null,
+                     order_stop_date: null};
 
             var popupForm = getPopupForm();
             if (!popupForm) return r;
@@ -612,14 +647,60 @@ class FailReasonCollector:
                 } catch(e) {}
             }
 
-            // 4. dsItemDetail에서 보조 정보 (상품명, 발주상태)
+            // 4. dsItemDetail에서 보조 정보 (상품명, 발주상태, 발주정지일)
             try {
                 var ds = popupForm.dsItemDetail;
                 if (ds && ds.getRowCount() > 0) {
                     r.item_nm = dsVal(ds, 0, 'ITEM_NM');
                     r.orderable_status = dsVal(ds, 0, 'ORD_PSS_ID_NM');
+                    // 발주정지일 (ORD_STOP_YMD / ORD_STOP_DT 등)
+                    var stopDt = dsVal(ds, 0, 'ORD_STOP_YMD')
+                             || dsVal(ds, 0, 'ORD_STOP_DT')
+                             || dsVal(ds, 0, 'STOP_YMD');
+                    if (stopDt) r.order_stop_date = stopDt;
                 }
             } catch(e) {}
+
+            // 4.5 divInfo01 UI에서 발주정지일 직접 추출 (stOrdStopDate 등)
+            if (!r.order_stop_date) {
+                try {
+                    var divInfo01 = popupForm.divInfo01;
+                    if (divInfo01 && divInfo01.form) {
+                        // 발주정지일 컴포넌트명 후보 탐색
+                        var stopComps = ['stOrdStopDate', 'edt_ordStopDate', 'stStopDate',
+                                         'stOrdStopYmd', 'edtOrdStopDate'];
+                        for (var s = 0; s < stopComps.length; s++) {
+                            var comp = divInfo01.form[stopComps[s]];
+                            if (comp) {
+                                var val = comp.text || comp.value || '';
+                                if (val && val.trim()) {
+                                    r.order_stop_date = val.trim();
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                } catch(e) {}
+            }
+
+            // 4.6 DOM fallback: 발주정지일 관련 요소 직접 탐색
+            if (!r.order_stop_date) {
+                try {
+                    var stopEls = document.querySelectorAll(
+                        '[id*="CallItemDetailPopup"][id*="StopDate"],' +
+                        '[id*="CallItemDetailPopup"][id*="StopYmd"],' +
+                        '[id*="CallItemDetailPopup"][id*="stopDate"],' +
+                        '[id*="CallItemDetailPopup"][id*="ordStop"]'
+                    );
+                    for (var j = 0; j < stopEls.length; j++) {
+                        var txt = (stopEls[j].innerText || stopEls[j].textContent || '').trim();
+                        if (txt && /\\d{8}/.test(txt)) {
+                            r.order_stop_date = txt;
+                            break;
+                        }
+                    }
+                } catch(e) {}
+            }
 
             // 5. dsItemDetailOrd에서 발주요일 등 추가 정보
             try {
@@ -650,9 +731,20 @@ class FailReasonCollector:
 
         if result:
             # 빈 문자열 → None 정리
-            for key in ("stop_reason", "item_nm", "orderable_status", "orderable_day"):
+            for key in ("stop_reason", "item_nm", "orderable_status",
+                        "orderable_day", "order_stop_date"):
                 if result.get(key) == "":
                     result[key] = None
+
+            # 발주정지일 기반 정지사유 추론:
+            # stop_reason 미기재 + 발주정지일 존재 → '일시공급불가'
+            if not result.get("stop_reason") and result.get("order_stop_date"):
+                result["stop_reason"] = FAIL_REASON_STOP_DATE_INFER
+                logger.info(
+                    f"[FailReason] 정지사유 추론: {item_cd} "
+                    f"발주정지일={result['order_stop_date']} → {FAIL_REASON_STOP_DATE_INFER}"
+                )
+
             return result
 
         return None

@@ -29,6 +29,15 @@ from .new_product_repo import NewProductStatusRepository
 from .waste_cause_repo import WasteCauseRepository
 from .waste_slip_repo import WasteSlipRepository
 from .bayesian_optimization_repo import BayesianOptimizationRepository
+from .order_exclusion_repo import OrderExclusionRepository
+from .manual_order_repo import ManualOrderItemRepository
+from .detected_new_product_repo import DetectedNewProductRepository
+from .np_tracking_repo import NewProductDailyTrackingRepository
+from .hourly_sales_repo import HourlySalesRepository
+from .substitution_repo import SubstitutionEventRepository
+from .dessert_decision_repo import DessertDecisionRepository
+from .beverage_decision_repo import BeverageDecisionRepository
+from .np_3day_tracking_repo import NewProduct3DayTrackingRepository as NP3DayTrackingRepo
 
 # --- Common DB repositories (공통 DB) ---
 from .product_detail_repo import ProductDetailRepository
@@ -63,6 +72,15 @@ __all__ = [
     "WasteCauseRepository",
     "WasteSlipRepository",
     "BayesianOptimizationRepository",
+    "OrderExclusionRepository",
+    "ManualOrderItemRepository",
+    "DetectedNewProductRepository",
+    "NewProductDailyTrackingRepository",
+    "HourlySalesRepository",
+    "SubstitutionEventRepository",
+    "DessertDecisionRepository",
+    "BeverageDecisionRepository",
+    "NP3DayTrackingRepo",
     # Common
     "ProductDetailRepository",
     "ExternalFactorRepository",

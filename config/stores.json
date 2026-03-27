@@ -17,12 +17,21 @@
       "is_active": true,
       "description": "2호점",
       "added_date": "2026-02-06"
+    },
+    {
+      "store_id": "47863",
+      "store_name": "마평로드점",
+      "location": "경기 이천시",
+      "type": "일반점",
+      "is_active": true,
+      "description": "",
+      "added_date": "2026-03-04"
     }
   ],
   "_metadata": {
     "version": "1.0",
-    "last_updated": "2026-02-07",
-    "total_stores": 2,
+    "last_updated": "2026-03-04T21:53:50.261232",
+    "total_stores": 3,
     "active_stores": 2,
     "note": "인증 정보는 .env 파일의 BGF_USER_ID_{store_id}, BGF_PASSWORD_{store_id} 환경변수에서 로드됩니다"
   }

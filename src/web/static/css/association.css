@@ -1,0 +1,264 @@
+/* 연관 패턴 효과 분석 대시보드 */
+
+/* === 수집 중 화면 === */
+.assoc-collecting {
+    max-width: 600px;
+    margin: 60px auto;
+    text-align: center;
+}
+.assoc-collect-icon { margin-bottom: 16px; }
+.assoc-collect-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--text-primary, #e2e8f0);
+    margin: 0 0 8px;
+}
+.assoc-collect-sub {
+    font-size: 0.875rem;
+    color: var(--text-secondary, #94a3b8);
+    margin: 0 0 32px;
+}
+
+/* 프로그레스 바 */
+.assoc-progress-section { margin-bottom: 32px; }
+.assoc-prog-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+.assoc-prog-label {
+    width: 80px;
+    font-size: 0.8rem;
+    color: var(--text-secondary, #94a3b8);
+    text-align: right;
+    flex-shrink: 0;
+}
+.assoc-prog-track {
+    flex: 1;
+    height: 10px;
+    background: rgba(148,163,184,0.15);
+    border-radius: 5px;
+    overflow: hidden;
+}
+.assoc-prog-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #6366f1, #818cf8);
+    border-radius: 5px;
+    transition: width 0.6s ease;
+}
+.assoc-prog-fill.assoc-prog-done {
+    background: linear-gradient(90deg, #22c55e, #4ade80);
+}
+.assoc-prog-val {
+    width: 140px;
+    font-size: 0.8rem;
+    color: var(--text-secondary, #94a3b8);
+    flex-shrink: 0;
+}
+
+/* 매장별 수집 현황 */
+.assoc-stores-section { margin-top: 8px; }
+.assoc-section-title {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-primary, #e2e8f0);
+    margin: 0 0 12px;
+}
+.assoc-stores-grid { text-align: left; }
+.assoc-store-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+.assoc-store-name {
+    width: 120px;
+    font-size: 0.8rem;
+    color: var(--text-primary, #e2e8f0);
+    text-align: right;
+    flex-shrink: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.assoc-bar-track {
+    flex: 1;
+    height: 8px;
+    background: rgba(148,163,184,0.12);
+    border-radius: 4px;
+    overflow: hidden;
+}
+.assoc-bar-fill {
+    height: 100%;
+    background: rgba(99,102,241,0.6);
+    border-radius: 4px;
+    transition: width 0.4s ease;
+}
+.assoc-store-cnt {
+    width: 60px;
+    font-size: 0.75rem;
+    color: var(--text-secondary, #94a3b8);
+    flex-shrink: 0;
+}
+.assoc-estimate {
+    margin-top: 24px;
+    font-size: 0.8rem;
+    color: var(--text-tertiary, #64748b);
+}
+
+/* === 분석 화면 === */
+
+/* 요약 카드 */
+.assoc-cards {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-bottom: 20px;
+}
+.assoc-card {
+    background: var(--card-bg, rgba(30,41,59,0.6));
+    border: 1px solid var(--border, rgba(148,163,184,0.12));
+    border-radius: 12px;
+    padding: 20px;
+    text-align: center;
+}
+.assoc-card-label {
+    font-size: 0.8rem;
+    color: var(--text-secondary, #94a3b8);
+    margin-bottom: 4px;
+}
+.assoc-card-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text-primary, #e2e8f0);
+}
+.assoc-card-boost .assoc-card-value { color: #818cf8; }
+.assoc-card-avg .assoc-card-value { color: #fbbf24; }
+.assoc-card-good .assoc-card-value { color: #4ade80; }
+.assoc-card-bad .assoc-card-value { color: #f87171; }
+
+/* 패널 */
+.assoc-panel {
+    background: var(--card-bg, rgba(30,41,59,0.6));
+    border: 1px solid var(--border, rgba(148,163,184,0.12));
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 16px;
+}
+.assoc-panel-title {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-primary, #e2e8f0);
+    margin: 0 0 16px;
+}
+.assoc-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 16px;
+}
+.assoc-panel-half { margin-bottom: 0; }
+
+/* 차트 */
+.assoc-chart-wrap { height: 220px; }
+.assoc-chart-wide { height: 260px; }
+
+/* 테이블 */
+.assoc-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+}
+.assoc-table th {
+    text-align: left;
+    padding: 8px 10px;
+    color: var(--text-secondary, #94a3b8);
+    font-weight: 500;
+    border-bottom: 1px solid var(--border, rgba(148,163,184,0.12));
+}
+.assoc-table td {
+    padding: 8px 10px;
+    color: var(--text-primary, #e2e8f0);
+    border-bottom: 1px solid rgba(148,163,184,0.06);
+}
+.assoc-table .text-right { text-align: right; }
+.assoc-good { color: #4ade80; font-weight: 600; }
+.assoc-bad { color: #f87171; font-weight: 600; }
+
+.assoc-arrow {
+    text-align: center;
+    color: var(--text-tertiary, #64748b);
+    font-size: 1rem;
+    padding: 8px 4px;
+}
+.assoc-rule-item {
+    max-width: 200px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.assoc-lift {
+    color: #fbbf24;
+    font-weight: 600;
+}
+
+/* 배지 */
+.assoc-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+.assoc-badge-mid {
+    background: rgba(99,102,241,0.2);
+    color: #a5b4fc;
+}
+.assoc-badge-item {
+    background: rgba(251,191,36,0.2);
+    color: #fcd34d;
+}
+
+/* 로딩/에러 */
+.assoc-loading {
+    text-align: center;
+    padding: 60px 0;
+    color: var(--text-secondary, #94a3b8);
+}
+.assoc-error {
+    text-align: center;
+    padding: 60px 0;
+    color: #f87171;
+}
+.assoc-empty {
+    text-align: center;
+    padding: 24px;
+    color: var(--text-tertiary, #64748b);
+    font-size: 0.85rem;
+}
+
+/* 반응형 */
+@media (max-width: 768px) {
+    .assoc-cards { grid-template-columns: 1fr; }
+    .assoc-row { grid-template-columns: 1fr; }
+    .assoc-prog-row { flex-wrap: wrap; }
+    .assoc-prog-label { width: 100%; text-align: left; }
+    .assoc-prog-val { width: auto; }
+}
+
+/* === 라이트 테마 === */
+[data-theme="light"] .assoc-card {
+    background: #fff;
+    border-color: #e2e8f0;
+}
+[data-theme="light"] .assoc-panel {
+    background: #fff;
+    border-color: #e2e8f0;
+}
+[data-theme="light"] .assoc-collect-title { color: #1e293b; }
+[data-theme="light"] .assoc-table td { color: #334155; }
+[data-theme="light"] .assoc-card-value { color: #1e293b; }
+[data-theme="light"] .assoc-card-good .assoc-card-value { color: #16a34a; }
+[data-theme="light"] .assoc-card-bad .assoc-card-value { color: #dc2626; }

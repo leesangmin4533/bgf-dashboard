@@ -99,12 +99,32 @@ COMMON_SCHEMA = [
         store_id TEXT PRIMARY KEY,
         store_name TEXT NOT NULL,
         location TEXT,
+        lat REAL,
+        lng REAL,
         type TEXT,
         is_active INTEGER DEFAULT 1,
         bgf_user_id TEXT,
         bgf_password TEXT,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
+    )""",
+
+    # store_analysis (상권 분석)
+    """CREATE TABLE IF NOT EXISTS store_analysis (
+        store_id TEXT PRIMARY KEY,
+        competitor_count INTEGER,
+        school_count INTEGER,
+        hospital_count INTEGER,
+        restaurant_count INTEGER,
+        cafe_count INTEGER,
+        subway_count INTEGER,
+        office_count INTEGER,
+        daycare_count INTEGER DEFAULT 0,
+        traffic_score REAL,
+        competition_score REAL,
+        area_type TEXT,
+        analyzed_at TEXT,
+        radius_m INTEGER DEFAULT 500
     )""",
 
     # store_eval_params
@@ -259,7 +279,8 @@ STORE_SCHEMA = [
         status TEXT DEFAULT 'active',
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
-        store_id TEXT
+        store_id TEXT,
+        delivery_type TEXT DEFAULT NULL
     )""",
 
     # realtime_inventory
@@ -337,7 +358,7 @@ STORE_SCHEMA = [
         promo_type TEXT,
         trend_score REAL,
         stockout_freq REAL,
-        UNIQUE(eval_date, item_cd)
+        UNIQUE(store_id, eval_date, item_cd)
     )""",
 
     # promotions
@@ -479,7 +500,7 @@ STORE_SCHEMA = [
         order_status TEXT,
         checked_at TEXT,
         created_at TEXT,
-        UNIQUE(eval_date, item_cd)
+        UNIQUE(store_id, eval_date, item_cd)
     )""",
 
     # calibration_history
@@ -575,6 +596,7 @@ STORE_SCHEMA = [
         item_cd TEXT NOT NULL,
         item_nm TEXT,
         small_nm TEXT,
+        mid_cd TEXT DEFAULT '',
         ord_pss_nm TEXT,
         week_cont TEXT,
         ds_yn TEXT,
@@ -900,6 +922,25 @@ STORE_SCHEMA = [
         created_at TEXT NOT NULL,
         UNIQUE(store_id, eval_date, item_cd)
     )""",
+
+    # user_order_tendency — 카테고리별 점주 발주 개입 성향 (v63: order_diffs 기반)
+    """CREATE TABLE IF NOT EXISTS user_order_tendency (
+        store_id TEXT NOT NULL,
+        mid_cd TEXT NOT NULL,
+        period_days INTEGER DEFAULT 90,
+        removed_count INTEGER DEFAULT 0,
+        added_count INTEGER DEFAULT 0,
+        qty_changed_count INTEGER DEFAULT 0,
+        qty_up_count INTEGER DEFAULT 0,
+        qty_down_count INTEGER DEFAULT 0,
+        remove_rate REAL,
+        add_rate REAL,
+        qty_up_rate REAL,
+        tendency TEXT,
+        zero_stock_rate REAL,
+        updated_at TEXT,
+        PRIMARY KEY (store_id, mid_cd)
+    )""",
 ]
 
 STORE_INDEXES = [
@@ -1005,6 +1046,8 @@ STORE_INDEXES = [
     # order_exclusions
     "CREATE INDEX IF NOT EXISTS idx_oe_date ON order_exclusions(eval_date)",
     "CREATE INDEX IF NOT EXISTS idx_oe_type ON order_exclusions(exclusion_type)",
+    # user_order_tendency
+    "CREATE INDEX IF NOT EXISTS idx_uot_tendency ON user_order_tendency(tendency)",
 ]
 
 
@@ -1085,6 +1128,36 @@ _STORE_COLUMN_PATCHES = [
     "ALTER TABLE detected_new_products ADD COLUMN settlement_verdict TEXT",
     "ALTER TABLE detected_new_products ADD COLUMN settlement_date TEXT",
     "ALTER TABLE detected_new_products ADD COLUMN settlement_checked_at TEXT",
+    # v64: 발주 확정 pending 컬럼
+    "ALTER TABLE order_tracking ADD COLUMN pending_confirmed INTEGER DEFAULT 0",
+    "ALTER TABLE order_tracking ADD COLUMN pending_confirmed_at TEXT",
+    # v65: 발주방법 (ORD_INPUT_ID: 단품별(재택), 자동발주, 스마트발주 등)
+    "ALTER TABLE order_tracking ADD COLUMN ord_input_id TEXT",
+    # v66: order_behavior_log (AI vs 실제 발주 비교)
+    """CREATE TABLE IF NOT EXISTS order_behavior_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        store_id TEXT NOT NULL,
+        order_date TEXT NOT NULL,
+        item_cd TEXT NOT NULL,
+        mid_cd TEXT,
+        ai_predicted_qty REAL,
+        ai_recommended_qty INTEGER,
+        ai_final_qty INTEGER,
+        ai_eval_decision TEXT,
+        actual_qty INTEGER,
+        ord_input_id TEXT,
+        already_received_qty INTEGER,
+        diff INTEGER,
+        diff_ratio REAL,
+        action TEXT,
+        created_at TEXT DEFAULT (datetime('now')),
+        UNIQUE(store_id, order_date, item_cd)
+    )""",
+    "CREATE INDEX IF NOT EXISTS idx_obl_store_date ON order_behavior_log(store_id, order_date)",
+    "CREATE INDEX IF NOT EXISTS idx_obl_mid_action ON order_behavior_log(mid_cd, action)",
+    # v67: 발주정지 예정 (STOP_PLAN_YMD) + 정지 사유
+    "ALTER TABLE realtime_inventory ADD COLUMN stop_plan_ymd TEXT",
+    "ALTER TABLE realtime_inventory ADD COLUMN cut_reason TEXT",
 ]
 
 
@@ -1198,6 +1271,134 @@ def _fix_calibration_unique(cursor) -> None:
         logger.warning(f"food_waste_calibration UNIQUE 보정 실패 (무시): {e}")
 
 
+def _fix_eval_outcomes_unique(cursor) -> None:
+    """eval_outcomes UNIQUE 제약을 (eval_date, item_cd) → (store_id, eval_date, item_cd)로 보정.
+
+    코드의 ON CONFLICT(store_id, eval_date, item_cd)와 DDL이 불일치하면 저장 실패.
+    47863 등 2컬럼 UNIQUE인 매장만 재생성.
+    """
+    try:
+        row = cursor.execute(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='eval_outcomes'"
+        ).fetchone()
+        if not row:
+            return
+        create_sql = row[0]
+        # 이미 store_id가 UNIQUE에 포함되어 있으면 스킵
+        if "store_id, eval_date, item_cd" in create_sql:
+            return
+        logger.info("eval_outcomes 테이블 UNIQUE 보정: 2컬럼 → 3컬럼 (store_id 추가)")
+        cursor.execute("ALTER TABLE eval_outcomes RENAME TO eval_outcomes_old")
+        cursor.execute("""
+            CREATE TABLE eval_outcomes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                store_id TEXT,
+                eval_date TEXT NOT NULL,
+                item_cd TEXT NOT NULL,
+                mid_cd TEXT,
+                decision TEXT NOT NULL,
+                exposure_days REAL,
+                popularity_score REAL,
+                daily_avg REAL,
+                current_stock INTEGER,
+                pending_qty INTEGER,
+                actual_sold_qty INTEGER,
+                next_day_stock INTEGER,
+                was_stockout INTEGER,
+                was_waste INTEGER DEFAULT 0,
+                outcome TEXT,
+                verified_at TEXT,
+                created_at TEXT NOT NULL,
+                predicted_qty INTEGER,
+                actual_order_qty INTEGER,
+                order_status TEXT,
+                weekday INTEGER,
+                delivery_batch TEXT,
+                sell_price INTEGER,
+                margin_rate REAL,
+                disuse_qty INTEGER,
+                promo_type TEXT,
+                trend_score REAL,
+                stockout_freq REAL,
+                UNIQUE(store_id, eval_date, item_cd)
+            )
+        """)
+        cursor.execute("""
+            INSERT OR IGNORE INTO eval_outcomes
+                (id, store_id, eval_date, item_cd, mid_cd, decision,
+                 exposure_days, popularity_score, daily_avg, current_stock,
+                 pending_qty, actual_sold_qty, next_day_stock, was_stockout,
+                 was_waste, outcome, verified_at, created_at, predicted_qty,
+                 actual_order_qty, order_status, weekday, delivery_batch,
+                 sell_price, margin_rate, disuse_qty, promo_type,
+                 trend_score, stockout_freq)
+            SELECT id, store_id, eval_date, item_cd, mid_cd, decision,
+                   exposure_days, popularity_score, daily_avg, current_stock,
+                   pending_qty, actual_sold_qty, next_day_stock, was_stockout,
+                   was_waste, outcome, verified_at, created_at, predicted_qty,
+                   actual_order_qty, order_status, weekday, delivery_batch,
+                   sell_price, margin_rate, disuse_qty, promo_type,
+                   trend_score, stockout_freq
+            FROM eval_outcomes_old
+        """)
+        cursor.execute("DROP TABLE eval_outcomes_old")
+        # 인덱스 재생성
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_eval_outcomes_date ON eval_outcomes(eval_date)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_eval_outcomes_item ON eval_outcomes(item_cd)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_eval_outcomes_decision ON eval_outcomes(decision)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_eval_outcomes_outcome ON eval_outcomes(outcome)")
+        logger.info("eval_outcomes 테이블 UNIQUE 보정 완료")
+    except Exception as e:
+        logger.warning(f"eval_outcomes UNIQUE 보정 실패 (무시): {e}")
+
+
+def _fix_order_fail_reasons_unique(cursor) -> None:
+    """order_fail_reasons UNIQUE 제약을 (eval_date, item_cd) → (store_id, eval_date, item_cd)로 보정."""
+    try:
+        row = cursor.execute(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='order_fail_reasons'"
+        ).fetchone()
+        if not row:
+            return
+        create_sql = row[0]
+        if "store_id, eval_date, item_cd" in create_sql:
+            return
+        logger.info("order_fail_reasons 테이블 UNIQUE 보정: 2컬럼 → 3컬럼 (store_id 추가)")
+        cursor.execute("ALTER TABLE order_fail_reasons RENAME TO order_fail_reasons_old")
+        cursor.execute("""
+            CREATE TABLE order_fail_reasons (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                store_id TEXT,
+                eval_date TEXT NOT NULL,
+                item_cd TEXT NOT NULL,
+                item_nm TEXT,
+                mid_cd TEXT,
+                stop_reason TEXT,
+                orderable_status TEXT,
+                orderable_day TEXT,
+                order_status TEXT,
+                checked_at TEXT,
+                created_at TEXT,
+                UNIQUE(store_id, eval_date, item_cd)
+            )
+        """)
+        cursor.execute("""
+            INSERT OR IGNORE INTO order_fail_reasons
+                (id, store_id, eval_date, item_cd, item_nm, mid_cd,
+                 stop_reason, orderable_status, orderable_day,
+                 order_status, checked_at, created_at)
+            SELECT id, store_id, eval_date, item_cd, item_nm, mid_cd,
+                   stop_reason, orderable_status, orderable_day,
+                   order_status, checked_at, created_at
+            FROM order_fail_reasons_old
+        """)
+        cursor.execute("DROP TABLE order_fail_reasons_old")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_order_fail_reasons_date ON order_fail_reasons(eval_date)")
+        logger.info("order_fail_reasons 테이블 UNIQUE 보정 완료")
+    except Exception as e:
+        logger.warning(f"order_fail_reasons UNIQUE 보정 실패 (무시): {e}")
+
+
 def _apply_store_column_patches(cursor) -> None:
     """기존 매장 DB 테이블에 누락된 컬럼을 안전하게 추가.
 
@@ -1216,6 +1417,8 @@ def _apply_store_column_patches(cursor) -> None:
     # UNIQUE 제약 보정
     _fix_promotions_unique(cursor)
     _fix_calibration_unique(cursor)
+    _fix_eval_outcomes_unique(cursor)
+    _fix_order_fail_reasons_unique(cursor)
 
 
 def init_db(db_path: Optional[Path] = None) -> None:

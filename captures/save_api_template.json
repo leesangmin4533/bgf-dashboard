@@ -1,0 +1,74 @@
+{
+  "description": "BGF saveOrd API 캡처 템플릿 (2026-02-27, 검증완료)",
+  "endpoint": "https://store.bgfretail.com/stbjz00/saveOrd",
+  "method": "POST",
+  "content_type": "text/plain;charset=UTF-8",
+  "captured_at": "2026-02-27T23:31:36",
+  "verified": true,
+
+  "session_vars": [
+    "GV_USERFLAG", "_xm_webid_1_", "_xm_tid_1_",
+    "SS_STORE_CD", "SS_PRE_STORE_CD", "SS_STORE_NM",
+    "SS_SLC_CD", "SS_LOC_CD", "SS_ADM_SECT_CD",
+    "SS_STORE_OWNER_NM", "SS_STORE_POS_QTY", "SS_STORE_IP",
+    "SS_SV_EMP_NO", "SS_SSTORE_ID", "SS_RCV_ID",
+    "SS_FC_CD", "SS_USER_GRP_ID", "SS_USER_NO",
+    "SS_SGGD_CD", "SS_LOGIN_USER_NO"
+  ],
+
+  "parameters": {
+    "strPyunsuId": "0",
+    "strOrdInputFlag": "04",
+    "GV_MENU_ID": "0001,STBJ030_M0",
+    "GV_USERFLAG": "HOME",
+    "GV_CHANNELTYPE": "HOME"
+  },
+
+  "dsGeneralGrid_columns_count": 55,
+  "dsGeneralGrid_columns": [
+    "STORE_CD", "ORD_YMD", "PRE_STORE_CD", "JIP_ITEM_CD", "RET_PSS_ID",
+    "ITEM_NM", "PITEM_ID", "PITEM_ID_CSS", "PITEM_ID_NM", "PROFIT_RATE",
+    "HQ_MAEGA_SET", "ORD_UNIT", "ORD_UNIT_QTY", "ITEM_CD", "PYUN_ID",
+    "PYUN_QTY", "ORD_TURN_HMS", "ABSENCE", "ORD_MULT_ULMT", "ORD_MULT_LLMT",
+    "CT_ITEM_YN", "CUT_ITEM_YN", "NOW_QTY", "ORD_MUL_QTY", "OLD_PYUN_QTY",
+    "TOT_QTY", "CURDAY", "CURTIME", "MID_NM", "PRE_BKCOLOR",
+    "IMG_CHK", "IMG_URL", "PAGE_CNT", "EXPIRE_DAY", "MONTH_EVT",
+    "NEXT_MONTH_EVT", "RT_GB", "RT_GB_CSS", "EVT_DC_YN", "EVT_DC_CSS",
+    "RB_YN", "RB_CSS", "WMCHG_YN", "WMCHG_CSS", "STOP_PLAN_YN",
+    "STOP_PLAN_CSS", "EVT_DC_YMD", "EVT_DC_RATE", "RB_AMT", "RB_CON",
+    "RB_YMD", "RT_YMD", "STOP_PLAN_YMD", "ITEM_CHK", "NAP_NEXTORD"
+  ],
+
+  "key_column_indices": {
+    "STORE_CD": 1,
+    "ORD_YMD": 2,
+    "ORD_UNIT_QTY": 13,
+    "ITEM_CD": 14,
+    "ORD_MUL_QTY": 24
+  },
+
+  "dsSaveChk_columns": [
+    "ITEM_CD", "ITEM_NM", "MID_NM", "ORD_YMD", "ORD_MUL_QTY", "ORD_INPUT_NM"
+  ],
+
+  "key_columns": {
+    "item_cd": "ITEM_CD",
+    "order_qty": "ORD_MUL_QTY",
+    "order_date": "ORD_YMD",
+    "store_cd": "STORE_CD"
+  },
+
+  "gfn_transaction": {
+    "txId": "savOrd",
+    "svcURL": "saveOrd",
+    "inDS": "dsGeneralGrid=dsGeneralGrid dsSaveChk=dsSaveChk",
+    "outDS": "gds_ErrMsg=gds_ErrMsg",
+    "args": "strPyunsuId=0 strOrdInputFlag=04"
+  },
+
+  "response_format": {
+    "success_indicator": "ErrorCode:string=0",
+    "error_indicator": "ErrorCode:string=99999",
+    "success_dataset": "gds_ErrMsg"
+  }
+}

@@ -40,13 +40,13 @@ FOOD_EXPIRY_SAFETY_CONFIG = {
         "ultra_short": {  # 1일 (당일 폐기)
             "min_days": 0,
             "max_days": 1,
-            "safety_days": 0.5,  # 0.3 → 0.5 상향 (Priority 1.3)
+            "safety_days": 0.7,  # 0.5→0.7 (need-qty-fix: gap_consumption 흡수)
             "description": "당일 폐기 (도시락, 김밥, 주먹밥)"
         },
         "short": {  # 2~3일
             "min_days": 2,
             "max_days": 3,
-            "safety_days": 0.7,  # 0.5 → 0.7 상향 (Priority 1.3)
+            "safety_days": 0.8,  # 0.7→0.8 (need-qty-fix: gap_consumption 흡수)
             "description": "단기 유통 (샌드위치, 일부 빵)"
         },
         "medium": {  # 4~7일
@@ -191,23 +191,48 @@ def calculate_delivery_gap_consumption(
         except Exception:
             pass
 
-    # 시간대별 수요 비율 적용 (갭 시간 비례 대신 실제 수요 분포 반영)
-    time_demand_ratio = DELIVERY_TIME_DEMAND_RATIO.get(delivery_type, 1.0)
+    # 시간대별 수요 비율 적용 (실제 매출 분포 기반 동적 비율 우선)
+    time_demand_ratio = _get_time_demand_ratio(delivery_type, store_id)
     gap_consumption = daily_avg * time_demand_ratio * coefficient
     return round(gap_consumption, 2)
 
 
-def _get_db_path(store_id: Optional[str] = None) -> str:
-    """DB 경로 반환 (매장 DB 우선, 없으면 legacy)"""
+def _get_time_demand_ratio(
+    delivery_type: str, store_id: Optional[str] = None
+) -> float:
+    """동적 시간대 수요 비율 조회 (DB 우선, 폴백: 고정값)
+
+    최근 7일 시간대별 매출 데이터로 배송차수별 비율을 계산합니다.
+    데이터가 없거나 에러 시 기존 DELIVERY_TIME_DEMAND_RATIO 고정값을 사용합니다.
+
+    Args:
+        delivery_type: '1차' 또는 '2차'
+        store_id: 매장 코드
+
+    Returns:
+        시간대 수요 비율 (float). 예: 1차=0.72, 2차=1.00
+    """
     if store_id:
         try:
-            from src.infrastructure.database.connection import DBRouter
-            store_path = DBRouter.get_store_db_path(store_id)
-            if store_path.exists():
-                return str(store_path)
+            from src.infrastructure.database.repos.hourly_sales_repo import (
+                HourlySalesRepository,
+            )
+            repo = HourlySalesRepository(store_id=store_id)
+            ratios = repo.calculate_time_demand_ratio()
+            if ratios:
+                ratio = ratios.get(delivery_type)
+                if ratio is not None:
+                    return ratio
         except Exception:
             pass
-    return str(Path(__file__).parent.parent.parent.parent / "data" / "bgf_sales.db")
+    # 폴백: 기존 고정값
+    return DELIVERY_TIME_DEMAND_RATIO.get(delivery_type, 1.0)
+
+
+def _get_db_path(store_id: Optional[str] = None) -> str:
+    """DB 경로 반환 (매장 DB 우선, 없으면 legacy)"""
+    from src.infrastructure.database.connection import resolve_db_path
+    return resolve_db_path(store_id=store_id)
 
 
 @dataclass
@@ -283,7 +308,8 @@ def get_food_expiration_days(item_cd: str, mid_cd: str, db_path: Optional[str] =
         from src.infrastructure.database.connection import DBRouter
         common_path = str(DBRouter.get_common_db_path())
     except Exception:
-        common_path = str(Path(__file__).parent.parent.parent.parent / "data" / "bgf_sales.db")
+        from src.infrastructure.database.connection import resolve_db_path
+        common_path = resolve_db_path()
 
     # 1. DB에서 조회 (product_details.expiration_days)
     try:
@@ -792,6 +818,163 @@ def get_delivery_waste_adjustment(
         return 1.0
 
 
+# =============================================================================
+# 통합 폐기 감량 계수 (food-waste-unify)
+# =============================================================================
+UNIFIED_WASTE_COEF_FLOOR = 0.70   # 최대 30% 감량 (기존 4중: 최대 87%)
+UNIFIED_WASTE_COEF_MULTIPLIER = 1.0  # 폐기율 → 계수 변환 승수
+UNIFIED_IB_WEIGHT = 0.7           # inventory_batches 가중치
+UNIFIED_OT_WEIGHT = 0.3           # order_tracking 가중치
+
+
+def get_unified_waste_coefficient(
+    item_cd: str,
+    mid_cd: str,
+    store_id: Optional[str] = None,
+    db_path: Optional[str] = None,
+) -> float:
+    """
+    모든 폐기 신호를 단일 계수로 통합 (food-waste-unify)
+
+    기존 4중 감량(disuse_coef, delivery_waste, calibrator, waste_feedback)을
+    하나의 통합 계수로 대체한다.
+
+    데이터 소스:
+    - inventory_batches: 배치별 폐기 실적 (정확도 높음, 가중치 70%)
+    - order_tracking: 차수별 폐기 실적 (보조, 가중치 30%)
+
+    공식: max(0.70, 1.0 - blended_rate * 1.0)
+    - 폐기율 0% → 1.0 (감량 없음)
+    - 폐기율 10% → 0.90
+    - 폐기율 20% → 0.80
+    - 폐기율 30%+ → 0.70 (하한, 최대 30% 감량)
+
+    Returns:
+        통합 폐기 계수 (0.70 ~ 1.0)
+    """
+    if db_path is None:
+        db_path = _get_db_path(store_id)
+
+    ib_rate = None   # inventory_batches 기반 폐기율
+    ot_rate = None   # order_tracking 기반 폐기율
+
+    try:
+        conn = sqlite3.connect(db_path, timeout=30)
+        try:
+            cursor = conn.cursor()
+            lookback = DISUSE_IB_LOOKBACK_DAYS
+
+            # === Source 1: inventory_batches (상품+중분류 블렌딩) ===
+            item_ib_rate = None
+            mid_ib_rate = None
+            item_batch_count = 0
+
+            try:
+                # 상품별
+                params = [item_cd, lookback]
+                where_store = ""
+                if store_id:
+                    where_store = "AND store_id = ?"
+                    params = [item_cd, store_id, lookback]
+                cursor.execute(f"""
+                    SELECT SUM(initial_qty),
+                           SUM(CASE WHEN status='expired' THEN remaining_qty ELSE 0 END),
+                           COUNT(*)
+                    FROM inventory_batches
+                    WHERE item_cd = ? {where_store}
+                    AND status IN ('consumed','expired')
+                    AND receiving_date >= date('now', '-' || ? || ' days')
+                """, params)
+                row = cursor.fetchone()
+                if row and row[0] and row[0] > 0:
+                    item_ib_rate = (row[1] or 0) / row[0]
+                    item_batch_count = row[2] or 0
+
+                # 중분류별
+                params = [mid_cd, lookback]
+                if store_id:
+                    params = [mid_cd, store_id, lookback]
+                cursor.execute(f"""
+                    SELECT SUM(initial_qty),
+                           SUM(CASE WHEN status='expired' THEN remaining_qty ELSE 0 END)
+                    FROM inventory_batches
+                    WHERE mid_cd = ? {where_store}
+                    AND status IN ('consumed','expired')
+                    AND receiving_date >= date('now', '-' || ? || ' days')
+                """, params)
+                row = cursor.fetchone()
+                if row and row[0] and row[0] > 0:
+                    mid_ib_rate = (row[1] or 0) / row[0]
+            except sqlite3.OperationalError:
+                pass
+
+            # 블렌딩: 상품 데이터 충분하면 80:20, 아니면 중분류 100%
+            if item_ib_rate is not None and item_batch_count >= DISUSE_MIN_BATCH_COUNT:
+                if mid_ib_rate is not None:
+                    ib_rate = item_ib_rate * 0.8 + mid_ib_rate * 0.2
+                else:
+                    ib_rate = item_ib_rate
+            elif mid_ib_rate is not None:
+                ib_rate = mid_ib_rate
+
+            # === Source 2: order_tracking (차수별 폐기) ===
+            try:
+                # 상품명 끝자리로 차수 판별 불필요 — 전체 차수 통합 조회
+                params = [item_cd, lookback]
+                if store_id:
+                    where_store = "AND store_id = ?"
+                    params = [item_cd, store_id, lookback]
+                cursor.execute(f"""
+                    SELECT COALESCE(SUM(order_qty), 0),
+                           COALESCE(SUM(remaining_qty), 0)
+                    FROM order_tracking
+                    WHERE item_cd = ? {where_store}
+                    AND status IN ('expired', 'disposed')
+                    AND order_date >= date('now', '-' || ? || ' days')
+                """, params)
+                row = cursor.fetchone()
+                if row and row[0] > 0:
+                    ot_rate = row[1] / row[0]
+            except sqlite3.OperationalError:
+                pass
+
+        finally:
+            conn.close()
+    except Exception as e:
+        logger.warning(f"[통합폐기계수] DB 조회 실패 ({item_cd}): {e}")
+        return 1.0
+
+    # === 가중 평균으로 단일 폐기율 산출 ===
+    if ib_rate is not None and ot_rate is not None:
+        blended_rate = ib_rate * UNIFIED_IB_WEIGHT + ot_rate * UNIFIED_OT_WEIGHT
+        blend_source = f"IB({ib_rate:.1%})×{UNIFIED_IB_WEIGHT}+OT({ot_rate:.1%})×{UNIFIED_OT_WEIGHT}"
+    elif ib_rate is not None:
+        blended_rate = ib_rate
+        blend_source = f"IB_only({ib_rate:.1%})"
+    elif ot_rate is not None:
+        blended_rate = ot_rate
+        blend_source = f"OT_only({ot_rate:.1%})"
+    else:
+        return 1.0  # 데이터 없으면 감량 없음
+
+    # 연속함수: max(FLOOR, 1.0 - rate * MULTIPLIER)
+    coef = max(UNIFIED_WASTE_COEF_FLOOR, 1.0 - blended_rate * UNIFIED_WASTE_COEF_MULTIPLIER)
+    coef = round(coef, 3)
+
+    if coef <= UNIFIED_WASTE_COEF_FLOOR:
+        logger.info(
+            f"[통합폐기계수] {item_cd} (mid={mid_cd}): coef={coef}(하한) "
+            f"blended={blended_rate:.1%} [{blend_source}]"
+        )
+    elif coef < 0.90:
+        logger.info(
+            f"[통합폐기계수] {item_cd} (mid={mid_cd}): coef={coef} "
+            f"blended={blended_rate:.1%} [{blend_source}]"
+        )
+
+    return coef
+
+
 # 기온×푸드 교차 효과 계수
 # 기온 구간별 푸드 카테고리 수요 보정 (편의점 실측 패턴 기반)
 # 키: (기온하한, 기온상한), 값: {mid_cd: 계수}
@@ -855,6 +1038,64 @@ def get_food_weather_cross_coefficient(mid_cd: str, temperature: Optional[float]
             return coefs.get(mid_cd, 1.0)
 
     return 1.0
+
+
+# 강수확률×푸드 교차 효과 계수
+FOOD_PRECIPITATION_CROSS_COEFFICIENTS = {
+    # 약한 비 (30~60%): 야외소비 소폭 감소
+    "light": {
+        "001": 0.97,   # 도시락 -3% (야외 소비 비중 높음)
+        "002": 0.97,   # 주먹밥 -3%
+        "003": 0.95,   # 김밥 -5% (야외소비 영향 큼)
+        "004": 1.00,   # 샌드위치 (실내소비 위주)
+        "005": 1.00,   # 햄버거
+        "012": 0.98,   # 디저트/빵
+    },
+    # 보통 비 (60~80%): 유동인구 감소 영향
+    "moderate": {
+        "001": 0.93,
+        "002": 0.93,
+        "003": 0.90,
+        "004": 0.97,
+        "005": 1.00,
+        "012": 0.95,
+    },
+    # 폭우 (80%+): 상당한 방문 감소
+    "heavy": {
+        "001": 0.88,
+        "002": 0.88,
+        "003": 0.85,
+        "004": 0.93,
+        "005": 0.97,
+        "012": 0.90,
+    },
+}
+
+
+def get_food_precipitation_cross_coefficient(mid_cd: str, rain_rate: Optional[float]) -> float:
+    """강수확률×푸드 교차 효과 계수 반환
+
+    Args:
+        mid_cd: 중분류 코드
+        rain_rate: 강수확률 (%). None이면 1.0 반환.
+
+    Returns:
+        교차 효과 계수 (0.85 ~ 1.0)
+    """
+    if rain_rate is None or mid_cd not in FOOD_CATEGORIES:
+        return 1.0
+
+    if rain_rate >= 80:
+        level = "heavy"
+    elif rain_rate >= 60:
+        level = "moderate"
+    elif rain_rate >= 30:
+        level = "light"
+    else:
+        return 1.0
+
+    coefs = FOOD_PRECIPITATION_CROSS_COEFFICIENTS.get(level, {})
+    return coefs.get(mid_cd, 1.0)
 
 
 def get_food_weekday_coefficient(
@@ -987,3 +1228,43 @@ def get_safety_stock_with_food_pattern(
     # 기본값
     default_days = FOOD_EXPIRY_SAFETY_CONFIG["default_safety_days"]
     return daily_avg * default_days, None
+
+
+# =============================================================================
+# 품절 기반 예측 부스트 (food-stockout-balance-fix)
+# =============================================================================
+STOCKOUT_BOOST_ENABLED = True           # 토글: False로 설정하면 부스트 비활성화
+
+# 폐기-품절 오판 방지 상수 (food-stockout-misclassify)
+WASTE_EXEMPT_OVERRIDE_THRESHOLD = 0.25   # 폐기율 25% 초과 시 품절 면제 해제
+WASTE_EXEMPT_PARTIAL_FLOOR = 0.80        # 면제 해제 시 최소 폐기계수
+WASTE_RATE_LOOKBACK_DAYS = 14            # 폐기율 조회 기간 (일)
+STOCKOUT_BOOST_THRESHOLDS = {
+    0.70: 1.30,   # 70%+ 품절 → 30% 부스트
+    0.50: 1.15,   # 50%+ 품절 → 15% 부스트
+    0.30: 1.05,   # 30%+ 품절 → 5% 부스트
+}
+
+
+def get_stockout_boost_coefficient(stockout_freq: float) -> float:
+    """
+    기회손실(stockout) 기반 예측 부스트 계수.
+
+    품절 빈도가 높은 상품의 예측을 증가시켜 발주량을 늘린다.
+    푸드 전용으로 improved_predictor에서 is_food_category() 체크 후 호출.
+
+    Args:
+        stockout_freq: 품절 빈도 (0.0~1.0). 1.0 - sell_day_ratio로 계산.
+
+    Returns:
+        부스트 계수 (1.00~1.30). 1.0이면 부스트 없음.
+    """
+    if not STOCKOUT_BOOST_ENABLED:
+        return 1.0
+
+    for threshold, boost in sorted(
+        STOCKOUT_BOOST_THRESHOLDS.items(), reverse=True
+    ):
+        if stockout_freq >= threshold:
+            return boost
+    return 1.0

@@ -69,18 +69,6 @@ BGF 리테일(CU 편의점) 다매장 자동 발주 시스템
 
 ---
 
-## 상세 문서
-
-| 문서 | 내용 |
-|------|------|
-| [넥사크로 스크래핑 가이드](.claude/skills/nexacro-scraping.md) | execute_script 패턴, 데이터셋 조회, 그리드 클릭, 입력 처리 |
-| [DB 스키마 및 Repository](.claude/skills/bgf-database.md) | 테이블 정의, Repository 클래스, 마이그레이션 |
-| [발주 플로우 및 알고리즘](.claude/skills/bgf-order-flow.md) | 모듈 관계, 발주 공식, 카테고리별 로직, 폐기 알림 |
-| [BGF 화면 매핑](.claude/skills/bgf-screen-map.md) | 프레임 ID, 데이터셋, 그리드 컬럼 인덱스 |
-| [푸드류 총량 상한](.claude/skills/food-daily-cap.md) | 요일별 cap 공식, 탐색/활용 선별, 설계 원칙, 변경 금지 항목 |
-| [웹 대시보드](.claude/skills/web-dashboard.md) | Flask 대시보드 구조, API 엔드포인트, 라우트 설정 |
-| [배송/도착 가이드](.claude/skills/bgf-delivery-guide.md) | 1차/2차 배송, 카테고리별 도착시간, 폐기 스케줄, 예측 날짜 기준 |
-
 ---
 
 ## 디렉토리 구조
@@ -377,6 +365,37 @@ result = flow.run(dry_run=True, max_items=10)
 | 기타 | 미분류 | DefaultStrategy | 기본 예측 |
 
 > **참고**: `food_daily_cap`은 독립 카테고리가 아닌, food 카테고리에 적용되는 총량 상한 로직 (cap=요일평균+20%버퍼, 수량합 기반)
+
+---
+
+## 문서 관리 규칙
+
+### 3계층 구조
+
+```
+CLAUDE.md              ← 프로젝트 개요 + 규칙 (AI가 매 세션마다 읽음)
+.claude/skills/        ← 기술 가이드 (7개, 코드 작업 시 참조)
+docs/
+  ├── active/          ← 현재 진행중인 작업 문서만 (5개 이내 유지)
+  └── archive/         ← 완료된 문서 (참조용, 평소 안 읽음)
+```
+
+### 원칙
+- **active/에는 진행중인 작업만** — 완료 시 archive로 이동 또는 삭제
+- **변경 이력은 git이 관리** — 문서에 수동으로 이력 기록하지 않음
+- **장애/작업은 GitHub Issues** — `gh issue create/close`
+- **새 문서 생성 최소화** — 기존 문서 수정 우선, 꼭 필요할 때만 신규 생성
+
+### skills/ 목록 (현행)
+| 문서 | 핵심 내용 |
+|------|---------|
+| nexacro-scraping.md | 넥사크로 JS 패턴, 데이터셋, 그리드 |
+| bgf-database.md | DB 스키마, Repository, 마이그레이션 |
+| bgf-order-flow.md | 발주 파이프라인, 카테고리별 로직 |
+| bgf-screen-map.md | 프레임 ID, 데이터셋, 컬럼 인덱스 |
+| bgf-delivery-guide.md | 1차/2차 배송, 도착시간, 폐기 스케줄 |
+| food-daily-cap.md | 푸드 총량 상한, 요일별 cap 공식 |
+| web-dashboard.md | Flask 대시보드, API 엔드포인트 |
 
 ---
 

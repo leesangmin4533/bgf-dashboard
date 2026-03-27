@@ -16,3 +16,4 @@ def login_page():
     if "user_id" in session:
         return redirect(url_for("pages.index"))
     return render_template("login.html")
+

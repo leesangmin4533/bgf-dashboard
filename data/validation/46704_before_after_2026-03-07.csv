@@ -1,0 +1,33 @@
+﻿category,month,period,metric_1,metric_2,metric_3,metric_4,detail
+disuse_monthly,2025-08,before,sale=25672,disuse=22,rate=0.086%,daily_avg=0.96,"품목수=10, 수집일수=23"
+disuse_monthly,2025-09,before,sale=31162,disuse=42,rate=0.135%,daily_avg=1.4,"품목수=14, 수집일수=30"
+disuse_monthly,2025-10,before,sale=31666,disuse=17,rate=0.054%,daily_avg=0.55,"품목수=13, 수집일수=31"
+disuse_monthly,2025-11,before,sale=28477,disuse=24,rate=0.084%,daily_avg=0.8,"품목수=12, 수집일수=30"
+disuse_monthly,2025-12,before,sale=28504,disuse=64,rate=0.225%,daily_avg=2.06,"품목수=21, 수집일수=31"
+disuse_monthly,2026-01,before,sale=20646,disuse=50,rate=0.242%,daily_avg=1.61,"품목수=43, 수집일수=31"
+disuse_monthly,2026-02,after,sale=25167,disuse=136,rate=0.54%,daily_avg=4.86,"품목수=103, 수집일수=28"
+disuse_monthly,2026-03,after,sale=6545,disuse=58,rate=0.886%,daily_avg=8.29,"품목수=45, 수집일수=7"
+waste_slips,2026-02,after,wonga=210951.0,maega=363800.0,slips=84,items=108,일평균원가=7534.0
+waste_slips,2026-03,after,wonga=107119.0,maega=175000.0,slips=29,items=57,일평균원가=15303.0
+prediction_accuracy,2026-02,after,accuracy=55.1%,over=976,under=1280,accurate=1161,"total=34043, actual=34043, coverage=100.0%"
+prediction_accuracy,2026-03,after,accuracy=25.5%,over=5,under=4,accurate=1,"total=11390, actual=9778, coverage=85.8%"
+top_disuse_before,,before,rank=1,disuse=26,sale=28,,튀김)바삭매콤순살꼬치N (2201148677323) mid:300
+top_disuse_before,,before,rank=2,disuse=25,sale=37,,튀김)바삭순살치킨꼬치N (2201148677330) mid:300
+top_disuse_before,,before,rank=3,disuse=21,sale=3,,HEYROO미네랄워터P500ml (8801056169817) mid:041
+top_disuse_before,,before,rank=4,disuse=20,sale=2,,22다회용쇼핑백도시락형 (8809863060259) mid:061
+top_disuse_before,,before,rank=5,disuse=7,sale=4,,고구마)군고구마2000N (2201148670768) mid:300
+top_disuse_before,,before,rank=6,disuse=6,sale=2,,티오피)스윗아메캔275ml (8801037087550) mid:042
+top_disuse_before,,before,rank=7,disuse=4,sale=0,,브루클린필스너캔500ml (5900014005495) mid:049
+top_disuse_before,,before,rank=8,disuse=3,sale=0,,도너츠)초코후로스트N (2202000040408) mid:300
+top_disuse_before,,before,rank=9,disuse=3,sale=2,,튀김)가라아게꼬치N (2202000058847) mid:300
+top_disuse_before,,before,rank=10,disuse=3,sale=0,,파울라너뮌헨라거캔500ml (4066600211815) mid:049
+top_disuse_after,,after,rank=1,disuse=4,sale=0,,주)3XL베이컨햄마요김치2 (8800279670896) mid:002
+top_disuse_after,,after,rank=2,disuse=4,sale=0,,도)매콤닭강정덮밥1 (8800336394451) mid:001
+top_disuse_after,,after,rank=3,disuse=3,sale=0,,조이)두바이초코브라우니 (8809692958826) mid:014
+top_disuse_after,,after,rank=4,disuse=2,sale=4,,고구마)군고구마2000N (2201148670768) mid:300
+top_disuse_after,,after,rank=5,disuse=2,sale=0,,삼)참치소고기고추장더블2 (8800271903480) mid:002
+top_disuse_after,,after,rank=6,disuse=2,sale=0,,주)압도적플러스흑돈제육1 (8800271903596) mid:002
+top_disuse_after,,after,rank=7,disuse=2,sale=1,,도)정성가득불백한상1 (8800271904715) mid:001
+top_disuse_after,,after,rank=8,disuse=2,sale=0,,빅삼)바싹제육삼각1 (8800279676348) mid:002
+top_disuse_after,,after,rank=9,disuse=2,sale=0,,빅삼)바싹제육삼각2 (8800279676355) mid:002
+top_disuse_after,,after,rank=10,disuse=2,sale=0,,KH)뉴욕베이글갈릭어니언 (8801065003386) mid:012

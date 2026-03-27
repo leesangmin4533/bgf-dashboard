@@ -80,13 +80,10 @@ INSTANT_MEAL_DYNAMIC_SAFETY_CONFIG = {
 }
 
 
-def _get_db_path() -> str:
-    """DB 경로 반환
-
-    Returns:
-        bgf_sales.db 파일의 절대 경로 문자열
-    """
-    return str(Path(__file__).parent.parent.parent.parent / "data" / "bgf_sales.db")
+def _get_db_path(store_id: str = None) -> str:
+    """DB 경로 반환"""
+    from src.infrastructure.database.connection import resolve_db_path
+    return resolve_db_path(store_id=store_id)
 
 
 @dataclass
@@ -157,7 +154,7 @@ def _learn_weekday_pattern(mid_cd: str, db_path: str = None, min_data_days: int 
         {0: coef, 1: coef, ..., 6: coef} Python weekday 순서 dict
     """
     if db_path is None:
-        db_path = _get_db_path()
+        db_path = _get_db_path(store_id)
 
     try:
         conn = sqlite3.connect(db_path, timeout=30)
@@ -354,7 +351,7 @@ def analyze_instant_meal_pattern(
     config = INSTANT_MEAL_DYNAMIC_SAFETY_CONFIG
 
     if db_path is None:
-        db_path = _get_db_path()
+        db_path = _get_db_path(store_id)
 
     from datetime import datetime
     order_weekday = datetime.now().weekday()  # 0=월, 6=일

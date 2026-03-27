@@ -1,0 +1,760 @@
+{
+  "timestamp": "2026-03-08T21:29:53.434332",
+  "items": {},
+  "nexacro_datasets": {
+    "datasets": {
+      "dsGeneralGrid": {
+        "columnCount": 55,
+        "rowCount": 0,
+        "columns": [
+          {
+            "name": "STORE_CD",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "ORD_YMD",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "PRE_STORE_CD",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "JIP_ITEM_CD",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "RET_PSS_ID",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "ITEM_NM",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "PITEM_ID",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "PITEM_ID_CSS",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "PITEM_ID_NM",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "PROFIT_RATE",
+            "type": "BIGDECIMAL",
+            "size": "256"
+          },
+          {
+            "name": "HQ_MAEGA_SET",
+            "type": "INT",
+            "size": "256"
+          },
+          {
+            "name": "ORD_UNIT",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "ORD_UNIT_QTY",
+            "type": "INT",
+            "size": "256"
+          },
+          {
+            "name": "ITEM_CD",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "PYUN_ID",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "PYUN_QTY",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "ORD_TURN_HMS",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "ABSENCE",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "ORD_MULT_ULMT",
+            "type": "INT",
+            "size": "256"
+          },
+          {
+            "name": "ORD_MULT_LLMT",
+            "type": "INT",
+            "size": "256"
+          },
+          {
+            "name": "CT_ITEM_YN",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "CUT_ITEM_YN",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "NOW_QTY",
+            "type": "INT",
+            "size": "256"
+          },
+          {
+            "name": "ORD_MUL_QTY",
+            "type": "INT",
+            "size": "256"
+          },
+          {
+            "name": "OLD_PYUN_QTY",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "TOT_QTY",
+            "type": "INT",
+            "size": "256"
+          },
+          {
+            "name": "CURDAY",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "CURTIME",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "MID_NM",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "PRE_BKCOLOR",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "IMG_CHK",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "IMG_URL",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "PAGE_CNT",
+            "type": "INT",
+            "size": "256"
+          },
+          {
+            "name": "EXPIRE_DAY",
+            "type": "INT",
+            "size": "256"
+          },
+          {
+            "name": "MONTH_EVT",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "NEXT_MONTH_EVT",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "RT_GB",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "RT_GB_CSS",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "EVT_DC_YN",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "EVT_DC_CSS",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "RB_YN",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "RB_CSS",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "WMCHG_YN",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "WMCHG_CSS",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "STOP_PLAN_YN",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "STOP_PLAN_CSS",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "EVT_DC_YMD",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "EVT_DC_RATE",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "RB_AMT",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "RB_CON",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "RB_YMD",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "RT_YMD",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "STOP_PLAN_YMD",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "ITEM_CHK",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "NAP_NEXTORD",
+            "type": "STRING",
+            "size": "256"
+          }
+        ],
+        "sampleRow": {}
+      },
+      "dsItem": {
+        "columnCount": 55,
+        "rowCount": 0,
+        "columns": [
+          {
+            "name": "STORE_CD",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "ORD_YMD",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "PRE_STORE_CD",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "JIP_ITEM_CD",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "RET_PSS_ID",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "ITEM_NM",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "PITEM_ID",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "PITEM_ID_CSS",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "PITEM_ID_NM",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "PROFIT_RATE",
+            "type": "BIGDECIMAL",
+            "size": "256"
+          },
+          {
+            "name": "HQ_MAEGA_SET",
+            "type": "INT",
+            "size": "256"
+          },
+          {
+            "name": "ORD_UNIT",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "ORD_UNIT_QTY",
+            "type": "INT",
+            "size": "256"
+          },
+          {
+            "name": "ITEM_CD",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "PYUN_ID",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "PYUN_QTY",
+            "type": "INT",
+            "size": "256"
+          },
+          {
+            "name": "ORD_TURN_HMS",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "ABSENCE",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "ORD_MULT_ULMT",
+            "type": "INT",
+            "size": "256"
+          },
+          {
+            "name": "ORD_MULT_LLMT",
+            "type": "INT",
+            "size": "256"
+          },
+          {
+            "name": "CT_ITEM_YN",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "CUT_ITEM_YN",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "NOW_QTY",
+            "type": "INT",
+            "size": "256"
+          },
+          {
+            "name": "ORD_MUL_QTY",
+            "type": "INT",
+            "size": "256"
+          },
+          {
+            "name": "OLD_PYUN_QTY",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "TOT_QTY",
+            "type": "INT",
+            "size": "256"
+          },
+          {
+            "name": "CURDAY",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "CURTIME",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "MID_NM",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "PRE_BKCOLOR",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "IMG_CHK",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "IMG_URL",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "PAGE_CNT",
+            "type": "INT",
+            "size": "256"
+          },
+          {
+            "name": "EXPIRE_DAY",
+            "type": "INT",
+            "size": "256"
+          },
+          {
+            "name": "MONTH_EVT",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "NEXT_MONTH_EVT",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "RT_GB",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "RT_GB_CSS",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "EVT_DC_YN",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "EVT_DC_CSS",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "RB_YN",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "RB_CSS",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "WMCHG_YN",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "WMCHG_CSS",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "STOP_PLAN_YN",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "STOP_PLAN_CSS",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "EVT_DC_YMD",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "EVT_DC_RATE",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "RB_AMT",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "RB_CON",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "RB_YMD",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "RT_YMD",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "STOP_PLAN_YMD",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "ITEM_CHK",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "NAP_NEXTORD",
+            "type": "STRING",
+            "size": "256"
+          }
+        ],
+        "sampleRow": {}
+      },
+      "dsOrderSale": {
+        "columnCount": 8,
+        "rowCount": 0,
+        "columns": [
+          {
+            "name": "ORD_YMD",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "JIP_ITEM_CD",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "ITEM_CD",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "ORD_QTY",
+            "type": "INT",
+            "size": "256"
+          },
+          {
+            "name": "BUY_QTY",
+            "type": "INT",
+            "size": "256"
+          },
+          {
+            "name": "SALE_QTY",
+            "type": "INT",
+            "size": "256"
+          },
+          {
+            "name": "DISUSE_QTY",
+            "type": "INT",
+            "size": "256"
+          },
+          {
+            "name": "SUM_UNIT_ID",
+            "type": "STRING",
+            "size": "256"
+          }
+        ],
+        "sampleRow": {}
+      },
+      "dsSaveChk": {
+        "columnCount": 6,
+        "rowCount": 0,
+        "columns": [
+          {
+            "name": "ITEM_CD",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "ITEM_NM",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "MID_NM",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "ORD_YMD",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "ORD_MUL_QTY",
+            "type": "INT",
+            "size": "256"
+          },
+          {
+            "name": "ORD_INPUT_NM",
+            "type": "STRING",
+            "size": "256"
+          }
+        ],
+        "sampleRow": {}
+      },
+      "dsOrderSaleBind": {
+        "columnCount": 9,
+        "rowCount": 0,
+        "columns": [
+          {
+            "name": "DAY1",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "DAY2",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "DAY3",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "DAY4",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "DAY5",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "DAY6",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "DAY7",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "DAY8",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "AVG",
+            "type": "BIGDECIMAL",
+            "size": "256"
+          }
+        ],
+        "sampleRow": {}
+      },
+      "dsWeek": {
+        "columnCount": 1,
+        "rowCount": 8,
+        "columns": [
+          {
+            "name": "ORD_YMD",
+            "type": "STRING",
+            "size": "256"
+          }
+        ],
+        "sampleRow": {
+          "ORD_YMD": "NaNNaNNaN"
+        }
+      },
+      "dsCheckMagam": {
+        "columnCount": 4,
+        "rowCount": 0,
+        "columns": [
+          {
+            "name": "ORD_YMD",
+            "type": "STRING",
+            "size": "8"
+          },
+          {
+            "name": "S_ORD_TURN_HMS",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "E_ORD_TURN_HMS",
+            "type": "STRING",
+            "size": "256"
+          },
+          {
+            "name": "SAVE_TIME_YN",
+            "type": "STRING",
+            "size": "256"
+          }
+        ],
+        "sampleRow": {}
+      }
+    },
+    "grids": [
+      {
+        "id": "gdList",
+        "type": "Grid"
+      },
+      {
+        "id": "grd_summ",
+        "type": "Grid"
+      }
+    ]
+  },
+  "summary": {}
+}

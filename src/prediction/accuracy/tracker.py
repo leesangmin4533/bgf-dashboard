@@ -3,9 +3,11 @@
 
 지표:
 1. MAPE (Mean Absolute Percentage Error): 평균 절대 백분율 오차
-2. MAE (Mean Absolute Error): 평균 절대 오차
-3. Accuracy@N: N개 이내 오차 비율
-4. Bias: 과대예측 vs 과소예측 경향
+2. SMAPE (Symmetric MAPE): 대칭 평균 절대 백분율 오차
+3. wMAPE (Weighted MAPE): 가중 평균 절대 백분율 오차
+4. MAE (Mean Absolute Error): 평균 절대 오차
+5. Accuracy@N: N개 이내 오차 비율
+6. Bias: 과대예측 vs 과소예측 경향
 """
 
 import sqlite3
@@ -18,7 +20,8 @@ import math
 
 def _get_legacy_db_path() -> str:
     """레거시 DB 경로 반환 (store_id 없을 때 폴백용)"""
-    return str(Path(__file__).parent.parent.parent.parent / "data" / "bgf_sales.db")
+    from src.infrastructure.database.connection import resolve_db_path
+    return resolve_db_path()
 
 
 @dataclass
@@ -29,9 +32,11 @@ class AccuracyMetrics:
     total_predictions: int         # 총 예측 건수
 
     # 오차 지표
-    mape: float                    # MAPE (%)
+    mape: float                    # MAPE (%) - actual>0 기준
     mae: float                     # MAE (개수)
     rmse: float                    # RMSE
+    smape: float                   # SMAPE (%) - 대칭 MAPE
+    wmape: float                   # wMAPE (%) - 가중 MAPE
 
     # 적중률
     accuracy_exact: float          # 정확히 맞춘 비율 (%)
@@ -116,6 +121,9 @@ class AccuracyTracker:
         abs_errors = []
         squared_errors = []
         pct_errors = []
+        smape_errors = []          # SMAPE 개별 값
+        sum_abs_errors = 0         # wMAPE 분자: SUM(|pred - actual|)
+        sum_actuals = 0            # wMAPE 분모: SUM(actual)
 
         exact_count = 0
         within_1 = 0
@@ -139,6 +147,17 @@ class AccuracyTracker:
             if actual > 0:
                 pct_errors.append(abs_error / actual * 100)
 
+            # SMAPE 계산 (pred와 actual 둘 다 0이면 SMAPE=0)
+            denom = (abs(pred) + abs(actual)) / 2.0
+            if denom > 0:
+                smape_errors.append(abs_error / denom * 100)
+            else:
+                smape_errors.append(0.0)  # 둘 다 0 → 완벽히 맞음
+
+            # wMAPE 누적
+            sum_abs_errors += abs_error
+            sum_actuals += actual
+
             # 적중률
             if error == 0:
                 exact_count += 1
@@ -159,6 +178,8 @@ class AccuracyTracker:
         mape = sum(pct_errors) / len(pct_errors) if pct_errors else 0
         mae = sum(abs_errors) / total
         rmse = math.sqrt(sum(squared_errors) / total)
+        smape = sum(smape_errors) / len(smape_errors) if smape_errors else 0
+        wmape = (sum_abs_errors / sum_actuals * 100) if sum_actuals > 0 else 0
 
         over_rate = len(over_predictions) / total * 100 if total > 0 else 0
         under_rate = len(under_predictions) / total * 100 if total > 0 else 0
@@ -177,6 +198,8 @@ class AccuracyTracker:
             mape=round(mape, 2),
             mae=round(mae, 2),
             rmse=round(rmse, 2),
+            smape=round(smape, 2),
+            wmape=round(wmape, 2),
             accuracy_exact=round(exact_count / total * 100, 1),
             accuracy_within_1=round(within_1 / total * 100, 1),
             accuracy_within_2=round(within_2 / total * 100, 1),
@@ -193,6 +216,7 @@ class AccuracyTracker:
             period_start="", period_end="",
             total_predictions=0,
             mape=0, mae=0, rmse=0,
+            smape=0, wmape=0,
             accuracy_exact=0, accuracy_within_1=0,
             accuracy_within_2=0, accuracy_within_3=0,
             over_prediction_rate=0, under_prediction_rate=0,
@@ -213,21 +237,23 @@ class AccuracyTracker:
             AccuracyMetrics
         """
         conn = self._get_connection()
-        cursor = conn.cursor()
+        try:
+            cursor = conn.cursor()
 
-        # prediction_logs에서 예측 조회
-        store_filter = "AND store_id = ?" if self.store_id else ""
-        store_params = (self.store_id,) if self.store_id else ()
-        cursor.execute(f"""
-            SELECT item_cd, predicted_qty, actual_qty
-            FROM prediction_logs
-            WHERE prediction_date = ?
-            AND actual_qty IS NOT NULL
-            {store_filter}
-        """, (target_date,) + store_params)
+            # prediction_logs에서 예측 조회
+            store_filter = "AND store_id = ?" if self.store_id else ""
+            store_params = (self.store_id,) if self.store_id else ()
+            cursor.execute(f"""
+                SELECT item_cd, predicted_qty, actual_qty
+                FROM prediction_logs
+                WHERE prediction_date = ?
+                AND actual_qty IS NOT NULL
+                {store_filter}
+            """, (target_date,) + store_params)
 
-        rows = cursor.fetchall()
-        conn.close()
+            rows = cursor.fetchall()
+        finally:
+            conn.close()
 
         if not rows:
             return self._empty_metrics()
@@ -260,21 +286,23 @@ class AccuracyTracker:
         start_date = end_date - timedelta(days=days)
 
         conn = self._get_connection()
-        cursor = conn.cursor()
+        try:
+            cursor = conn.cursor()
 
-        store_filter = "AND store_id = ?" if self.store_id else ""
-        store_params = (self.store_id,) if self.store_id else ()
-        cursor.execute(f"""
-            SELECT item_cd, predicted_qty, actual_qty, prediction_date
-            FROM prediction_logs
-            WHERE prediction_date >= ?
-            AND prediction_date <= ?
-            AND actual_qty IS NOT NULL
-            {store_filter}
-        """, (start_date.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d")) + store_params)
+            store_filter = "AND store_id = ?" if self.store_id else ""
+            store_params = (self.store_id,) if self.store_id else ()
+            cursor.execute(f"""
+                SELECT item_cd, predicted_qty, actual_qty, prediction_date
+                FROM prediction_logs
+                WHERE prediction_date >= ?
+                AND prediction_date <= ?
+                AND actual_qty IS NOT NULL
+                {store_filter}
+            """, (start_date.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d")) + store_params)
 
-        rows = cursor.fetchall()
-        conn.close()
+            rows = cursor.fetchall()
+        finally:
+            conn.close()
 
         if not rows:
             return self._empty_metrics()
@@ -310,30 +338,32 @@ class AccuracyTracker:
         start_date = end_date - timedelta(days=days)
 
         conn = self._get_connection()
-        cursor = conn.cursor()
+        try:
+            cursor = conn.cursor()
 
-        # 카테고리별 예측 데이터 조회
-        store_filter = "AND pl.store_id = ?" if self.store_id else ""
-        store_params = (self.store_id,) if self.store_id else ()
-        cursor.execute(f"""
-            SELECT
-                pl.item_cd,
-                pl.predicted_qty,
-                pl.actual_qty,
-                pl.prediction_date,
-                p.mid_cd,
-                COALESCE(m.mid_nm, p.mid_cd) as mid_nm
-            FROM prediction_logs pl
-            LEFT JOIN products p ON pl.item_cd = p.item_cd
-            LEFT JOIN mid_categories m ON p.mid_cd = m.mid_cd
-            WHERE pl.prediction_date >= ?
-            AND pl.prediction_date <= ?
-            AND pl.actual_qty IS NOT NULL
-            {store_filter}
-        """, (start_date.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d")) + store_params)
+            # 카테고리별 예측 데이터 조회
+            store_filter = "AND pl.store_id = ?" if self.store_id else ""
+            store_params = (self.store_id,) if self.store_id else ()
+            cursor.execute(f"""
+                SELECT
+                    pl.item_cd,
+                    pl.predicted_qty,
+                    pl.actual_qty,
+                    pl.prediction_date,
+                    p.mid_cd,
+                    COALESCE(m.mid_nm, p.mid_cd) as mid_nm
+                FROM prediction_logs pl
+                LEFT JOIN products p ON pl.item_cd = p.item_cd
+                LEFT JOIN mid_categories m ON p.mid_cd = m.mid_cd
+                WHERE pl.prediction_date >= ?
+                AND pl.prediction_date <= ?
+                AND pl.actual_qty IS NOT NULL
+                {store_filter}
+            """, (start_date.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d")) + store_params)
 
-        rows = cursor.fetchall()
-        conn.close()
+            rows = cursor.fetchall()
+        finally:
+            conn.close()
 
         if not rows:
             return []
@@ -374,73 +404,99 @@ class AccuracyTracker:
 
         return results
 
+    def _get_ranked_items(
+        self,
+        days: int = 7,
+        limit: int = 10,
+        min_samples: int = 3,
+        ascending: bool = False,
+    ) -> List[Dict[str, Any]]:
+        """
+        예측 정확도 기준 상품 목록 (worst/best 공용)
+
+        min_samples 이상 데이터가 있는 상품이 없으면
+        자동으로 임계값을 낮춰서 (2→1) 재시도합니다.
+
+        Args:
+            ascending: True이면 best(SMAPE 낮은 순), False이면 worst(높은 순)
+
+        Returns:
+            [{"item_cd", "item_nm", "mape", "mae", "bias", "avg_predicted", "avg_actual"}, ...]
+        """
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=days)
+        order = "ASC" if ascending else "DESC"
+
+        conn = self._get_connection()
+        try:
+            cursor = conn.cursor()
+
+            store_filter = "AND pl.store_id = ?" if self.store_id else ""
+            store_params = (self.store_id,) if self.store_id else ()
+
+            rows = []
+            for threshold in (min_samples, 2, 1):
+                cursor.execute(f"""
+                    SELECT
+                        pl.item_cd,
+                        COALESCE(p.item_nm, pl.item_cd) as item_nm,
+                        p.mid_cd,
+                        AVG(ABS(pl.predicted_qty - pl.actual_qty)) as avg_error,
+                        AVG(CASE WHEN pl.actual_qty > 0
+                            THEN ABS(pl.predicted_qty - pl.actual_qty) * 100.0 / pl.actual_qty
+                            END) as mape,
+                        AVG(CASE
+                            WHEN (ABS(pl.predicted_qty) + ABS(pl.actual_qty)) > 0
+                            THEN ABS(pl.predicted_qty - pl.actual_qty) * 200.0
+                                 / (ABS(pl.predicted_qty) + ABS(pl.actual_qty))
+                            ELSE 0 END) as smape,
+                        AVG(pl.predicted_qty - pl.actual_qty) as bias,
+                        COUNT(*) as count,
+                        AVG(pl.predicted_qty) as avg_predicted,
+                        AVG(pl.actual_qty) as avg_actual
+                    FROM prediction_logs pl
+                    LEFT JOIN products p ON pl.item_cd = p.item_cd
+                    WHERE pl.prediction_date >= ?
+                    AND pl.prediction_date <= ?
+                    AND pl.actual_qty IS NOT NULL
+                    {store_filter}
+                    GROUP BY pl.item_cd
+                    HAVING count >= ?
+                    ORDER BY smape {order}
+                    LIMIT ?
+                """, (start_date.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d"))
+                     + store_params + (threshold, limit))
+                rows = cursor.fetchall()
+                if rows:
+                    break
+        finally:
+            conn.close()
+
+        results = []
+        for item_cd, item_nm, mid_cd, mae, mape, smape, bias, count, avg_pred, avg_act in rows:
+            results.append({
+                "item_cd": item_cd,
+                "item_nm": item_nm,
+                "mid_cd": mid_cd,
+                "mape": round(mape, 1) if mape is not None else 0,
+                "smape": round(smape, 1),
+                "mae": round(mae, 2),
+                "bias": round(bias, 2),
+                "sample_count": count,
+                "avg_predicted": round(avg_pred, 1) if avg_pred is not None else 0,
+                "avg_actual": round(avg_act, 1) if avg_act is not None else 0,
+            })
+
+        return results
+
     def get_worst_items(
         self,
         days: int = 7,
         limit: int = 10,
         min_samples: int = 3,
     ) -> List[Dict[str, Any]]:
-        """
-        예측 정확도가 가장 낮은 상품 목록
-
-        min_samples 이상 데이터가 있는 상품이 없으면
-        자동으로 임계값을 낮춰서 (2→1) 재시도합니다.
-
-        Returns:
-            [{"item_cd", "item_nm", "mape", "mae", "bias"}, ...]
-        """
-        end_date = datetime.now()
-        start_date = end_date - timedelta(days=days)
-
-        conn = self._get_connection()
-        cursor = conn.cursor()
-
-        store_filter = "AND pl.store_id = ?" if self.store_id else ""
-        store_params = (self.store_id,) if self.store_id else ()
-
-        rows = []
-        for threshold in (min_samples, 2, 1):
-            cursor.execute(f"""
-                SELECT
-                    pl.item_cd,
-                    COALESCE(p.item_nm, pl.item_cd) as item_nm,
-                    p.mid_cd,
-                    AVG(ABS(pl.predicted_qty - pl.actual_qty)) as avg_error,
-                    AVG(CASE WHEN pl.actual_qty > 0
-                        THEN ABS(pl.predicted_qty - pl.actual_qty) * 100.0 / pl.actual_qty
-                        ELSE 0 END) as mape,
-                    AVG(pl.predicted_qty - pl.actual_qty) as bias,
-                    COUNT(*) as count
-                FROM prediction_logs pl
-                LEFT JOIN products p ON pl.item_cd = p.item_cd
-                WHERE pl.prediction_date >= ?
-                AND pl.prediction_date <= ?
-                AND pl.actual_qty IS NOT NULL
-                {store_filter}
-                GROUP BY pl.item_cd
-                HAVING count >= {threshold}
-                ORDER BY mape DESC
-                LIMIT ?
-            """, (start_date.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d")) + store_params + (limit,))
-            rows = cursor.fetchall()
-            if rows:
-                break
-
-        conn.close()
-
-        results = []
-        for item_cd, item_nm, mid_cd, mae, mape, bias, count in rows:
-            results.append({
-                "item_cd": item_cd,
-                "item_nm": item_nm,
-                "mid_cd": mid_cd,
-                "mape": round(mape, 1),
-                "mae": round(mae, 2),
-                "bias": round(bias, 2),
-                "sample_count": count
-            })
-
-        return results
+        """예측 정확도가 가장 낮은 상품 목록 (SMAPE 내림차순)"""
+        return self._get_ranked_items(days, limit, min_samples, ascending=False)
 
     def get_best_items(
         self,
@@ -448,64 +504,8 @@ class AccuracyTracker:
         limit: int = 10,
         min_samples: int = 3,
     ) -> List[Dict[str, Any]]:
-        """
-        예측 정확도가 가장 높은 상품 목록
-
-        min_samples 이상 데이터가 있는 상품이 없으면
-        자동으로 임계값을 낮춰서 (2→1) 재시도합니다.
-        """
-        end_date = datetime.now()
-        start_date = end_date - timedelta(days=days)
-
-        conn = self._get_connection()
-        cursor = conn.cursor()
-
-        store_filter = "AND pl.store_id = ?" if self.store_id else ""
-        store_params = (self.store_id,) if self.store_id else ()
-
-        rows = []
-        for threshold in (min_samples, 2, 1):
-            cursor.execute(f"""
-                SELECT
-                    pl.item_cd,
-                    COALESCE(p.item_nm, pl.item_cd) as item_nm,
-                    p.mid_cd,
-                    AVG(ABS(pl.predicted_qty - pl.actual_qty)) as avg_error,
-                    AVG(CASE WHEN pl.actual_qty > 0
-                        THEN ABS(pl.predicted_qty - pl.actual_qty) * 100.0 / pl.actual_qty
-                        ELSE 0 END) as mape,
-                    AVG(pl.predicted_qty - pl.actual_qty) as bias,
-                    COUNT(*) as count
-                FROM prediction_logs pl
-                LEFT JOIN products p ON pl.item_cd = p.item_cd
-                WHERE pl.prediction_date >= ?
-                AND pl.prediction_date <= ?
-                AND pl.actual_qty IS NOT NULL
-                {store_filter}
-                GROUP BY pl.item_cd
-                HAVING count >= {threshold}
-                ORDER BY mape ASC
-                LIMIT ?
-            """, (start_date.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d")) + store_params + (limit,))
-            rows = cursor.fetchall()
-            if rows:
-                break
-
-        conn.close()
-
-        results = []
-        for item_cd, item_nm, mid_cd, mae, mape, bias, count in rows:
-            results.append({
-                "item_cd": item_cd,
-                "item_nm": item_nm,
-                "mid_cd": mid_cd,
-                "mape": round(mape, 1),
-                "mae": round(mae, 2),
-                "bias": round(bias, 2),
-                "sample_count": count
-            })
-
-        return results
+        """예측 정확도가 가장 높은 상품 목록 (SMAPE 오름차순)"""
+        return self._get_ranked_items(days, limit, min_samples, ascending=True)
 
     def update_actual_sales(
         self,
@@ -528,63 +528,65 @@ class AccuracyTracker:
             target_date = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
 
         conn = self._get_connection()
-        cursor = conn.cursor()
+        try:
+            cursor = conn.cursor()
 
-        store_filter_pl = "AND store_id = ?" if self.store_id else ""
-        store_filter_ds = "AND ds.store_id = ?" if self.store_id else ""
-        store_filter_ds2 = "AND store_id = ?" if self.store_id else ""
-        store_params = (self.store_id,) if self.store_id else ()
+            store_filter_pl = "AND store_id = ?" if self.store_id else ""
+            store_filter_ds = "AND ds.store_id = ?" if self.store_id else ""
+            store_filter_ds2 = "AND store_id = ?" if self.store_id else ""
+            store_params = (self.store_id,) if self.store_id else ()
 
-        # 1단계: daily_sales에 매칭되는 상품 → actual_qty = sale_qty
-        cursor.execute(f"""
-            UPDATE prediction_logs
-            SET actual_qty = (
-                SELECT ds.sale_qty
-                FROM daily_sales ds
-                WHERE ds.item_cd = prediction_logs.item_cd
-                AND ds.sales_date = prediction_logs.target_date
-                {store_filter_ds}
-            )
-            WHERE target_date = ?
-            AND actual_qty IS NULL
-            {store_filter_pl}
-            AND EXISTS (
-                SELECT 1 FROM daily_sales ds
-                WHERE ds.item_cd = prediction_logs.item_cd
-                AND ds.sales_date = prediction_logs.target_date
-                {store_filter_ds}
-            )
-        """, store_params + (target_date,) + store_params + store_params)
-
-        updated_matched = cursor.rowcount
-
-        # 2단계: 해당 날짜에 판매 데이터가 수집된 것이 확인되면,
-        # daily_sales에 없는 상품 = 판매 0개 → actual_qty = 0 설정
-        # (판매 데이터가 아예 수집되지 않은 날짜는 건드리지 않음)
-        has_sales_data = cursor.execute(f"""
-            SELECT COUNT(*) FROM daily_sales
-            WHERE sales_date = ? {store_filter_ds2}
-        """, (target_date,) + store_params).fetchone()[0]
-
-        updated_zero = 0
-        if has_sales_data > 0:
+            # 1단계: daily_sales에 매칭되는 상품 → actual_qty = sale_qty
             cursor.execute(f"""
                 UPDATE prediction_logs
-                SET actual_qty = 0
+                SET actual_qty = (
+                    SELECT ds.sale_qty
+                    FROM daily_sales ds
+                    WHERE ds.item_cd = prediction_logs.item_cd
+                    AND ds.sales_date = prediction_logs.target_date
+                    {store_filter_ds}
+                )
                 WHERE target_date = ?
                 AND actual_qty IS NULL
                 {store_filter_pl}
-                AND NOT EXISTS (
+                AND EXISTS (
                     SELECT 1 FROM daily_sales ds
                     WHERE ds.item_cd = prediction_logs.item_cd
                     AND ds.sales_date = prediction_logs.target_date
                     {store_filter_ds}
                 )
-            """, (target_date,) + store_params + store_params)
-            updated_zero = cursor.rowcount
+            """, store_params + (target_date,) + store_params + store_params)
 
-        conn.commit()
-        conn.close()
+            updated_matched = cursor.rowcount
+
+            # 2단계: 해당 날짜에 판매 데이터가 수집된 것이 확인되면,
+            # daily_sales에 없는 상품 = 판매 0개 → actual_qty = 0 설정
+            # (판매 데이터가 아예 수집되지 않은 날짜는 건드리지 않음)
+            has_sales_data = cursor.execute(f"""
+                SELECT COUNT(*) FROM daily_sales
+                WHERE sales_date = ? {store_filter_ds2}
+            """, (target_date,) + store_params).fetchone()[0]
+
+            updated_zero = 0
+            if has_sales_data > 0:
+                cursor.execute(f"""
+                    UPDATE prediction_logs
+                    SET actual_qty = 0
+                    WHERE target_date = ?
+                    AND actual_qty IS NULL
+                    {store_filter_pl}
+                    AND NOT EXISTS (
+                        SELECT 1 FROM daily_sales ds
+                        WHERE ds.item_cd = prediction_logs.item_cd
+                        AND ds.sales_date = prediction_logs.target_date
+                        {store_filter_ds}
+                    )
+                """, (target_date,) + store_params + store_params)
+                updated_zero = cursor.rowcount
+
+            conn.commit()
+        finally:
+            conn.close()
 
         return updated_matched + updated_zero
 
@@ -611,39 +613,269 @@ class AccuracyTracker:
         days: int = 14
     ) -> List[Dict[str, Any]]:
         """
-        일별 MAPE 추이
+        일별 MAPE/SMAPE 추이
 
         Returns:
-            [{"date": ..., "mape": ..., "count": ...}, ...]
+            [{"date": ..., "mape": ..., "smape": ..., "count": ..., "sold_count": ...}, ...]
         """
         end_date = datetime.now()
         start_date = end_date - timedelta(days=days)
 
         conn = self._get_connection()
-        cursor = conn.cursor()
+        try:
+            cursor = conn.cursor()
 
-        store_filter = "AND store_id = ?" if self.store_id else ""
-        store_params = (self.store_id,) if self.store_id else ()
-        cursor.execute(f"""
-            SELECT
-                prediction_date,
-                AVG(CASE WHEN actual_qty > 0
-                    THEN ABS(predicted_qty - actual_qty) * 100.0 / actual_qty
-                    ELSE 0 END) as mape,
-                COUNT(*) as count
-            FROM prediction_logs
-            WHERE prediction_date >= ?
-            AND prediction_date <= ?
-            AND actual_qty IS NOT NULL
-            {store_filter}
-            GROUP BY prediction_date
-            ORDER BY prediction_date
-        """, (start_date.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d")) + store_params)
+            store_filter = "AND store_id = ?" if self.store_id else ""
+            store_params = (self.store_id,) if self.store_id else ()
+            cursor.execute(f"""
+                SELECT
+                    prediction_date,
+                    AVG(CASE WHEN actual_qty > 0
+                        THEN ABS(predicted_qty - actual_qty) * 100.0 / actual_qty
+                        END) as mape,
+                    AVG(CASE
+                        WHEN (ABS(predicted_qty) + ABS(actual_qty)) > 0
+                        THEN ABS(predicted_qty - actual_qty) * 200.0
+                             / (ABS(predicted_qty) + ABS(actual_qty))
+                        ELSE 0 END) as smape,
+                    COUNT(*) as total_count,
+                    SUM(CASE WHEN actual_qty > 0 THEN 1 ELSE 0 END) as sold_count
+                FROM prediction_logs
+                WHERE prediction_date >= ?
+                AND prediction_date <= ?
+                AND actual_qty IS NOT NULL
+                {store_filter}
+                GROUP BY prediction_date
+                ORDER BY prediction_date
+            """, (start_date.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d")) + store_params)
 
-        rows = cursor.fetchall()
-        conn.close()
+            rows = cursor.fetchall()
+        finally:
+            conn.close()
 
         return [
-            {"date": date, "mape": round(mape, 1), "count": count}
-            for date, mape, count in rows
+            {
+                "date": date,
+                "mape": round(mape, 1) if mape is not None else 0,
+                "smape": round(smape, 1) if smape is not None else 0,
+                "count": total_count,
+                "sold_count": sold_count or 0,
+            }
+            for date, mape, smape, total_count, sold_count in rows
         ]
+
+    # ── v55: Rule vs ML 분리 정확도 분석 ──────────────────────────
+
+    def get_rule_vs_ml_accuracy(self, days: int = 14) -> Dict[str, Any]:
+        """Rule 단독 MAE vs 블렌딩(Rule+ML) MAE 비교
+
+        prediction_logs에 rule_order_qty가 저장된 레코드만 대상으로
+        Rule 단독 정확도와 최종 블렌딩 정확도를 비교합니다.
+
+        Args:
+            days: 분석 기간 (기본 14일)
+
+        Returns:
+            {
+                "total_records": int,
+                "rule_mae": float,
+                "blended_mae": float,
+                "ml_contribution": float,  # (rule_mae - blended_mae) / rule_mae * 100
+                "avg_ml_weight": float,
+                "by_group": {group_name: {rule_mae, blended_mae, count, avg_ml_weight}, ...}
+            }
+        """
+        from src.prediction.ml.feature_builder import get_category_group
+
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=days)
+
+        conn = self._get_connection()
+        try:
+            cursor = conn.cursor()
+
+            store_filter = "AND pl.store_id = ?" if self.store_id else ""
+            store_params = (self.store_id,) if self.store_id else ()
+
+            cursor.execute(f"""
+                SELECT
+                    pl.item_cd,
+                    pl.order_qty,
+                    pl.rule_order_qty,
+                    pl.ml_order_qty,
+                    pl.ml_weight_used,
+                    pl.actual_qty,
+                    p.mid_cd
+                FROM prediction_logs pl
+                LEFT JOIN products p ON pl.item_cd = p.item_cd
+                WHERE pl.prediction_date >= ?
+                AND pl.prediction_date <= ?
+                AND pl.actual_qty IS NOT NULL
+                AND pl.rule_order_qty IS NOT NULL
+                {store_filter}
+            """, (start_date.strftime("%Y-%m-%d"),
+                  end_date.strftime("%Y-%m-%d")) + store_params)
+
+            rows = cursor.fetchall()
+        finally:
+            conn.close()
+
+        if not rows:
+            return {"total_records": 0, "message": "아직 Rule vs ML 비교 데이터가 없습니다"}
+
+        # 전체 및 그룹별 집계
+        total_rule_errors = []
+        total_blended_errors = []
+        total_ml_weights = []
+        group_data: Dict[str, Dict[str, list]] = {}
+
+        for item_cd, order_qty, rule_oq, ml_oq, ml_w, actual, mid_cd in rows:
+            if actual is None:
+                continue
+
+            rule_error = abs((rule_oq or 0) - actual)
+            blended_error = abs((order_qty or 0) - actual)
+
+            total_rule_errors.append(rule_error)
+            total_blended_errors.append(blended_error)
+            if ml_w is not None:
+                total_ml_weights.append(ml_w)
+
+            group = get_category_group(mid_cd or "")
+            if group not in group_data:
+                group_data[group] = {
+                    "rule_errors": [], "blended_errors": [], "ml_weights": []
+                }
+            group_data[group]["rule_errors"].append(rule_error)
+            group_data[group]["blended_errors"].append(blended_error)
+            if ml_w is not None:
+                group_data[group]["ml_weights"].append(ml_w)
+
+        n = len(total_rule_errors)
+        rule_mae = sum(total_rule_errors) / n
+        blended_mae = sum(total_blended_errors) / n
+        avg_w = sum(total_ml_weights) / len(total_ml_weights) if total_ml_weights else 0
+        contribution = ((rule_mae - blended_mae) / rule_mae * 100) if rule_mae > 0 else 0
+
+        by_group = {}
+        for gname, gd in sorted(group_data.items()):
+            gc = len(gd["rule_errors"])
+            g_rule = sum(gd["rule_errors"]) / gc
+            g_blend = sum(gd["blended_errors"]) / gc
+            g_w = sum(gd["ml_weights"]) / len(gd["ml_weights"]) if gd["ml_weights"] else 0
+            by_group[gname] = {
+                "rule_mae": round(g_rule, 3),
+                "blended_mae": round(g_blend, 3),
+                "count": gc,
+                "avg_ml_weight": round(g_w, 4),
+            }
+
+        return {
+            "total_records": n,
+            "rule_mae": round(rule_mae, 3),
+            "blended_mae": round(blended_mae, 3),
+            "ml_contribution": round(contribution, 2),
+            "avg_ml_weight": round(avg_w, 4),
+            "by_group": by_group,
+        }
+
+    def get_ml_weight_effectiveness(self, days: int = 14) -> Dict[str, Any]:
+        """ML 가중치 구간별 MAE 분석
+
+        ml_weight_used 값을 구간(0~0.05, 0.05~0.15, 0.15~0.25, 0.25+)별로
+        그룹핑하여 MAE를 비교합니다. 어떤 가중치 구간이 가장 효과적인지 파악용.
+
+        Args:
+            days: 분석 기간 (기본 14일)
+
+        Returns:
+            {
+                "total_records": int,
+                "buckets": [
+                    {"range": "0.00-0.05", "count": int, "mae": float,
+                     "rule_mae": float, "improvement": float}, ...
+                ]
+            }
+        """
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=days)
+
+        conn = self._get_connection()
+        try:
+            cursor = conn.cursor()
+
+            store_filter = "AND store_id = ?" if self.store_id else ""
+            store_params = (self.store_id,) if self.store_id else ()
+
+            cursor.execute(f"""
+                SELECT
+                    order_qty,
+                    rule_order_qty,
+                    ml_weight_used,
+                    actual_qty
+                FROM prediction_logs
+                WHERE prediction_date >= ?
+                AND prediction_date <= ?
+                AND actual_qty IS NOT NULL
+                AND ml_weight_used IS NOT NULL
+                {store_filter}
+            """, (start_date.strftime("%Y-%m-%d"),
+                  end_date.strftime("%Y-%m-%d")) + store_params)
+
+            rows = cursor.fetchall()
+        finally:
+            conn.close()
+
+        if not rows:
+            return {"total_records": 0, "message": "아직 ML 가중치 효과 데이터가 없습니다"}
+
+        # 구간 정의
+        bucket_ranges = [
+            (0.00, 0.05, "0.00-0.05"),
+            (0.05, 0.15, "0.05-0.15"),
+            (0.15, 0.25, "0.15-0.25"),
+            (0.25, 1.01, "0.25+"),
+        ]
+
+        bucket_data: Dict[str, Dict[str, list]] = {
+            label: {"blended_errors": [], "rule_errors": []}
+            for _, _, label in bucket_ranges
+        }
+
+        for order_qty, rule_oq, ml_w, actual in rows:
+            if actual is None or ml_w is None:
+                continue
+
+            blended_error = abs((order_qty or 0) - actual)
+            rule_error = abs((rule_oq or 0) - actual)
+
+            for lo, hi, label in bucket_ranges:
+                if lo <= ml_w < hi:
+                    bucket_data[label]["blended_errors"].append(blended_error)
+                    bucket_data[label]["rule_errors"].append(rule_error)
+                    break
+
+        buckets = []
+        for _, _, label in bucket_ranges:
+            bd = bucket_data[label]
+            cnt = len(bd["blended_errors"])
+            if cnt == 0:
+                buckets.append({"range": label, "count": 0, "mae": 0, "rule_mae": 0, "improvement": 0})
+                continue
+
+            mae = sum(bd["blended_errors"]) / cnt
+            r_mae = sum(bd["rule_errors"]) / cnt
+            improvement = ((r_mae - mae) / r_mae * 100) if r_mae > 0 else 0
+
+            buckets.append({
+                "range": label,
+                "count": cnt,
+                "mae": round(mae, 3),
+                "rule_mae": round(r_mae, 3),
+                "improvement": round(improvement, 2),
+            })
+
+        return {
+            "total_records": len(rows),
+            "buckets": buckets,
+        }

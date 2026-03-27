@@ -381,7 +381,7 @@ def analyze_tobacco_pattern(
     """
     config = TOBACCO_DYNAMIC_SAFETY_CONFIG
     if db_path is None:
-        db_path = _get_db_path()
+        db_path = _get_db_path(store_id)
 
     analysis_days = config["analysis_days"]
     min_data_days = config["min_data_days"]

@@ -16,6 +16,9 @@ from src.utils.logger import get_logger
 logger = get_logger(__name__)
 
 
+UNAVAILABLE_FAIL_THRESHOLD = 3  # 연속 N회 실패 시 미취급 마킹
+
+
 class RealtimeInventoryRepository(BaseRepository):
     """실시간 재고/미입고 저장소 (발주 전 조회 데이터)"""
 
@@ -30,7 +33,8 @@ class RealtimeInventoryRepository(BaseRepository):
         is_available: bool = True,
         item_nm: Optional[str] = None,
         is_cut_item: bool = False,
-        store_id: str = DEFAULT_STORE_ID
+        store_id: str = DEFAULT_STORE_ID,
+        preserve_stock_if_zero: bool = False,
     ) -> None:
         """
         실시간 재고/미입고 정보 저장 (upsert)
@@ -44,6 +48,8 @@ class RealtimeInventoryRepository(BaseRepository):
             item_nm: 상품명 (편의용)
             is_cut_item: 발주중지(CUT) 상품 여부
             store_id: 점포 코드
+            preserve_stock_if_zero: True면 prefetch stock=0일 때 기존 stock_qty 보존
+                (매출조회 재고를 단품발주조회 결과로 덮어쓰는 문제 방지)
         """
         # 음수 재고/미입고 방어 (저장 시점에서 0으로 변환)
         stock_qty = self._to_positive_int(stock_qty)
@@ -54,6 +60,21 @@ class RealtimeInventoryRepository(BaseRepository):
         try:
             cursor = conn.cursor()
             now = self._now()
+
+            # prefetch에서 stock=0 반환 시: 기존 stock 보존 (is_available은 유지)
+            # 직배 상품 등 단품발주조회 NOW_QTY=0이지만 매장 진열 재고는 있는 경우
+            if preserve_stock_if_zero and stock_qty == 0:
+                cursor.execute(
+                    "SELECT stock_qty FROM realtime_inventory WHERE store_id = ? AND item_cd = ?",
+                    (store_id, item_cd)
+                )
+                existing = cursor.fetchone()
+                if existing and existing[0] > 0:
+                    logger.debug(
+                        f"[preserve_stock] {item_cd}: prefetch stock=0이지만 "
+                        f"기존 stock={existing[0]} 보존 (is_available 유지)"
+                    )
+                    stock_qty = existing[0]
 
             cursor.execute(
                 """
@@ -67,7 +88,9 @@ class RealtimeInventoryRepository(BaseRepository):
                     order_unit_qty = excluded.order_unit_qty,
                     is_available = excluded.is_available,
                     is_cut_item = excluded.is_cut_item,
-                    queried_at = excluded.queried_at
+                    queried_at = excluded.queried_at,
+                    query_fail_count = 0,
+                    unavail_reason = NULL
                 """,
                 (store_id, item_cd, item_nm, stock_qty, pending_qty, order_unit_qty,
                  1 if is_available else 0, 1 if is_cut_item else 0, now, now)
@@ -126,7 +149,9 @@ class RealtimeInventoryRepository(BaseRepository):
                         order_unit_qty = excluded.order_unit_qty,
                         is_available = excluded.is_available,
                         is_cut_item = excluded.is_cut_item,
-                        queried_at = excluded.queried_at
+                        queried_at = excluded.queried_at,
+                        query_fail_count = 0,
+                        unavail_reason = NULL
                     """,
                     (
                         store_id,
@@ -521,11 +546,27 @@ class RealtimeInventoryRepository(BaseRepository):
             if not candidates:
                 return {"cleaned": 0, "total_ghost_stock": 0, "total_ghost_pending": 0}
 
+            # active 배치가 있는 상품 목록 (유령재고 정리에서 보호)
+            active_batch_items = set()
+            try:
+                sid_cond = "AND store_id = ?" if store_id else ""
+                sid_params = [store_id] if store_id else []
+                cursor.execute(
+                    f"""SELECT DISTINCT item_cd FROM inventory_batches
+                    WHERE status = 'active' AND remaining_qty > 0
+                    {sid_cond}""",
+                    sid_params
+                )
+                active_batch_items = {r[0] for r in cursor.fetchall()}
+            except Exception as e:
+                logger.warning(f"active 배치 조회 실패 (보호 없이 진행): {e}")
+
             # 상품별 TTL 판정
             now = datetime.now()
             stale_item_cds = []
             total_ghost = 0
             total_ghost_pending = 0
+            batch_protected = 0
 
             for row in candidates:
                 item_cd = row[0]
@@ -541,13 +582,23 @@ class RealtimeInventoryRepository(BaseRepository):
                     queried_dt = datetime.fromisoformat(queried_at)
                     cutoff = now - timedelta(hours=item_stale_hours)
                     if queried_dt < cutoff:
+                        # active 배치가 있으면 실재고 → 보호
+                        if item_cd in active_batch_items:
+                            batch_protected += 1
+                            continue
                         stale_item_cds.append(item_cd)
                         total_ghost += stock_qty
                         total_ghost_pending += pending_qty
                 except (ValueError, TypeError):
+                    if item_cd in active_batch_items:
+                        batch_protected += 1
+                        continue
                     stale_item_cds.append(item_cd)
                     total_ghost += stock_qty
                     total_ghost_pending += pending_qty
+
+            if batch_protected > 0:
+                logger.info(f"유령 재고 보호: {batch_protected}개 상품 (active 배치 존재)")
 
             if not stale_item_cds:
                 return {"cleaned": 0, "total_ghost_stock": 0, "total_ghost_pending": 0}
@@ -595,6 +646,55 @@ class RealtimeInventoryRepository(BaseRepository):
                 "cross_store_cleaned": cross_store_cleaned,
             }
 
+        finally:
+            conn.close()
+
+    def get_stale_stock_item_codes(
+        self,
+        store_id: Optional[str] = None
+    ) -> List[str]:
+        """유통기한 TTL 초과 + stock_qty > 0 상품의 item_cd 목록 반환.
+
+        cleanup_stale_stock과 동일한 stale 판정 기준.
+        Phase 1.68 DirectAPI 재고 갱신 대상 추출용.
+        """
+        conn = self._get_conn_with_common() if self.store_id else self._get_conn()
+        try:
+            cursor = conn.cursor()
+            sf, sp = self._store_filter("ri", store_id)
+            prefix = "common." if self.store_id else ""
+
+            cursor.execute(
+                f"""SELECT ri.item_cd, ri.queried_at,
+                       pd.expiration_days, p.mid_cd
+                FROM realtime_inventory ri
+                LEFT JOIN {prefix}product_details pd ON ri.item_cd = pd.item_cd
+                LEFT JOIN {prefix}products p ON ri.item_cd = p.item_cd
+                WHERE ri.stock_qty > 0
+                {sf}""",
+                sp
+            )
+            candidates = cursor.fetchall()
+
+            if not candidates:
+                return []
+
+            now = datetime.now()
+            stale_items = []
+
+            for row in candidates:
+                item_cd, queried_at, expiry_days, mid_cd = row
+                item_stale_hours = self._get_stale_hours_for_expiry(expiry_days, mid_cd)
+
+                try:
+                    queried_dt = datetime.fromisoformat(queried_at)
+                    cutoff = now - timedelta(hours=item_stale_hours)
+                    if queried_dt < cutoff:
+                        stale_items.append(item_cd)
+                except (ValueError, TypeError):
+                    stale_items.append(item_cd)
+
+            return stale_items
         finally:
             conn.close()
 
@@ -669,7 +769,7 @@ class RealtimeInventoryRepository(BaseRepository):
 
     def mark_unavailable(self, item_cd: str, store_id: str = DEFAULT_STORE_ID) -> None:
         """
-        상품을 미취급으로 표시
+        상품을 미취급으로 표시 (명시적 수동 마킹)
 
         Args:
             item_cd: 상품코드
@@ -683,16 +783,81 @@ class RealtimeInventoryRepository(BaseRepository):
             cursor.execute(
                 """
                 INSERT INTO realtime_inventory
-                (store_id, item_cd, is_available, queried_at, created_at)
-                VALUES (?, ?, 0, ?, ?)
+                (store_id, item_cd, is_available, unavail_reason, queried_at, created_at)
+                VALUES (?, ?, 0, 'manual', ?, ?)
                 ON CONFLICT(store_id, item_cd) DO UPDATE SET
                     is_available = 0,
+                    unavail_reason = 'manual',
                     queried_at = excluded.queried_at
                 """,
                 (store_id, item_cd, now, now)
             )
 
             conn.commit()
+        finally:
+            conn.close()
+
+    def increment_fail_count(self, item_cd: str, store_id: str = DEFAULT_STORE_ID) -> None:
+        """
+        조회 실패 시 카운트 증가, 임계값 도달 시 is_available=0 마킹
+
+        1~2회 실패: fail_count만 증가, is_available 유지
+        3회(UNAVAILABLE_FAIL_THRESHOLD) 이상: is_available=0, unavail_reason='query_fail'
+
+        Args:
+            item_cd: 상품코드
+            store_id: 점포 코드
+        """
+        conn = self._get_conn()
+        try:
+            cursor = conn.cursor()
+            now = self._now()
+
+            # fail_count 증가 (UPSERT)
+            cursor.execute(
+                """
+                INSERT INTO realtime_inventory
+                (store_id, item_cd, query_fail_count, is_available, queried_at, created_at)
+                VALUES (?, ?, 1, 1, ?, ?)
+                ON CONFLICT(store_id, item_cd) DO UPDATE SET
+                    query_fail_count = COALESCE(realtime_inventory.query_fail_count, 0) + 1,
+                    queried_at = excluded.queried_at
+                """,
+                (store_id, item_cd, now, now)
+            )
+
+            # 임계값 도달 시 미취급 마킹
+            cursor.execute(
+                """
+                UPDATE realtime_inventory
+                SET is_available = 0,
+                    unavail_reason = 'query_fail'
+                WHERE store_id = ? AND item_cd = ?
+                AND query_fail_count >= ?
+                """,
+                (store_id, item_cd, UNAVAILABLE_FAIL_THRESHOLD)
+            )
+
+            conn.commit()
+
+            # 로깅
+            cursor.execute(
+                "SELECT query_fail_count, is_available FROM realtime_inventory WHERE store_id = ? AND item_cd = ?",
+                (store_id, item_cd)
+            )
+            row = cursor.fetchone()
+            if row:
+                fail_count = row[0]
+                is_avail = row[1]
+                if fail_count >= UNAVAILABLE_FAIL_THRESHOLD:
+                    logger.warning(
+                        f"상품 {item_cd} 연속 {fail_count}회 조회 실패 → 미취급 마킹"
+                    )
+                else:
+                    logger.info(
+                        f"상품 {item_cd} 조회 실패 {fail_count}/{UNAVAILABLE_FAIL_THRESHOLD} "
+                        f"(is_available={is_avail})"
+                    )
         finally:
             conn.close()
 

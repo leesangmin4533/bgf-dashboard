@@ -240,7 +240,7 @@ class TestSnackNonOrderableSkip:
                         db_path="/fake/db",
                         orderable_day="화목토",
                     )
-                    assert result.skip_order is True
+                    assert result.skip_order is False  # 비발주일에도 발주 진행
                     assert result.is_orderable_today is False
 
     @pytest.mark.unit
@@ -262,8 +262,8 @@ class TestSnackNonOrderableSkip:
                         db_path="/fake/db",
                         orderable_day="화목토",
                     )
-                    assert "비발주일" in result.skip_reason
-                    assert "화목토" in result.skip_reason
+                    assert result.skip_reason == ""  # 비발주일이어도 스킵 사유 없음
+                    assert result.skip_order is False
 
     @pytest.mark.unit
     def test_no_skip_on_orderable_day(self):

@@ -89,13 +89,10 @@ def is_alcohol_general_category(mid_cd: str) -> bool:
     return mid_cd in ALCOHOL_GENERAL_TARGET_CATEGORIES
 
 
-def _get_db_path() -> str:
-    """DB 경로 반환
-
-    Returns:
-        bgf_sales.db 절대 경로 문자열
-    """
-    return str(Path(__file__).parent.parent.parent.parent / "data" / "bgf_sales.db")
+def _get_db_path(store_id: str = None) -> str:
+    """DB 경로 반환"""
+    from src.infrastructure.database.connection import resolve_db_path
+    return resolve_db_path(store_id=store_id)
 
 
 def _learn_weekday_pattern(mid_cd: str, db_path: str = None, min_data_days: int = 14,
@@ -115,7 +112,7 @@ def _learn_weekday_pattern(mid_cd: str, db_path: str = None, min_data_days: int 
         {0: coef, 1: coef, ..., 6: coef} (Python weekday: 월=0, 일=6)
     """
     if db_path is None:
-        db_path = _get_db_path()
+        db_path = _get_db_path(store_id)
     try:
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
@@ -198,7 +195,7 @@ def analyze_alcohol_general_pattern(
     config = ALCOHOL_GENERAL_DYNAMIC_SAFETY_CONFIG
 
     if db_path is None:
-        db_path = _get_db_path()
+        db_path = _get_db_path(store_id)
 
     # 오늘 요일
     weekday = datetime.now().weekday()  # 월=0, 일=6

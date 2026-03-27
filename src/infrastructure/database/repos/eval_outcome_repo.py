@@ -379,6 +379,40 @@ class EvalOutcomeRepository(BaseRepository):
         finally:
             conn.close()
 
+    def get_by_item_date_range(
+        self,
+        item_cd: str,
+        start_date: str,
+        end_date: str,
+        store_id: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """특정 상품의 기간 내 평가 결과 조회 (판매주기 판정용)
+
+        Args:
+            item_cd: 상품 코드
+            start_date: 시작일 (YYYY-MM-DD, 포함)
+            end_date: 종료일 (YYYY-MM-DD, 포함)
+            store_id: 매장 코드
+
+        Returns:
+            해당 상품의 기간 내 평가 결과 목록
+        """
+        conn = self._get_conn()
+        try:
+            cursor = conn.cursor()
+            sf, sp = self._store_filter(None, store_id)
+            cursor.execute(
+                f"""
+                SELECT * FROM eval_outcomes
+                WHERE item_cd = ? AND eval_date >= ? AND eval_date <= ? {sf}
+                ORDER BY eval_date
+                """,
+                (item_cd, start_date, end_date) + sp,
+            )
+            return [dict(row) for row in cursor.fetchall()]
+        finally:
+            conn.close()
+
     def get_outcomes_by_date(self, eval_date: str, store_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """특정 날짜의 모든 평가 결과 조회
 

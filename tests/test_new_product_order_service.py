@@ -376,7 +376,7 @@ class TestNewProduct3DayTrackingRepo:
         assert item is not None
         assert item["product_code"] == "TEST001"
         assert item["bgf_order_count"] == 3
-        assert item["our_order_count"] == 0
+        assert item["our_order_count"] == 3  # bgf_order_count로 초기화
         assert item["base_name"] == "테스트김밥"
 
     def test_record_order_increments(self, tracking_db):
@@ -902,7 +902,7 @@ class TestMultiWeekD3Force:
         return factory
 
     def test_w3_d5_force(self, tracking_db, monkeypatch):
-        """W3은 D-2 (강제) → 발주"""
+        """W3은 D-2 (강제) → 발주 (bgf_order_count=1, our_order_count=1이므로 미달성)"""
         repo = NewProduct3DayTrackingRepository(db_path=tracking_db)
         monkeypatch.setattr(
             "src.infrastructure.database.repos.NP3DayTrackingRepo",
@@ -913,7 +913,7 @@ class TestMultiWeekD3Force:
             week_start="2026-03-02", week_end="2026-03-20",
             product_code="P001", product_name="도)해물도시락1",
             base_name="도)해물도시락",
-            bgf_order_count=3, order_interval_days=6,
+            bgf_order_count=1, order_interval_days=6,
             next_order_date="2026-03-14",
         )
         orders = get_today_new_product_orders(store_id="46513", today="2026-03-18")

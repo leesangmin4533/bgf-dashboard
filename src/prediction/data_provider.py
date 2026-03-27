@@ -20,6 +20,20 @@ from .categories import FOOD_ANALYSIS_DAYS
 logger = get_logger(__name__)
 
 
+class _NoCloseConnection:
+    """close() 호출을 무시하는 커넥션 래퍼 (persistent 모드용)"""
+    __slots__ = ('_conn',)
+
+    def __init__(self, conn: sqlite3.Connection):
+        self._conn = conn
+
+    def close(self):
+        pass  # persistent 모드에서는 close 무시
+
+    def __getattr__(self, name):
+        return getattr(self._conn, name)
+
+
 class PredictionDataProvider:
     """예측에 필요한 DB/인프라 데이터 접근 계층
 
@@ -46,14 +60,31 @@ class PredictionDataProvider:
         self._pending_cache: Dict[str, int] = {}  # 미입고 수량 캐시
         self._stock_cache: Dict[str, int] = {}    # 실시간 재고 캐시 (BGF 시스템에서 조회)
         self._promo_cache: Optional[Dict[str, list]] = None  # 행사 기간 캐시
+        self._persistent_conn = None
 
     def _get_connection(self, timeout: int = 30) -> sqlite3.Connection:
+        if self._persistent_conn is not None:
+            return _NoCloseConnection(self._persistent_conn)
         conn = sqlite3.connect(self.db_path, timeout=timeout)
         conn.row_factory = sqlite3.Row
         if self.store_id:
             from src.infrastructure.database.connection import attach_common_with_views
             attach_common_with_views(conn, self.store_id)
         return conn
+
+    def open_persistent_connection(self) -> None:
+        """predict_batch 시작 시 호출 — 이후 _get_connection은 이 커넥션을 재사용"""
+        if self._persistent_conn is None:
+            self._persistent_conn = self._get_connection()
+
+    def close_persistent_connection(self) -> None:
+        """predict_batch 종료 시 호출 — 커넥션 닫고 해제"""
+        if self._persistent_conn is not None:
+            try:
+                self._persistent_conn.close()
+            except Exception:
+                pass
+            self._persistent_conn = None
 
     def get_sales_history(
         self,
@@ -156,7 +187,8 @@ class PredictionDataProvider:
                     pd.sell_price,
                     pd.margin_rate,
                     pd.lead_time_days,
-                    pd.orderable_day
+                    pd.orderable_day,
+                    pd.large_cd
                 FROM products p
                 LEFT JOIN product_details pd ON p.item_cd = pd.item_cd
                 WHERE p.item_cd = ?
@@ -175,6 +207,7 @@ class PredictionDataProvider:
                     "margin_rate": row[6],
                     "lead_time_days": row[7] if row[7] is not None and row[7] > 0 else 1,
                     "orderable_day": row[8] if row[8] else "일월화수목금토",
+                    "large_cd": row[9],
                 }
             return None
         finally:

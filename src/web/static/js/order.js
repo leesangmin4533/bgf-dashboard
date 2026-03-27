@@ -436,7 +436,13 @@ async function updatePartialSummary() {
 }
 
 function runPartialOrder(mode) {
-    var categories = getSelectedCategories();
+    // 전체발주 모드이면 설정 탭의 CATEGORIES 전체 사용
+    var categories;
+    if (typeof orderMode !== 'undefined' && orderMode === 'all' && typeof getEffectiveCategories === 'function') {
+        categories = getEffectiveCategories();
+    } else {
+        categories = getSelectedCategories();
+    }
     if (categories.length === 0) {
         showToast('카테고리를 1개 이상 선택하세요.', 'warning');
         return;
@@ -444,9 +450,13 @@ function runPartialOrder(mode) {
 
     // 실제 발주 확인
     if (mode === 'real-order') {
-        var msg = '선택된 ' + categories.length + '개 카테고리로 실제 발주를 실행합니다.\n' +
-                  '카테고리: ' + categories.join(', ') + '\n\n정말 실행하시겠습니까?';
-        if (!confirm(msg)) return;
+        if (typeof orderMode !== 'undefined' && orderMode === 'all') {
+            if (!confirm('전체 카테고리 발주를 실행합니다. 계속하시겠습니까?')) return;
+        } else {
+            var msg = '선택된 ' + categories.length + '개 카테고리로 실제 발주를 실행합니다.\n' +
+                      '카테고리: ' + categories.join(', ') + '\n\n정말 실행하시겠습니까?';
+            if (!confirm(msg)) return;
+        }
     }
 
     var maxItems = parseInt(document.getElementById('testMaxItems').value) || 0;
@@ -575,7 +585,10 @@ async function runFullOrder(mode) {
     var isExecute = (mode === 'real-order');
     var btn = isExecute ? document.getElementById('btnFullExecute') : document.getElementById('btnFullPreview');
 
-    if (isExecute) {
+    // 전체발주 모드(설정 탭) 확인 팝업
+    if (typeof orderMode !== 'undefined' && orderMode === 'all' && isExecute) {
+        if (!confirm('전체 카테고리 발주를 실행합니다. 계속하시겠습니까?')) return;
+    } else if (isExecute) {
         var confirmed = confirm('전체 상품을 대상으로 실제 발주를 실행합니다.\n정말 실행하시겠습니까?');
         if (!confirmed) return;
     }
@@ -623,9 +636,9 @@ function showOrderResult(result, isExecuted) {
     var stats = result.summary || {};
     summary.innerHTML =
         '<div class="result-stat"><div class="result-stat-label">총 상품수</div><div class="result-stat-value">' + (stats.total_items || 0) + '</div></div>' +
-        '<div class="result-stat"><div class="result-stat-label">발주 상품</div><div class="result-stat-value">' + (stats.order_items || 0) + '</div></div>' +
-        '<div class="result-stat"><div class="result-stat-label">총 발주량</div><div class="result-stat-value">' + (stats.total_qty || 0) + '</div></div>' +
-        '<div class="result-stat"><div class="result-stat-label">스킵</div><div class="result-stat-value">' + (stats.skip_items || 0) + '</div></div>';
+        '<div class="result-stat"><div class="result-stat-label">발주 상품</div><div class="result-stat-value">' + (stats.ordered_count || 0) + '</div></div>' +
+        '<div class="result-stat"><div class="result-stat-label">총 발주량</div><div class="result-stat-value">' + (stats.total_order_qty || 0) + '</div></div>' +
+        '<div class="result-stat"><div class="result-stat-label">스킵</div><div class="result-stat-value">' + (stats.skipped_count || 0) + '</div></div>';
 
     // 테이블 데이터
     var items = result.items || [];
@@ -634,8 +647,8 @@ function showOrderResult(result, isExecuted) {
     } else {
         tbody.innerHTML = items.map(function(item) {
             return '<tr>' +
-                '<td>' + escapeHtml(item.item_name) + '</td>' +
-                '<td>' + escapeHtml(item.cat_name) + '</td>' +
+                '<td>' + escapeHtml(item.item_nm) + '</td>' +
+                '<td>' + escapeHtml(item.category) + '</td>' +
                 '<td class="text-right">' + (item.daily_avg || 0).toFixed(1) + '</td>' +
                 '<td class="text-right">' + (item.safety_stock || 0) + '</td>' +
                 '<td class="text-right">' + (item.current_stock || 0) + '</td>' +

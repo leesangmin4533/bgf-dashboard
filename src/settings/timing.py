@@ -92,7 +92,7 @@ ORDER_BETWEEN_ITEMS = 0.5         # 상품 간 대기 (초) [최적화: 1.0→0.
 ORDER_LAST_ITEM_EXTRA = 0.5       # 마지막 상품 입력 후 추가 대기 (초) [최적화: 2.0→0.5]
 ORDER_BEFORE_SAVE = 1.0           # 전체 저장 전 안정화 대기 (초)
 ORDER_BETWEEN_DATES = 1.0         # 날짜 그룹 간 대기 (초)
-ORDER_DATE_BUTTON_AFTER = 2.0     # 발주일자 버튼 클릭 후 대기 (초)
+ORDER_DATE_BUTTON_AFTER = 1.0     # 발주일자 버튼 클릭 후 대기 (초) [최적화: 2.0→1.0 팝업 즉시 로드됨]
 ORDER_AFTER_DAY_SELECT = 1.0      # 요일 선택 후 대기 (초)
 ORDER_CELL_ACTIVATE_WAIT = 0.3    # 셀 활성화 후 대기 (초)
 ORDER_NEW_ROW_DOM_WAIT = 0.3      # 새 행 추가 후 DOM 업데이트 대기 (초)
@@ -151,8 +151,8 @@ PI_BETWEEN_ITEMS = 1.0            # 상품 간 처리 대기 (초)
 # =====================================================================
 LOGIN_RETRY_DELAY = 10            # 로그인 재시도 간격 (초)
 SCHEDULER_RETRY_DELAY = 30        # 스케줄러 오류 시 재시도 간격 (초)
-BACKFILL_BETWEEN_DATES = 5        # 백필 수집 날짜 간 대기 (초)
-DAILY_JOB_AFTER_CLOSE_TAB = 1.0   # 매출 탭 닫기 후 발주 전환 대기 (초)
+BACKFILL_BETWEEN_DATES = 3        # 백필 수집 날짜 간 대기 (초) [최적화: 5→3 서버 부하 낮음]
+DAILY_JOB_AFTER_CLOSE_TAB = 0.5   # 매출 탭 닫기 후 발주 전환 대기 (초) [최적화: 1.0→0.5]
 
 # =====================================================================
 # 입고/발주현황 수집
@@ -190,6 +190,27 @@ WS_DSGS_SETUP_WAIT = 0.3         # dsGs 파라미터 설정 후 대기 (초)
 WS_POPUP_CLOSE_WAIT = 0.5        # 기존 팝업 닫기 후 대기 (초)
 WS_POPUP_OPEN_WAIT = 3.0         # 팝업 열기 후 대기 (초, 렌더링+onload)
 WS_SEARCH_WAIT = 4.0             # fn_selSearch 서버 응답 대기 (초, 캐시 완화)
+
+# =====================================================================
+# 상품 상세 일괄 수집 (product_detail_batch_collector)
+# =====================================================================
+BD_BARCODE_INPUT_WAIT = 0.3       # 바코드 입력 후 대기 (초)
+BD_POPUP_MAX_CHECKS = 10          # 팝업 대기 최대 확인 횟수
+BD_POPUP_CHECK_INTERVAL = 0.5     # 팝업 대기 확인 간격 (초)
+BD_DATA_LOAD_MAX_CHECKS = 10      # 데이터 로딩 대기 최대 확인 횟수
+BD_DATA_LOAD_CHECK_INTERVAL = 0.3  # 데이터 로딩 확인 간격 (초)
+BD_POPUP_CLOSE_WAIT = 0.5         # 팝업 닫기 후 대기 (초)
+BD_BETWEEN_ITEMS = 2.0            # 상품 간 처리 간격 (초, 서버 부하 방지)
+BD_MAX_ITEMS_PER_RUN = 200        # 1회 실행 최대 상품 수
+
+# =====================================================================
+# Direct API 발주 저장 타이밍 (direct-api-order)
+# =====================================================================
+DIRECT_API_SAVE_TIMEOUT_MS = 15000    # 발주 저장 API 타임아웃 (밀리초)
+DIRECT_API_VERIFY_WAIT = 2.0         # 저장 후 검증 대기 (초)
+BATCH_GRID_POPULATE_WAIT = 1.0       # 배치 그리드 입력 후 안정화 대기 (초)
+BATCH_GRID_SAVE_WAIT = 3.0           # 배치 저장 후 서버 응답 대기 (초)
+BATCH_GRID_ROW_DELAY_MS = 10         # 행 추가 간 딜레이 (밀리초)
 
 # =====================================================================
 # 진행 로그 출력 간격

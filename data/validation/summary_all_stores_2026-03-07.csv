@@ -1,0 +1,4 @@
+﻿store_id,store_name,auto_start,analysis_days,before_months,after_months,before_data_days,after_data_days,before_disuse_rate_pct,after_disuse_rate_pct,disuse_rate_change_pp,before_daily_disuse,after_daily_disuse,daily_disuse_change_pct,after_daily_wonga,after_monthly_est_wonga,avg_accuracy_pct,total_over_order,total_under_order,total_accurate,note
+46513,이천호반베르디움점,2026-01-26,40,5,3,145,66,0.211,1.291,1.08,1.36,8.39,516.9,24722.0,741660.0,53.1,3702,2725,6750,waste_slips는 시스템 구축 후만 존재. 폐기율은 daily_sales 기준.
+46704,이천동양점,2026-02-24,11,6,2,176,35,0.132,0.612,0.48,1.24,5.54,346.8,9088.0,272640.0,40.3,981,1284,1162,waste_slips는 시스템 구축 후만 존재. 폐기율은 daily_sales 기준.
+47863,47863,2026-03-05,2,12,1,362,7,0.473,0.502,0.029,2.67,3.0,12.4,23438.0,703140.0,0,1,6,1,waste_slips는 시스템 구축 후만 존재. 폐기율은 daily_sales 기준.

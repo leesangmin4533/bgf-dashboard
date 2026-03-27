@@ -85,13 +85,10 @@ def is_general_merchandise_category(mid_cd: str) -> bool:
     return mid_cd in GENERAL_MERCHANDISE_CATEGORIES
 
 
-def _get_db_path() -> str:
-    """DB 경로 반환
-
-    Returns:
-        bgf_sales.db의 절대 경로 문자열
-    """
-    return str(Path(__file__).parent.parent.parent.parent / "data" / "bgf_sales.db")
+def _get_db_path(store_id: str = None) -> str:
+    """DB 경로 반환"""
+    from src.infrastructure.database.connection import resolve_db_path
+    return resolve_db_path(store_id=store_id)
 
 
 def _learn_weekday_pattern(mid_cd: str, db_path: str = None, min_data_days: int = 7,
@@ -144,7 +141,7 @@ def analyze_general_merchandise_pattern(
     config = GENERAL_MERCHANDISE_DYNAMIC_SAFETY_CONFIG
 
     if db_path is None:
-        db_path = _get_db_path()
+        db_path = _get_db_path(store_id)
 
     # DB에서 일평균 판매량 조회
     conn = sqlite3.connect(db_path, timeout=30)

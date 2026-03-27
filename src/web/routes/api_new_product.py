@@ -4,6 +4,9 @@
   - GET /status: 현재 월 도입 현황
   - GET /missing-items: 미도입/미달성 상품 목록
   - GET /simulation: 추가 발주 시 예상 점수
+  - GET /settlement: 안착 판정 목록 (모니터링 중 + KPI)
+  - GET /settlement/<item_cd>: 단일 제품 안착 상세
+  - POST /settlement/run: 수동 안착 판정 실행
 """
 
 from datetime import datetime
@@ -98,3 +101,105 @@ def simulation():
         },
         "estimated": result,
     })
+
+
+# ── 안착 판정 API (v56) ──────────────────────────────────
+
+
+@new_product_bp.route("/settlement", methods=["GET"])
+def settlement_list():
+    """모니터링 중인 신제품 목록 + KPI 요약 + 판정 상태"""
+    store_id = request.args.get("store_id")
+    if not store_id:
+        return jsonify({"error": "store_id 필수"}), 400
+
+    try:
+        from src.application.services.new_product_settlement_service import (
+            NewProductSettlementService,
+        )
+        service = NewProductSettlementService(store_id=store_id)
+        summaries = service.get_settlement_summary()
+        return jsonify({
+            "store_id": store_id,
+            "count": len(summaries),
+            "items": summaries,
+        })
+    except Exception as e:
+        logger.error(f"[API] settlement list 실패: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@new_product_bp.route("/settlement/<item_cd>", methods=["GET"])
+def settlement_detail(item_cd):
+    """단일 제품 안착 상세 분석 (일별 트렌드 + KPI 5개)"""
+    store_id = request.args.get("store_id")
+    if not store_id:
+        return jsonify({"error": "store_id 필수"}), 400
+
+    try:
+        from src.application.services.new_product_settlement_service import (
+            NewProductSettlementService,
+        )
+        from src.infrastructure.database.repos import NewProductDailyTrackingRepository
+
+        service = NewProductSettlementService(store_id=store_id)
+        result = service.analyze(item_cd)
+        if not result:
+            return jsonify({"error": "제품 정보 없음"}), 404
+
+        tracking_repo = NewProductDailyTrackingRepository(store_id=store_id)
+        tracking = tracking_repo.get_tracking_history(item_cd, store_id=store_id)
+
+        return jsonify({
+            "item_cd": result.item_cd,
+            "item_nm": result.item_nm,
+            "verdict": result.verdict,
+            "score": result.score,
+            "kpis": {
+                "velocity": round(result.velocity, 2),
+                "velocity_ratio": round(result.velocity_ratio, 2),
+                "cv": round(result.cv, 1) if result.cv is not None else None,
+                "sellthrough_rate": round(result.sellthrough_rate, 1),
+                "expiry_risk": result.expiry_risk,
+                "rank": round(result.rank, 3),
+            },
+            "extension_count": result.extension_count,
+            "analysis_window_days": result.analysis_window_days,
+            "daily_tracking": tracking,
+        })
+    except Exception as e:
+        logger.error(f"[API] settlement detail 실패: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@new_product_bp.route("/settlement/run", methods=["POST"])
+def settlement_run():
+    """수동 안착 판정 실행 (대시보드 '지금 분석' 버튼용)"""
+    store_id = request.args.get("store_id") or request.json.get("store_id") if request.json else None
+    if not store_id:
+        return jsonify({"error": "store_id 필수"}), 400
+
+    try:
+        from src.application.services.new_product_settlement_service import (
+            NewProductSettlementService,
+        )
+        service = NewProductSettlementService(store_id=store_id)
+        results = service.run_due_settlements()
+
+        return jsonify({
+            "store_id": store_id,
+            "processed": len(results),
+            "results": [
+                {
+                    "item_cd": r.item_cd,
+                    "item_nm": r.item_nm,
+                    "verdict": r.verdict,
+                    "score": round(r.score, 1),
+                    "velocity_ratio": round(r.velocity_ratio, 2),
+                }
+                for r in results
+            ],
+        })
+    except Exception as e:
+        logger.error(f"[API] settlement run 실패: {e}")
+        return jsonify({"error": str(e)}), 500

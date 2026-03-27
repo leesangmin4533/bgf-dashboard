@@ -382,7 +382,7 @@ class OrderPredictor:
 
         if mid_cd in ALERT_CATEGORIES:
             item_nm = product.get("item_nm", "")
-            delivery_type = get_delivery_type(item_nm)
+            delivery_type = get_delivery_type(item_nm, item_cd=item_cd)
 
             if delivery_type:
                 # 도착~폐기 실제 유통 시간 계산

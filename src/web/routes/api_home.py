@@ -3,17 +3,19 @@
 DashboardService를 통해 데이터를 제공합니다.
 """
 import os
+import sqlite3
 import sys
 import subprocess
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
-from flask import Blueprint, jsonify, request, current_app
+from flask import Blueprint, jsonify, request, current_app, session
 
 from src.application.services.dashboard_service import DashboardService
+from src.infrastructure.database.connection import DBRouter
 from src.utils.logger import get_logger
-from src.web.routes.api_auth import admin_required
+from src.web.routes.api_auth import admin_required, login_required
 
 logger = get_logger(__name__)
 
@@ -210,6 +212,385 @@ def scheduler_jobs():
         "total_jobs": len(jobs),
         "jobs": jobs,
     })
+
+
+@home_bp.route("/summary", methods=["GET"])
+@login_required
+def summary():
+    """점주용 홈 요약 API (발주핏 v2 대시보드용)
+
+    기존 /status 데이터를 간소화하여 반환합니다.
+    """
+    store_id = session.get("store_id") or request.args.get("store_id")
+    if store_id:
+        svc = DashboardService(store_id=store_id)
+    else:
+        db_path = current_app.config.get("DB_PATH")
+        svc = DashboardService(db_path=db_path)
+
+    project_root = current_app.config["PROJECT_ROOT"]
+    last_order = svc.get_last_order()
+
+    # 발주 상태 판정
+    if last_order.get("success_count", 0) > 0 and last_order.get("fail_count", 0) == 0:
+        order_status = "completed"
+    elif last_order.get("fail_count", 0) > 0:
+        order_status = "failed"
+    else:
+        sched = _get_scheduler_status(project_root)
+        order_status = "pending" if sched.get("running") else "pending"
+
+    # 매출 데이터 직접 쿼리 (hourly_sales_detail.sale_amt 실제 매출 우선, 폴백: qty*price)
+    today_sales = 0
+    today_sales_diff = 0
+    monthly_profit = 0
+    try:
+        conn = _get_summary_conn(store_id)
+        try:
+            today = datetime.now().strftime("%Y-%m-%d")
+            yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+
+            # 오늘 매출 (hourly_sales_detail 우선)
+            row_today = conn.execute("""
+                SELECT COALESCE(SUM(sale_amt), 0)
+                FROM hourly_sales_detail
+                WHERE sales_date = ?
+            """, (today,)).fetchone()
+            today_sales = row_today[0] if row_today else 0
+            if not today_sales:
+                row_today = conn.execute("""
+                    SELECT COALESCE(SUM(ds.sale_qty * COALESCE(pd.sell_price, 0)), 0)
+                    FROM daily_sales ds
+                    LEFT JOIN product_details pd ON ds.item_cd = pd.item_cd
+                    WHERE ds.sales_date = ?
+                """, (today,)).fetchone()
+                today_sales = row_today[0] if row_today else 0
+
+            # 어제 매출 (hourly_sales_detail 우선)
+            row_yest = conn.execute("""
+                SELECT COALESCE(SUM(sale_amt), 0)
+                FROM hourly_sales_detail
+                WHERE sales_date = ?
+            """, (yesterday,)).fetchone()
+            yest_sales = row_yest[0] if row_yest else 0
+            if not yest_sales:
+                row_yest = conn.execute("""
+                    SELECT COALESCE(SUM(ds.sale_qty * COALESCE(pd.sell_price, 0)), 0)
+                    FROM daily_sales ds
+                    LEFT JOIN product_details pd ON ds.item_cd = pd.item_cd
+                    WHERE ds.sales_date = ?
+                """, (yesterday,)).fetchone()
+                yest_sales = row_yest[0] if row_yest else 0
+
+            if yest_sales > 0:
+                today_sales_diff = round(
+                    (today_sales - yest_sales) / yest_sales * 100, 1
+                )
+
+            # 이번달 순수익 (hourly_sales_detail.sale_amt × margin_rate 기반)
+            row_month = conn.execute("""
+                SELECT COALESCE(SUM(
+                    hsd.sale_amt * COALESCE(pd.margin_rate, 25) / 100.0
+                ), 0)
+                FROM hourly_sales_detail hsd
+                LEFT JOIN product_details pd ON hsd.item_cd = pd.item_cd
+                WHERE hsd.sales_date >= date('now', 'start of month')
+            """).fetchone()
+            monthly_profit = int(row_month[0]) if row_month else 0
+            if not monthly_profit:
+                row_month = conn.execute("""
+                    SELECT COALESCE(SUM(
+                        ds.sale_qty * COALESCE(pd.sell_price, 0)
+                        * COALESCE(pd.margin_rate, 25) / 100.0
+                    ), 0)
+                    FROM daily_sales ds
+                    LEFT JOIN product_details pd ON ds.item_cd = pd.item_cd
+                    WHERE ds.sales_date >= date('now', 'start of month')
+                """).fetchone()
+                monthly_profit = int(row_month[0]) if row_month else 0
+        finally:
+            conn.close()
+    except Exception as e:
+        logger.warning("홈 매출 쿼리 실패: %s", e)
+
+    # 폐기 위험
+    expiry = svc.get_expiry_risk()
+    expiry_items = expiry.get("items", []) if isinstance(expiry, dict) else []
+    waste_risk_count = len(expiry_items)
+
+    return jsonify({
+        "order_status": order_status,
+        "order_time": last_order.get("time", "07:00"),
+        "today_sales": today_sales,
+        "today_sales_diff": today_sales_diff,
+        "waste_risk_count": waste_risk_count,
+        "monthly_profit": monthly_profit,
+        "order_success": last_order.get("success_count", 0),
+        "order_fail": last_order.get("fail_count", 0),
+    })
+
+
+@home_bp.route("/waste-risk-products", methods=["GET"])
+@login_required
+def waste_risk_products():
+    """폐기 위험 상품 목록 (점주 대시보드용)"""
+    store_id = session.get("store_id") or request.args.get("store_id")
+    if store_id:
+        svc = DashboardService(store_id=store_id)
+    else:
+        db_path = current_app.config.get("DB_PATH")
+        svc = DashboardService(db_path=db_path)
+
+    expiry = svc.get_expiry_risk()
+    items = expiry.get("items", []) if isinstance(expiry, dict) else []
+
+    result = []
+    for item in items[:20]:
+        expiry_date = item.get("expiry_date", "")
+        # 만료 시간 포맷팅
+        expires_at = expiry_date
+        try:
+            if " " in expiry_date:
+                # %H:%M:%S 또는 %H:%M 두 포맷 모두 처리
+                for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M"):
+                    try:
+                        dt = datetime.strptime(expiry_date, fmt)
+                        break
+                    except ValueError:
+                        continue
+                else:
+                    dt = None
+                if dt:
+                    today = datetime.now().strftime("%Y-%m-%d")
+                    if dt.strftime("%Y-%m-%d") == today:
+                        expires_at = "오늘 " + dt.strftime("%H:%M")
+                    else:
+                        expires_at = dt.strftime("%m/%d %H:%M")
+            else:
+                dt = datetime.strptime(expiry_date, "%Y-%m-%d")
+                today = datetime.now().strftime("%Y-%m-%d")
+                if expiry_date == today:
+                    expires_at = "오늘"
+                else:
+                    expires_at = dt.strftime("%m/%d")
+        except Exception:
+            pass
+
+        result.append({
+            "name": item.get("item_nm", ""),
+            "expires_at": expires_at,
+            "quantity": item.get("remaining_qty", 0),
+        })
+
+    return jsonify(result)
+
+
+@home_bp.route("/profit-breakdown", methods=["GET"])
+@login_required
+def profit_breakdown():
+    """이번달 순수익 중분류별 비중 (비중 높은 순 정렬)"""
+    store_id = session.get("store_id") or request.args.get("store_id")
+    items = []
+    total_profit = 0
+    try:
+        conn = _get_summary_conn(store_id)
+        try:
+            rows = conn.execute("""
+                SELECT COALESCE(p.mid_cd, '기타') AS mid_cd,
+                       COALESCE(mc.mid_nm, p.mid_cd, '기타') AS mid_nm,
+                       COALESCE(SUM(hsd.sale_amt), 0) AS total_sales,
+                       COALESCE(SUM(
+                           hsd.sale_amt * COALESCE(pd.margin_rate, 25) / 100.0
+                       ), 0) AS profit
+                FROM hourly_sales_detail hsd
+                LEFT JOIN products p ON hsd.item_cd = p.item_cd
+                LEFT JOIN product_details pd ON hsd.item_cd = pd.item_cd
+                LEFT JOIN mid_categories mc ON p.mid_cd = mc.mid_cd
+                WHERE hsd.sales_date >= date('now', 'start of month')
+                GROUP BY COALESCE(p.mid_cd, '기타')
+                HAVING profit > 0
+                ORDER BY profit DESC
+            """).fetchall()
+            if not rows:
+                rows = conn.execute("""
+                    SELECT COALESCE(p.mid_cd, '기타') AS mid_cd,
+                           COALESCE(mc.mid_nm, p.mid_cd, '기타') AS mid_nm,
+                           COALESCE(SUM(ds.sale_qty * COALESCE(pd.sell_price, 0)), 0) AS total_sales,
+                           COALESCE(SUM(
+                               ds.sale_qty * COALESCE(pd.sell_price, 0)
+                               * COALESCE(pd.margin_rate, 25) / 100.0
+                           ), 0) AS profit
+                    FROM daily_sales ds
+                    LEFT JOIN products p ON ds.item_cd = p.item_cd
+                    LEFT JOIN product_details pd ON ds.item_cd = pd.item_cd
+                    LEFT JOIN mid_categories mc ON p.mid_cd = mc.mid_cd
+                    WHERE ds.sales_date >= date('now', 'start of month')
+                    GROUP BY COALESCE(p.mid_cd, '기타')
+                    HAVING profit > 0
+                    ORDER BY profit DESC
+                """).fetchall()
+            for r in rows:
+                profit = int(r[3])
+                total_profit += profit
+                items.append({
+                    "mid_cd": r[0],
+                    "name": r[1],
+                    "sales": int(r[2]),
+                    "profit": profit,
+                })
+        finally:
+            conn.close()
+    except Exception as e:
+        logger.warning("순수익 비중 쿼리 실패: %s", e)
+
+    # 비중(%) 계산
+    for item in items:
+        item["pct"] = round(item["profit"] / total_profit * 100, 1) if total_profit > 0 else 0
+
+    return jsonify({"items": items[:30], "total_profit": total_profit})
+
+
+@home_bp.route("/analytics/weekly", methods=["GET"])
+@login_required
+def analytics_weekly():
+    """이번주 현황 API (점주 대시보드용)"""
+    store_id = session.get("store_id") or request.args.get("store_id")
+    if store_id:
+        svc = DashboardService(store_id=store_id)
+    else:
+        db_path = current_app.config.get("DB_PATH")
+        svc = DashboardService(db_path=db_path)
+
+    # 직접 쿼리: 날짜별 매출액 + 요일 라벨
+    day_labels = ["월", "화", "수", "목", "금", "토", "일"]
+    daily_sales = []
+    days = []
+    date_range = ""
+    total_sales = 0
+    total_ordered = 0
+    total_waste = 0
+
+    try:
+        conn = _get_summary_conn(store_id)
+        try:
+            # 7일 매출 (hourly_sales_detail.sale_amt 실제 매출 우선, 폴백: qty*price)
+            sales_rows = conn.execute("""
+                SELECT sales_date, COALESCE(SUM(sale_amt), 0)
+                FROM hourly_sales_detail
+                WHERE sales_date >= date('now', '-7 days')
+                GROUP BY sales_date
+                ORDER BY sales_date ASC
+            """).fetchall()
+            if not sales_rows:
+                sales_rows = conn.execute("""
+                    SELECT ds.sales_date, COALESCE(SUM(ds.sale_qty * COALESCE(pd.sell_price, 0)), 0)
+                    FROM daily_sales ds
+                    LEFT JOIN product_details pd ON ds.item_cd = pd.item_cd
+                    WHERE ds.sales_date >= date('now', '-7 days')
+                    GROUP BY ds.sales_date
+                    ORDER BY ds.sales_date ASC
+                """).fetchall()
+
+            for r in sales_rows:
+                daily_sales.append(r[1])
+                try:
+                    dt = datetime.strptime(r[0], "%Y-%m-%d")
+                    days.append(day_labels[dt.weekday()])
+                except Exception:
+                    days.append("")
+
+            if sales_rows and len(sales_rows) >= 2:
+                try:
+                    start = datetime.strptime(sales_rows[0][0], "%Y-%m-%d")
+                    end = datetime.strptime(sales_rows[-1][0], "%Y-%m-%d")
+                    date_range = "%d월 %d일 - %d월 %d일" % (
+                        start.month, start.day, end.month, end.day
+                    )
+                except Exception:
+                    pass
+
+            total_sales = sum(daily_sales)
+
+            # 발주 건수
+            order_row = conn.execute("""
+                SELECT COALESCE(SUM(order_qty), 0), COUNT(*)
+                FROM order_tracking
+                WHERE order_date >= date('now', '-7 days')
+            """).fetchone()
+            total_ordered = order_row[1] if order_row else 0
+
+            # 폐기 건수
+            waste_row = conn.execute("""
+                SELECT COALESCE(SUM(disuse_qty), 0), COUNT(*)
+                FROM daily_sales
+                WHERE sales_date >= date('now', '-7 days')
+                  AND disuse_qty > 0
+            """).fetchone()
+            total_waste = waste_row[1] if waste_row else 0
+        finally:
+            conn.close()
+    except Exception as e:
+        logger.warning("주간 분석 쿼리 실패: %s", e)
+
+    avg_daily = int(total_sales / len(daily_sales)) if daily_sales else 0
+
+    # 발주 적중률
+    order_accuracy = 0
+    if total_ordered > 0:
+        order_accuracy = round(
+            max(0, min(100, (1 - total_waste / max(total_ordered, 1)) * 100)), 1
+        )
+
+    # 시간대별 매출 (hourly_sales_detail 실제 매출, 당일)
+    hourly_data = []
+    try:
+        h_conn = _get_summary_conn(store_id)
+        try:
+            today_str = datetime.now().strftime("%Y-%m-%d")
+            h_rows = h_conn.execute("""
+                SELECT hour, COALESCE(SUM(sale_amt), 0)
+                FROM hourly_sales_detail
+                WHERE sales_date = ?
+                GROUP BY hour
+                ORDER BY hour ASC
+            """, (today_str,)).fetchall()
+            hourly_map = {r[0]: r[1] for r in h_rows}
+            for h in range(24):
+                hourly_data.append(hourly_map.get(h, 0))
+        finally:
+            h_conn.close()
+    except Exception as e:
+        logger.warning("시간대별 매출 조회 실패: %s", e)
+        hourly_data = [0] * 24
+
+    return jsonify({
+        "daily_sales": daily_sales,
+        "days": days,
+        "date_range": date_range,
+        "order_accuracy": order_accuracy,
+        "waste_saved": total_waste,
+        "waste_saved_diff": 0,
+        "total_sales": total_sales,
+        "avg_daily_sales": avg_daily,
+        "order_count": total_ordered,
+        "waste_count": total_waste,
+        "hourly_sales": hourly_data,
+    })
+
+
+def _get_summary_conn(store_id):
+    """매장 DB 연결 반환 (summary/weekly API용)"""
+    if store_id:
+        try:
+            from src.infrastructure.database.connection import attach_common_with_views
+            conn = DBRouter.get_store_connection(store_id)
+            return attach_common_with_views(conn, store_id)
+        except Exception:
+            pass
+    db_path = current_app.config.get("DB_PATH")
+    if db_path:
+        return sqlite3.connect(db_path, timeout=10)
+    return DBRouter.get_connection("store")
 
 
 def _get_scheduler_status(project_root):

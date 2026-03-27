@@ -30,7 +30,7 @@ from webdriver_manager.chrome import ChromeDriverManager
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from src.utils.timeout_handler import OperationTimer, wait_with_timeout, log_timeout_error, DEFAULT_TIMEOUT
 from src.utils.logger import get_logger
-from src.settings.constants import DEFAULT_STORE_ID
+from src.settings.constants import DEFAULT_STORE_ID, USE_DIRECT_API, DIRECT_API_CONCURRENCY, DIRECT_API_TIMEOUT_MS, DIRECT_API_DELAY_MS
 
 logger = get_logger(__name__)
 
@@ -52,6 +52,7 @@ class SalesAnalyzer:
         self.sales_data: List[Any] = []
         self.mid_categories: List[Dict[str, Any]] = []  # 중분류 목록
         self.weather_data: Optional[Dict[str, Any]] = None  # 날씨 정보
+        self._direct_sales_fetcher = None  # Direct API 매출 수집기
 
     def _load_credentials(self, store_id: str) -> tuple:
         """점포별 BGF 로그인 정보 로드
@@ -59,6 +60,9 @@ class SalesAnalyzer:
         환경변수에서 점포별 인증 정보를 로드합니다.
         - BGF_USER_ID_{store_id}
         - BGF_PASSWORD_{store_id}
+
+        .env 파일이 프로세스 시작 후 변경된 경우를 대비하여
+        환경변수가 없으면 .env를 재로드합니다.
 
         Args:
             store_id: 점포 코드
@@ -69,30 +73,30 @@ class SalesAnalyzer:
         Raises:
             ValueError: 환경변수가 설정되지 않은 경우
         """
+        from src.config.store_config import StoreConfigLoader
+
         try:
-            from src.config.store_config import StoreConfigLoader
             loader = StoreConfigLoader()
             config = loader.get_store_config(store_id)
             logger.info(f"[{store_id}] 점포 설정 로드: {config.store_name}")
             return config.bgf_user_id, config.bgf_password
-        except ValueError as e:
-            # StoreConfigLoader가 실패한 경우, 레거시 환경변수 시도
-            logger.debug(f"[{store_id}] 점포별 환경변수 로드 실패: {e}")
+        except ValueError:
+            # 환경변수 없음 → .env 재로드 후 재시도
+            logger.info(f"[{store_id}] 환경변수 미발견, .env 재로드 시도")
+            env_path = Path(__file__).parent.parent / ".env"
+            load_dotenv(env_path, override=True)
 
-            # 레거시 환경변수 (BGF_USER_ID, BGF_PASSWORD) 시도
-            user_id = os.environ.get("BGF_USER_ID") or ""
-            password = os.environ.get("BGF_PASSWORD") or ""
-
-            if not user_id or not password:
+            try:
+                config = loader.get_store_config(store_id)
+                logger.info(f"[{store_id}] .env 재로드 후 점포 설정 로드 성공: {config.store_name}")
+                return config.bgf_user_id, config.bgf_password
+            except ValueError:
                 raise ValueError(
                     f"점포 {store_id}의 BGF 로그인 정보가 없습니다.\n"
                     ".env 파일에 다음을 추가하세요:\n"
                     f"BGF_USER_ID_{store_id}=your_user_id\n"
                     f"BGF_PASSWORD_{store_id}=your_password"
                 )
-
-            logger.warning(f"[{store_id}] 레거시 환경변수 사용 (BGF_USER_ID/BGF_PASSWORD)")
-            return user_id, password
 
     def setup_driver(self) -> None:
         """크롬 드라이버 설정 (자동화 감지 우회 포함)"""
@@ -507,8 +511,9 @@ class SalesAnalyzer:
                                 '', 'fn_callback', false
                             );
 
-                            // ds_weatherTomorrow에서 날짜별 최고기온 추출
+                            // ds_weatherTomorrow에서 날짜별 최고기온+강수 추출
                             var dsTmr = topForm.ds_weatherTomorrow;
+                            result.forecast_precipitation = {};
                             if (dsTmr && dsTmr.getRowCount && dsTmr.getRowCount() > 0) {
                                 var today = new Date().toISOString().substring(0, 10);
                                 for (var r = 0; r < dsTmr.getRowCount(); r++) {
@@ -521,10 +526,10 @@ class SalesAnalyzer:
                                     // 오늘 제외 (실측 사용)
                                     if (ymdStr <= today) continue;
 
+                                    // 최고기온 (Decimal .hi 파싱)
                                     var highest = dsTmr.getColumn(r, 'HIGHEST_TMPT');
                                     var temp = null;
                                     if (highest !== null && highest !== undefined) {
-                                        // 넥사크로 Decimal 객체: .hi에 정수값
                                         if (typeof highest === 'object' && highest.hi !== undefined) {
                                             temp = highest.hi;
                                         } else {
@@ -534,6 +539,41 @@ class SalesAnalyzer:
                                     if (temp !== null && !isNaN(temp)) {
                                         result.forecast_daily[ymdStr] = temp;
                                     }
+
+                                    // 강수확률 (Decimal .hi 파싱)
+                                    var rainRateRaw = dsTmr.getColumn(r, 'RAIN_RATE');
+                                    var rainRate = null;
+                                    if (rainRateRaw !== null && rainRateRaw !== undefined) {
+                                        if (typeof rainRateRaw === 'object' && rainRateRaw.hi !== undefined) {
+                                            rainRate = rainRateRaw.hi;
+                                        } else {
+                                            rainRate = parseFloat(rainRateRaw);
+                                        }
+                                    }
+
+                                    // 강수량 (Decimal .hi 파싱)
+                                    var rainQtyRaw = dsTmr.getColumn(r, 'RAIN_QTY');
+                                    var rainQty = null;
+                                    if (rainQtyRaw !== null && rainQtyRaw !== undefined) {
+                                        if (typeof rainQtyRaw === 'object' && rainQtyRaw.hi !== undefined) {
+                                            rainQty = rainQtyRaw.hi;
+                                        } else {
+                                            rainQty = parseFloat(rainQtyRaw);
+                                        }
+                                    }
+
+                                    // 강수유형명 + 날씨설명 (문자열)
+                                    var rainTyNm = dsTmr.getColumn(r, 'RAIN_TY_NM') || '';
+                                    var weatherCdNm = dsTmr.getColumn(r, 'WEATHER_CD_NM') || '';
+                                    var isSnow = (rainTyNm.indexOf('눈') >= 0) || (weatherCdNm.indexOf('눈') >= 0);
+
+                                    result.forecast_precipitation[ymdStr] = {
+                                        rain_rate: rainRate,
+                                        rain_qty: rainQty,
+                                        rain_type_nm: rainTyNm.trim(),
+                                        weather_cd_nm: weatherCdNm.trim(),
+                                        is_snow: isSnow
+                                    };
                                 }
                                 result.forecast_source = 'ds_weatherTomorrow';
                                 result.forecast_rows = dsTmr.getRowCount();
@@ -562,7 +602,18 @@ class SalesAnalyzer:
                 forecast_daily = weather_info.get("forecast_daily", {})
                 if forecast_daily:
                     logger.info(f"예보 최고기온: {forecast_daily}")
-                elif weather_info.get('forecast_error'):
+
+                forecast_precip = weather_info.get("forecast_precipitation", {})
+                if forecast_precip:
+                    for fp_date, fp_data in forecast_precip.items():
+                        logger.info(
+                            f"예보 강수: {fp_date} 확률={fp_data.get('rain_rate')}% "
+                            f"강수량={fp_data.get('rain_qty')}mm "
+                            f"눈={fp_data.get('is_snow')} "
+                            f"날씨={fp_data.get('weather_cd_nm')}"
+                        )
+
+                if weather_info.get('forecast_error'):
                     logger.debug(f"예보 수집 오류: {weather_info['forecast_error']}")
 
                 return weather_info
@@ -1138,9 +1189,107 @@ class SalesAnalyzer:
             logger.error(f"상세 데이터 조회 실패: {e}")
             return []
 
+    def _init_direct_sales(self) -> bool:
+        """Direct Sales API 수집기 초기화
+
+        Returns:
+            초기화 성공 여부
+        """
+        if self._direct_sales_fetcher:
+            return True
+
+        if not USE_DIRECT_API or not self.driver:
+            return False
+
+        try:
+            from src.collectors.direct_sales_fetcher import DirectSalesFetcher
+            self._direct_sales_fetcher = DirectSalesFetcher(
+                driver=self.driver,
+                concurrency=DIRECT_API_CONCURRENCY,
+                timeout_ms=DIRECT_API_TIMEOUT_MS,
+            )
+            return True
+        except Exception as e:
+            logger.warning(f"Direct Sales 초기화 실패: {e}")
+            return False
+
+    def _ensure_direct_sales_templates(self) -> bool:
+        """Direct Sales 요청 템플릿 확보 (인터셉터 → Selenium 1회 트리거)
+
+        Returns:
+            템플릿 준비 완료 여부
+        """
+        if not self._direct_sales_fetcher:
+            return False
+
+        fetcher = self._direct_sales_fetcher
+
+        # 이미 템플릿이 있으면 스킵
+        if fetcher._search_template and fetcher._detail_template:
+            return True
+
+        # 인터셉터 설치
+        fetcher.install_interceptor()
+
+        # Selenium으로 1회 검색 트리거하여 selSearch 템플릿 캡처
+        if not fetcher._search_template:
+            logger.info("[DirectSales] selSearch 템플릿 캡처를 위한 검색 트리거")
+            # F_10 조회가 이미 수행되었다면 인터셉터에서 캡처됨
+            fetcher.capture_templates_from_interceptor()
+
+        # selDetailSearch 템플릿이 없으면 selSearch 템플릿에서 생성
+        if fetcher._search_template and not fetcher._detail_template:
+            logger.info("[DirectSales] selSearch 템플릿에서 selDetailSearch 템플릿 생성")
+            fetcher._detail_template = fetcher._build_detail_template_from_search(
+                fetcher._search_template
+            )
+
+        has_templates = bool(fetcher._search_template and fetcher._detail_template)
+        if has_templates:
+            logger.info("[DirectSales] 템플릿 준비 완료")
+        else:
+            logger.warning("[DirectSales] 템플릿 준비 실패")
+
+        return has_templates
+
+    def collect_all_mid_category_data_via_api(self, target_date: str) -> Optional[List[Dict[str, Any]]]:
+        """
+        Direct API로 모든 중분류 매출 데이터 수집
+
+        Args:
+            target_date: YYYYMMDD 형식 날짜
+
+        Returns:
+            전체 상품 데이터 리스트 또는 None (실패 시)
+        """
+        if not self._init_direct_sales():
+            return None
+
+        if not self._ensure_direct_sales_templates():
+            return None
+
+        try:
+            from src.collectors.direct_sales_fetcher import DIRECT_API_DELAY_MS as _
+        except ImportError:
+            pass
+
+        fetcher = self._direct_sales_fetcher
+        all_data = fetcher.collect_all(target_date)
+
+        if all_data:
+            logger.info(f"[DirectSales] API 수집 완료: {len(all_data)}개 상품")
+            self.sales_data = all_data
+            return all_data
+
+        logger.warning("[DirectSales] API 수집 실패 → Selenium 폴백")
+        return None
+
     def collect_all_mid_category_data(self, target_date: Optional[str] = None) -> List[Dict[str, Any]]:
         """
         모든 중분류의 상품 데이터 수집
+
+        USE_DIRECT_API=True면 Direct API를 먼저 시도하고,
+        실패 시 기존 Selenium 방식으로 폴백합니다.
 
         Args:
             target_date: 수집 대상 날짜 (YYYYMMDD 형식, 예: "20260124")
@@ -1153,7 +1302,49 @@ class SalesAnalyzer:
         if target_date:
             logger.info(f"대상 날짜: {target_date}")
 
-        # 0. 날짜 설정 (지정된 경우)
+        # Direct API 시도 (인터셉터 설치 → Selenium 검색으로 템플릿 캡처 → API 배치 조회)
+        if USE_DIRECT_API and target_date and self._init_direct_sales():
+            try:
+                fetcher = self._direct_sales_fetcher
+                fetcher.install_interceptor()
+
+                # Selenium으로 1회 검색 → 인터셉터가 selSearch body 캡처
+                self.set_date_and_search(target_date)
+                self.wait_for_dataset()
+
+                # 캡처된 템플릿 확보
+                fetcher.capture_templates_from_interceptor()
+
+                if fetcher._search_template and not fetcher._detail_template:
+                    fetcher._detail_template = fetcher._build_detail_template_from_search(
+                        fetcher._search_template
+                    )
+
+                if fetcher._search_template and fetcher._detail_template:
+                    # dsList는 이미 Selenium 검색으로 로딩됨 → 넥사크로에서 직접 추출
+                    categories = self.get_all_mid_categories()
+                    if categories:
+                        # API로 한 번에 dsList 조회 (이미 로딩됨, mid_cd 목록만 필요)
+                        cat_dicts = [{'MID_CD': c['MID_CD'], 'MID_NM': c.get('MID_NM', '')}
+                                     for c in categories]
+                        all_data = fetcher.fetch_all_categories_detail(
+                            target_date, cat_dicts, delay_ms=DIRECT_API_DELAY_MS
+                        )
+                        if all_data:
+                            logger.info(f"[DirectSales] API 수집 성공: {len(all_data)}개 상품")
+                            self.sales_data = all_data
+                            return all_data
+                        logger.warning("[DirectSales] API 배치 조회 실패 → Selenium 폴백")
+                    else:
+                        logger.warning("[DirectSales] 중분류 목록 없음 → Selenium 폴백")
+                else:
+                    logger.warning("[DirectSales] 템플릿 캡처 실패 → Selenium 폴백")
+            except Exception as e:
+                logger.warning(f"[DirectSales] API 수집 오류: {e} → Selenium 폴백")
+
+        # ── Selenium 폴백 ──
+
+        # 0. 날짜 설정 (지정된 경우, API에서 이미 수행되지 않은 경우)
         if target_date:
             self.set_date_and_search(target_date)
             # 데이터 로딩 대기

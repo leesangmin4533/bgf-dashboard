@@ -16,7 +16,7 @@ logger = get_logger(__name__)
 
 # DB 경로
 _DATA_DIR = Path(__file__).parent.parent.parent.parent / "data"
-_LEGACY_DB_PATH = str(_DATA_DIR / "bgf_sales.db")
+_LEGACY_DB_PATH = str(_DATA_DIR / "bgf_sales.db")  # deprecated: resolve_db_path() 사용 권장
 _COMMON_DB_PATH = str(_DATA_DIR / "common.db")
 
 
@@ -169,9 +169,72 @@ class MLDataPipeline:
         finally:
             conn.close()
 
+    def get_batch_daily_stats(
+        self, item_codes: List[str], days: int = 90
+    ) -> Dict[str, List[Dict[str, Any]]]:
+        """
+        여러 상품의 일별 통계를 한 번의 DB 쿼리로 일괄 조회.
+
+        get_item_daily_stats를 상품별로 호출하면 ~1,967회 conn open/close가
+        발생하므로, 배치로 한 번에 가져와 dict로 반환한다.
+
+        Args:
+            item_codes: 상품코드 리스트
+            days: 조회 기간 (일)
+
+        Returns:
+            {item_cd: [일별 판매 데이터(보간 완료)]} 딕셔너리
+        """
+        if not item_codes:
+            return {}
+
+        conn = self._get_conn()
+        try:
+            cursor = conn.cursor()
+            placeholders = ",".join("?" * len(item_codes))
+
+            if self._use_split_db:
+                cursor.execute(f"""
+                    SELECT item_cd, sales_date, sale_qty, stock_qty, buy_qty, mid_cd
+                    FROM daily_sales
+                    WHERE item_cd IN ({placeholders})
+                      AND sales_date >= date('now', ?)
+                    ORDER BY item_cd, sales_date
+                """, (*item_codes, f'-{days} days'))
+            else:
+                sf, sp = store_filter("", self.store_id)
+                cursor.execute(f"""
+                    SELECT item_cd, sales_date, sale_qty, stock_qty, buy_qty, mid_cd
+                    FROM daily_sales
+                    WHERE item_cd IN ({placeholders})
+                      AND sales_date >= date('now', ?)
+                      {sf}
+                    ORDER BY item_cd, sales_date
+                """, (*item_codes, f'-{days} days') + sp)
+
+            # 상품별로 그룹핑
+            grouped: Dict[str, List[Dict[str, Any]]] = {}
+            for row in cursor.fetchall():
+                d = dict(row)
+                icd = d.pop("item_cd")
+                grouped.setdefault(icd, []).append(d)
+
+            # 상품별 날짜 보간
+            result: Dict[str, List[Dict[str, Any]]] = {}
+            for icd, rows in grouped.items():
+                result[icd] = self._fill_missing_dates(rows)
+
+            return result
+        except Exception as e:
+            logger.warning(f"배치 일별 통계 조회 실패: {e}")
+            return {}
+        finally:
+            conn.close()
+
     def get_external_factors(self, start_date: str, end_date: str) -> Dict[str, Dict[str, Any]]:
         """
         외부 요인 데이터 조회 (날짜별) — common.db에서 조회
+        매장별 날씨 + 공통 캘린더 모두 반환 (store_id=self.store_id OR store_id='')
 
         Args:
             start_date: 시작일 (YYYY-MM-DD)
@@ -185,11 +248,13 @@ class MLDataPipeline:
         factors = {}
         try:
             cursor = conn.cursor()
+            sid = self.store_id or ''
             cursor.execute("""
                 SELECT factor_date, factor_key, factor_value
                 FROM external_factors
                 WHERE factor_date BETWEEN ? AND ?
-            """, (start_date, end_date))
+                      AND (store_id = ? OR store_id = '')
+            """, (start_date, end_date, sid))
 
             for row in cursor.fetchall():
                 d = row['factor_date']

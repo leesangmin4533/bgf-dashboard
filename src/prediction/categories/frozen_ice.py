@@ -5,7 +5,7 @@
 - 계절 가중치: 여름(6-8월) 수요 급증, 겨울(12-2월) 수요 감소
 - 요일 패턴: 주말 증가 (토 1.30배, 일 1.40배)
 - 안전재고: 여름 2.0일, 겨울 1.0일, 그 외 1.5일
-- 상한선: 일평균 × 7.0일 (냉동고 공간 제약)
+- 상한선: 일평균 × 14.0일 (대형단위 특성 반영, frozen-reorder PDCA)
 
 공식: 일평균 × 요일계수 × 계절계수 (예측), 일평균 × 안전재고일수 (안전재고)
 """
@@ -65,25 +65,34 @@ FROZEN_SAFETY_CONFIG = {
 }
 
 # 동적 안전재고 CONFIG
+# frozen-reorder PDCA: analysis_days 30→90, min_data_days 14→7, max_stock_days 7→14
 FROZEN_ICE_DYNAMIC_SAFETY_CONFIG = {
     "target_categories": ["021", "034", "100"],
     "enabled": True,
-    "analysis_days": 30,
-    "min_data_days": 14,
+    "analysis_days": 90,             # 30→90: 간헐판매 패턴 포착 (주 1~2회 판매)
+    "min_data_days": 7,              # 14→7: 90일 중 7일만 판매해도 분석 가능
     "default_safety_days": 1.5,
     "max_stock_enabled": True,
-    "max_stock_days": 7.0,
+    "max_stock_days": 14.0,          # 7→14: 대형단위 특성 반영 (24개입 ≈ 80일분)
     "seasonal_enabled": True,
 }
 
+# 냉동 재발주 바이패스 설정 (frozen-reorder PDCA)
+# round_surplus_zero에 의한 대형단위 품목의 구조적 발주 차단 해소
+FROZEN_REORDER_CONFIG = {
+    "enabled": True,                  # 기능 토글
+    "min_display_qty": 3,             # 최소진열수량 (stock ≤ 이 값이면 바이패스 후보)
+    "large_unit_threshold": 12,       # 대형단위 임계값 (order_unit ≥ 이 값)
+    "min_sales_for_reorder": 5,       # 90일 최소 판매수량
+    "max_order_boxes": 1,             # 바이패스 시 최대 발주 박스 수
+    "sales_lookup_days": 90,          # 판매이력 조회 기간
+}
 
-def _get_db_path() -> str:
-    """DB 경로 반환
 
-    Returns:
-        bgf_sales.db 파일의 절대 경로 문자열
-    """
-    return str(Path(__file__).parent.parent.parent.parent / "data" / "bgf_sales.db")
+def _get_db_path(store_id: str = None) -> str:
+    """DB 경로 반환"""
+    from src.infrastructure.database.connection import resolve_db_path
+    return resolve_db_path(store_id=store_id)
 
 
 @dataclass
@@ -154,7 +163,7 @@ def _learn_weekday_pattern(mid_cd: str, db_path: str = None, min_data_days: int 
         {0: coef, 1: coef, ..., 6: coef} Python weekday 순서 dict
     """
     if db_path is None:
-        db_path = _get_db_path()
+        db_path = _get_db_path(store_id)
 
     try:
         conn = sqlite3.connect(db_path, timeout=30)
@@ -249,7 +258,7 @@ def _learn_seasonal_pattern(mid_cd: str, db_path: str = None, store_id: Optional
         {1: coef, 2: coef, ..., 12: coef} 월별 계절 계수 dict
     """
     if db_path is None:
-        db_path = _get_db_path()
+        db_path = _get_db_path(store_id)
 
     try:
         conn = sqlite3.connect(db_path, timeout=30)
@@ -374,7 +383,7 @@ def analyze_frozen_ice_pattern(
     config = FROZEN_ICE_DYNAMIC_SAFETY_CONFIG
 
     if db_path is None:
-        db_path = _get_db_path()
+        db_path = _get_db_path(store_id)
 
     now = datetime.now()
     order_weekday = now.weekday()  # 0=월, 6=일
@@ -468,6 +477,73 @@ def analyze_frozen_ice_pattern(
         skip_reason=skip_reason,
         final_safety_stock=round(safety_stock, 2),
     )
+
+
+def should_bypass_frozen_surplus_zero(
+    item_cd: str,
+    mid_cd: str,
+    current_stock: int,
+    order_unit_qty: int,
+    store_id: str = None
+) -> bool:
+    """냉동/아이스 대형단위 surplus_zero 바이패스 판정
+
+    round_surplus_zero에 의해 대형단위(24~40개입) 냉동 품목이
+    구조적으로 영구 차단되는 문제를 해소한다.
+
+    바이패스 조건 (모두 충족 시 True):
+    1. FROZEN_REORDER_CONFIG["enabled"] == True
+    2. mid_cd in FROZEN_ICE_CATEGORIES (021, 034, 100)
+    3. current_stock <= min_display_qty (3)
+    4. order_unit_qty >= large_unit_threshold (12)
+    5. 90일 판매실적 >= min_sales_for_reorder (5)
+
+    Args:
+        item_cd: 상품코드
+        mid_cd: 중분류 코드
+        current_stock: 현재 재고
+        order_unit_qty: 발주단위
+        store_id: 매장 ID
+
+    Returns:
+        True이면 surplus_zero 우회 허용
+    """
+    config = FROZEN_REORDER_CONFIG
+    if not config["enabled"]:
+        return False
+    if mid_cd not in FROZEN_ICE_CATEGORIES:
+        return False
+    if current_stock > config["min_display_qty"]:
+        return False
+    if order_unit_qty < config["large_unit_threshold"]:
+        return False
+
+    # 90일 판매이력 조회
+    try:
+        db_path = _get_db_path(store_id)
+        conn = sqlite3.connect(db_path, timeout=30)
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT COALESCE(SUM(sale_qty), 0)
+            FROM daily_sales
+            WHERE item_cd = ?
+            AND sales_date >= date('now', '-' || ? || ' days')
+        """, (item_cd, config["sales_lookup_days"]))
+        sales_90d = cursor.fetchone()[0] or 0
+        conn.close()
+    except Exception as e:
+        logger.warning(f"[FROZEN_REORDER] DB 조회 실패: {item_cd}: {e}")
+        return False
+
+    if sales_90d < config["min_sales_for_reorder"]:
+        return False
+
+    logger.info(
+        f"[FROZEN_REORDER] bypass 허용: {item_cd} "
+        f"mid={mid_cd} stock={current_stock} unit={order_unit_qty} "
+        f"sales_90d={sales_90d}"
+    )
+    return True
 
 
 def calculate_frozen_ice_dynamic_safety(

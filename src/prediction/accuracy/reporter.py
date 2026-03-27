@@ -359,7 +359,7 @@ def run_daily_accuracy_report() -> Dict[str, Any]:
             try:
                 from src.notification.kakao_notifier import KakaoNotifier, DEFAULT_REST_API_KEY
                 notifier = KakaoNotifier(DEFAULT_REST_API_KEY)
-                if notifier.access_token:
+                if notifier.ensure_valid_token():
                     message = reporter.format_for_kakao(report)
                     notifier.send_message(message)
                     kakao_sent = True
@@ -392,7 +392,7 @@ def run_weekly_accuracy_report() -> Dict[str, Any]:
         try:
             from src.notification.kakao_notifier import KakaoNotifier, DEFAULT_REST_API_KEY
             notifier = KakaoNotifier(DEFAULT_REST_API_KEY)
-            if notifier.access_token:
+            if notifier.ensure_valid_token():
                 message = reporter.format_for_kakao(report)
                 notifier.send_message(message)
                 kakao_sent = True

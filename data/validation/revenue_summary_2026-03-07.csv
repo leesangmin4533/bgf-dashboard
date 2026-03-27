@@ -1,0 +1,4 @@
+﻿store_id,store_name,auto_start,analysis_days,before_data_days,after_data_days,before_daily_revenue,after_daily_revenue,before_monthly_revenue,after_monthly_revenue,revenue_change_pct,before_daily_waste,after_daily_waste,before_monthly_waste,after_monthly_waste,waste_saving_monthly,waste_saving_annual,before_waste_rate_pct,after_waste_rate_pct,waste_rate_change_pp,slip_monthly_wonga,before_daily_opp_loss,after_daily_opp_loss,opp_loss_change_pct,before_monthly_stockout,after_monthly_stockout
+46513,이천호반베르디움점,2026-01-26,40,145,66,1689477,1682204,50684315,50466123,-0.4,1743,13755,52278,412661,-360383,-4324596,0.103,0.818,0.715,741666,0,229336,0,0,2318
+46704,이천동양점,2026-02-24,11,176,35,2569464,2348390,77083935,70451709,-8.6,1271,9583,38144,287505,-249361,-2992332,0.049,0.408,0.359,272631,0,308424,0,0,2202
+47863,47863,2026-03-05,2,362,7,1399970,1517669,41999092,45530057,8.4,2547,3843,76400,115303,-38903,-466836,0.182,0.253,0.071,703131,0,0,0,0,0

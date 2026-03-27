@@ -13,6 +13,8 @@
 import logging
 import sys
 import io
+import threading
+import uuid
 from pathlib import Path
 from datetime import datetime, timedelta
 from logging.handlers import RotatingFileHandler
@@ -68,8 +70,57 @@ class SafeRotatingFileHandler(RotatingFileHandler):
                 self.stream = self._open()
 
 
+# ──────────────────────────────────────────────────────────────
+# Session ID — 세션별 로그 역추적용
+# ──────────────────────────────────────────────────────────────
+
+_session_ctx = threading.local()
+
+_NO_SESSION = "--------"
+
+
+def set_session_id(sid: str = None) -> str:
+    """세션 ID 설정. None이면 uuid4 hex 앞 8자리 자동 생성.
+
+    Args:
+        sid: 수동 지정할 세션 ID (8자 hex 권장). None이면 자동 생성.
+
+    Returns:
+        설정된 세션 ID
+    """
+    if sid is None:
+        sid = uuid.uuid4().hex[:8]
+    _session_ctx.sid = sid
+    return sid
+
+
+def get_session_id() -> str:
+    """현재 스레드의 세션 ID 반환. 미설정 시 '--------'."""
+    return getattr(_session_ctx, "sid", _NO_SESSION)
+
+
+def clear_session_id() -> None:
+    """세션 ID 초기화."""
+    _session_ctx.sid = _NO_SESSION
+
+
+class SessionFilter(logging.Filter):
+    """로그 레코드에 session_id 필드를 자동 주입하는 필터.
+
+    모든 핸들러 포맷에서 %(session_id)s 로 참조 가능.
+    set_session_id()가 호출되지 않았으면 '--------'이 삽입된다.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        record.session_id = get_session_id()
+        return True
+
+
+# ──────────────────────────────────────────────────────────────
 # 로그 포맷
-LOG_FORMAT = "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s"
+# ──────────────────────────────────────────────────────────────
+
+LOG_FORMAT = "%(asctime)s | %(levelname)-8s | %(session_id)s | %(name)s | %(message)s"
 LOG_FORMAT_SIMPLE = "%(asctime)s | %(levelname)-8s | %(message)s"
 DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 
@@ -117,6 +168,10 @@ def setup_logger(
 
     logger.setLevel(level)
 
+    # SessionFilter 추가 (핸들러 유무와 무관하게 항상)
+    if not any(isinstance(f, SessionFilter) for f in logger.filters):
+        logger.addFilter(SessionFilter())
+
     # 이미 핸들러가 있으면 스킵
     if logger.handlers:
         _configured_loggers.add(name)
@@ -160,6 +215,15 @@ def setup_logger(
         console_handler.setFormatter(simple_formatter)
         console_handler.setLevel(level)
         logger.addHandler(console_handler)
+
+    # 알림 핸들러 (ERROR 이상 → alerts.log + 선택적 Kakao)
+    try:
+        from src.utils.alerting import create_alerting_handler
+        alerting = create_alerting_handler()
+        alerting.setFormatter(formatter)
+        logger.addHandler(alerting)
+    except Exception:
+        pass  # 알림 핸들러 실패는 로깅에 영향 없음
 
     # 상위 로거로 전파 방지
     logger.propagate = False

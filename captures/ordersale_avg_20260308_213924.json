@@ -1,0 +1,134 @@
+{
+  "timestamp": "2026-03-08T21:39:01.036237",
+  "store_id": "46513",
+  "items": {
+    "8801043015653": {
+      "dsOrderSale": {
+        "columns": [
+          "ORD_YMD",
+          "JIP_ITEM_CD",
+          "ITEM_CD",
+          "ORD_QTY",
+          "BUY_QTY",
+          "SALE_QTY",
+          "DISUSE_QTY",
+          "SUM_UNIT_ID"
+        ],
+        "rowCount": 0,
+        "rows": []
+      },
+      "dsOrderSaleBind": {
+        "columns": [
+          "DAY1",
+          "DAY2",
+          "DAY3",
+          "DAY4",
+          "DAY5",
+          "DAY6",
+          "DAY7",
+          "DAY8",
+          "AVG"
+        ],
+        "columnCount": 9,
+        "rowCount": 0,
+        "rows": []
+      }
+    },
+    "8800279670889": {
+      "dsOrderSale": {
+        "columns": [
+          "ORD_YMD",
+          "JIP_ITEM_CD",
+          "ITEM_CD",
+          "ORD_QTY",
+          "BUY_QTY",
+          "SALE_QTY",
+          "DISUSE_QTY",
+          "SUM_UNIT_ID"
+        ],
+        "rowCount": 0,
+        "rows": []
+      },
+      "dsOrderSaleBind": {
+        "columns": [
+          "DAY1",
+          "DAY2",
+          "DAY3",
+          "DAY4",
+          "DAY5",
+          "DAY6",
+          "DAY7",
+          "DAY8",
+          "AVG"
+        ],
+        "columnCount": 9,
+        "rowCount": 0,
+        "rows": []
+      }
+    },
+    "0000088014463": {
+      "dsOrderSale": {
+        "columns": [
+          "ORD_YMD",
+          "JIP_ITEM_CD",
+          "ITEM_CD",
+          "ORD_QTY",
+          "BUY_QTY",
+          "SALE_QTY",
+          "DISUSE_QTY",
+          "SUM_UNIT_ID"
+        ],
+        "rowCount": 0,
+        "rows": []
+      },
+      "dsOrderSaleBind": {
+        "columns": [
+          "DAY1",
+          "DAY2",
+          "DAY3",
+          "DAY4",
+          "DAY5",
+          "DAY6",
+          "DAY7",
+          "DAY8",
+          "AVG"
+        ],
+        "columnCount": 9,
+        "rowCount": 0,
+        "rows": []
+      }
+    },
+    "8801056191115": {
+      "dsOrderSale": {
+        "columns": [
+          "ORD_YMD",
+          "JIP_ITEM_CD",
+          "ITEM_CD",
+          "ORD_QTY",
+          "BUY_QTY",
+          "SALE_QTY",
+          "DISUSE_QTY",
+          "SUM_UNIT_ID"
+        ],
+        "rowCount": 0,
+        "rows": []
+      },
+      "dsOrderSaleBind": {
+        "columns": [
+          "DAY1",
+          "DAY2",
+          "DAY3",
+          "DAY4",
+          "DAY5",
+          "DAY6",
+          "DAY7",
+          "DAY8",
+          "AVG"
+        ],
+        "columnCount": 9,
+        "rowCount": 0,
+        "rows": []
+      }
+    }
+  }
+}

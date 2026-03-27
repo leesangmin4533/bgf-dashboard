@@ -346,7 +346,7 @@ def np_db():
             week_no INTEGER NOT NULL,
             item_type TEXT NOT NULL,
             item_cd TEXT NOT NULL,
-            item_nm TEXT, small_nm TEXT, ord_pss_nm TEXT,
+            item_nm TEXT, small_nm TEXT, mid_cd TEXT DEFAULT '', ord_pss_nm TEXT,
             week_cont TEXT, ds_yn TEXT,
             is_ordered INTEGER DEFAULT 0,
             ordered_at TEXT,

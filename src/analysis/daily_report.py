@@ -188,8 +188,8 @@ class DailyReport:
         ]
 
     def _get_weather_info(self, target_date: str) -> Dict[str, Any]:
-        """날씨 정보"""
-        factors = self.factor_repo.get_factors(target_date, "weather")
+        """날씨 정보 (매장별 store_id 격리)"""
+        factors = self.factor_repo.get_factors(target_date, "weather", store_id=self.store_id or "")
 
         weather = {}
         for f in factors:

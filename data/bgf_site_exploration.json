@@ -1,0 +1,42 @@
+{
+  "timestamp": "2026-02-27T21:19:10.334206",
+  "menus": {
+    "STBJ000_M0": [],
+    "STJS000_M0": [],
+    "STGJ000_M0": [],
+    "STMB000_M0": [],
+    "STJK000_M0": [],
+    "STCM000_M0": [],
+    "STJJ000_M0": [],
+    "STMS000_M0": [],
+    "STON001_M0": [],
+    "STSE001_M0": []
+  },
+  "unknownScreens": [],
+  "screenAnalysis": {
+    "STBJ030_M0_existing": {
+      "name": "단품별 발주",
+      "datasets": [],
+      "grids": [],
+      "buttons": []
+    },
+    "STBJ070_M0_existing": {
+      "name": "발주현황조회",
+      "datasets": [],
+      "grids": [],
+      "buttons": []
+    },
+    "STMB011_M0_existing": {
+      "name": "중분류별 매출",
+      "datasets": [],
+      "grids": [],
+      "buttons": []
+    },
+    "STGJ010_M0_existing": {
+      "name": "센터매입",
+      "datasets": [],
+      "grids": [],
+      "buttons": []
+    }
+  }
+}

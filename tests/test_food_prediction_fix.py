@@ -460,15 +460,15 @@ class TestFoodExpirySafetyConfigUnified:
         from src.prediction.categories.food import FOOD_EXPIRY_SAFETY_CONFIG as food_fesc
         assert config_fesc is food_fesc
 
-    def test_ultra_short_safety_days_is_05(self):
-        """ultra_short safety_days가 0.5 (신 버전)인지 확인"""
+    def test_ultra_short_safety_days_is_07(self):
+        """ultra_short safety_days가 0.7 (gap 흡수 후)인지 확인"""
         from src.prediction.prediction_config import FOOD_EXPIRY_SAFETY_CONFIG
-        assert FOOD_EXPIRY_SAFETY_CONFIG["expiry_groups"]["ultra_short"]["safety_days"] == 0.5
+        assert FOOD_EXPIRY_SAFETY_CONFIG["expiry_groups"]["ultra_short"]["safety_days"] == 0.7
 
-    def test_short_safety_days_is_07(self):
-        """short safety_days가 0.7 (신 버전)인지 확인"""
+    def test_short_safety_days_is_08(self):
+        """short safety_days가 0.8 (gap 흡수 후)인지 확인"""
         from src.prediction.prediction_config import FOOD_EXPIRY_SAFETY_CONFIG
-        assert FOOD_EXPIRY_SAFETY_CONFIG["expiry_groups"]["short"]["safety_days"] == 0.7
+        assert FOOD_EXPIRY_SAFETY_CONFIG["expiry_groups"]["short"]["safety_days"] == 0.8
 
 
 # =============================================================================

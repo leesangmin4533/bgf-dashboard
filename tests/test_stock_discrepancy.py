@@ -417,6 +417,7 @@ class TestResolveStockAndPendingReturnValue:
         """캐시 히트 시 stock_source='cache' 반환"""
         from src.prediction.improved_predictor import ImprovedPredictor
         predictor = ImprovedPredictor.__new__(ImprovedPredictor)
+        predictor._ot_pending_cache = None  # 교차검증 비활성
 
         # _data 내부 저장소 모의 객체
         data = MagicMock()

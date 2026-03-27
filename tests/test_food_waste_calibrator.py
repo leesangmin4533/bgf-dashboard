@@ -105,21 +105,21 @@ class TestCalibrationParams:
     def test_get_default_params_dosirak(self):
         """도시락(001) 기본 파라미터: ultra_short"""
         params = get_default_params("001")
-        assert params.safety_days == 0.5
+        assert params.safety_days == 0.7  # 0.5→0.7 (need-qty-fix: gap 흡수)
         assert params.gap_coefficient == 0.4
         assert params.waste_buffer == 3
 
     def test_get_default_params_sandwich(self):
         """샌드위치(004) 기본 파라미터: short"""
         params = get_default_params("004")
-        assert params.safety_days == 0.7
+        assert params.safety_days == 0.8  # 0.7→0.8 (need-qty-fix: gap 흡수)
         assert params.gap_coefficient == 0.6
         assert params.waste_buffer == 3
 
     def test_get_default_params_bread(self):
         """빵(012) 기본 파라미터: short"""
         params = get_default_params("012")
-        assert params.safety_days == 0.7
+        assert params.safety_days == 0.8  # 0.7→0.8 (need-qty-fix: gap 흡수)
         assert params.gap_coefficient == 0.6
         assert params.waste_buffer == 3
 
@@ -172,7 +172,7 @@ class TestGetCalibratedParams:
     def test_effective_params_without_calibration(self, cal_db):
         """보정값이 없으면 기본값 반환"""
         result = get_effective_params("001", "", cal_db)
-        assert result.safety_days == 0.5  # 기본값
+        assert result.safety_days == 0.7  # 기본값 (0.5→0.7, need-qty-fix)
 
 
 # =============================================================================
@@ -194,7 +194,8 @@ class TestFoodWasteRateCalibrator:
         cal = FoodWasteRateCalibrator(db_path=cal_db)
         result = cal.calibrate()
 
-        r001 = [r for r in result["results"] if r["mid_cd"] == "001"]
+        # mid_cd 레벨 결과만 필터 (small_cd가 None인 것)
+        r001 = [r for r in result["results"] if r["mid_cd"] == "001" and not r.get("small_cd")]
         assert len(r001) == 1
         assert r001[0]["adjusted"] is False
 
@@ -205,7 +206,8 @@ class TestFoodWasteRateCalibrator:
         cal = FoodWasteRateCalibrator(db_path=cal_db)
         result = cal.calibrate()
 
-        r001 = [r for r in result["results"] if r["mid_cd"] == "001"]
+        # mid_cd 레벨 결과만 필터 (small_cd가 None인 것)
+        r001 = [r for r in result["results"] if r["mid_cd"] == "001" and not r.get("small_cd")]
         assert len(r001) == 1
         assert r001[0]["adjusted"] is True
         assert r001[0]["param_name"] == "safety_days"
@@ -218,7 +220,8 @@ class TestFoodWasteRateCalibrator:
         cal = FoodWasteRateCalibrator(db_path=cal_db)
         result = cal.calibrate()
 
-        r001 = [r for r in result["results"] if r["mid_cd"] == "001"]
+        # mid_cd 레벨 결과만 필터 (small_cd가 None인 것)
+        r001 = [r for r in result["results"] if r["mid_cd"] == "001" and not r.get("small_cd")]
         assert len(r001) == 1
         assert r001[0]["adjusted"] is True
         assert r001[0]["param_name"] == "safety_days"

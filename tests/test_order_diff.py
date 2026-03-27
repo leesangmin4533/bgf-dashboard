@@ -567,6 +567,59 @@ class TestOrderAnalysisRepository:
         assert a001["removal_count"] == 3
         assert a001["total_appearances"] == 4
 
+    def test_removal_stats_distinct_order_date(self, repo):
+        """이중 카운트 방지: 같은 order_date의 다른 receiving_date는 1건으로 집계"""
+        # 같은 order_date(2/15)에 receiving_date가 2개 → 1건으로 카운트
+        for recv_date in ["2026-02-15", "2026-02-16"]:
+            repo.save_diffs([{
+                "store_id": "46513",
+                "order_date": "2026-02-15",
+                "receiving_date": recv_date,
+                "item_cd": "DUP001", "item_nm": "이중카운트상품",
+                "mid_cd": "086", "diff_type": "removed",
+                "auto_order_qty": 3, "confirmed_order_qty": 0,
+            }])
+        # 다른 order_date(2/16)에도 2개
+        for recv_date in ["2026-02-16", "2026-02-17"]:
+            repo.save_diffs([{
+                "store_id": "46513",
+                "order_date": "2026-02-16",
+                "receiving_date": recv_date,
+                "item_cd": "DUP001", "item_nm": "이중카운트상품",
+                "mid_cd": "086", "diff_type": "removed",
+                "auto_order_qty": 3, "confirmed_order_qty": 0,
+            }])
+
+        stats = repo.get_item_removal_stats("46513", days=30)
+        dup = next(s for s in stats if s["item_cd"] == "DUP001")
+        # 4개 레코드이지만 DISTINCT order_date로 2건
+        assert dup["removal_count"] == 2
+        assert dup["total_appearances"] == 2
+
+    def test_removal_order_dates(self, repo):
+        """제거된 order_date 목록 조회"""
+        from datetime import datetime, timedelta
+        base = datetime.now()
+        dates_list = [
+            (base - timedelta(days=5)).strftime("%Y-%m-%d"),
+            (base - timedelta(days=3)).strftime("%Y-%m-%d"),
+            (base - timedelta(days=1)).strftime("%Y-%m-%d"),
+        ]
+        for od in dates_list:
+            repo.save_diffs([{
+                "store_id": "46513",
+                "order_date": od,
+                "receiving_date": od,
+                "item_cd": "RD001", "item_nm": "테스트",
+                "mid_cd": "086", "diff_type": "removed",
+                "auto_order_qty": 2, "confirmed_order_qty": 0,
+            }])
+
+        dates = repo.get_removal_order_dates("46513", days=30)
+        assert "RD001" in dates
+        assert len(dates["RD001"]) == 3
+        assert dates_list[0] in dates["RD001"]
+
     def test_item_addition_stats(self, repo):
         """상품별 추가 통계 조회"""
         for i in range(4):

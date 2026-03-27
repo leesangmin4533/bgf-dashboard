@@ -82,11 +82,18 @@ class WasteReportGenerator:
 
         wb = Workbook()
 
-        # 시트 생성
-        self._create_daily_detail_sheet(wb, target_date)
-        self._create_category_summary_sheet(wb, target_date)
-        self._create_weekly_trend_sheet(wb, target_date)
-        self._create_monthly_trend_sheet(wb, target_date)
+        # 시트 생성 (개별 시트 실패 시 나머지 계속 진행)
+        sheet_methods = [
+            ("일별 폐기 상세", self._create_daily_detail_sheet),
+            ("카테고리 집계", self._create_category_summary_sheet),
+            ("주간 트렌드", self._create_weekly_trend_sheet),
+            ("월간 트렌드", self._create_monthly_trend_sheet),
+        ]
+        for sheet_name, method in sheet_methods:
+            try:
+                method(wb, target_date)
+            except Exception as e:
+                logger.warning(f"시트 '{sheet_name}' 생성 실패 (계속 진행): {e}", exc_info=True)
 
         # 기본 시트 삭제 (Workbook 생성 시 자동으로 만들어진 빈 시트)
         if "Sheet" in wb.sheetnames:
@@ -648,7 +655,7 @@ def generate_waste_report(target_date: Optional[str] = None, store_id: Optional[
         generator = WasteReportGenerator(store_id=store_id)
         return generator.generate(target_date)
     except Exception as e:
-        logger.error(f"폐기 보고서 생성 실패: {e}")
+        logger.error(f"폐기 보고서 생성 실패: {e}", exc_info=True)
         return None
 
 

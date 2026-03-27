@@ -97,7 +97,8 @@ class FeatureCalculator:
 
     def __init__(self, db_path: Optional[str] = None, store_id: Optional[str] = None) -> None:
         if db_path is None:
-            db_path = Path(__file__).parent.parent.parent.parent / "data" / "bgf_sales.db"
+            from src.infrastructure.database.connection import resolve_db_path
+            db_path = resolve_db_path(store_id=store_id)
         self.db_path = str(db_path)
         self.store_id = store_id
 

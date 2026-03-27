@@ -1,0 +1,63 @@
+/* 서브탭 바 */
+.cat-subtab-bar {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+    border-bottom: 2px solid var(--border);
+    padding-bottom: 0;
+}
+
+.cat-subtab {
+    padding: 10px 20px;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 0.95rem;
+    font-weight: 500;
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -2px;
+    transition: all 0.2s;
+}
+
+.cat-subtab.active {
+    color: var(--primary);
+    border-bottom-color: var(--primary);
+}
+
+.cat-subtab:hover:not(.active) {
+    color: var(--text);
+    background: var(--bg-hover, rgba(255,255,255,0.05));
+}
+
+/* 서브탭 뱃지 */
+.cat-subtab-badge {
+    display: inline-block;
+    min-width: 18px;
+    height: 18px;
+    line-height: 18px;
+    text-align: center;
+    font-size: 0.7rem;
+    font-weight: 600;
+    background: var(--danger);
+    color: white;
+    border-radius: 9px;
+    margin-left: 6px;
+    padding: 0 5px;
+}
+
+/* Category 탭 뱃지 */
+.cat-tab-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    background: var(--danger);
+    color: white;
+    border-radius: 9px;
+    margin-left: 6px;
+    padding: 0 5px;
+}

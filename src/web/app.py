@@ -5,6 +5,7 @@ import sys
 from datetime import timedelta
 from pathlib import Path
 
+from dotenv import load_dotenv
 from flask import Flask, jsonify, request
 
 from src.utils.logger import get_logger
@@ -12,7 +13,11 @@ from src.utils.logger import get_logger
 logger = get_logger(__name__)
 
 PROJECT_ROOT = Path(__file__).parent.parent.parent
-DB_PATH = str(PROJECT_ROOT / "data" / "bgf_sales.db")
+
+# .env 파일에서 환경변수 로드 (ORDERFIT_SECRET_KEY 등)
+load_dotenv(PROJECT_ROOT / ".env")
+from src.infrastructure.database.connection import resolve_db_path
+DB_PATH = resolve_db_path()
 
 # PROJECT_ROOT가 sys.path에 있어야 from src.xxx import 가능
 _root_path = str(PROJECT_ROOT)

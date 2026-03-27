@@ -54,9 +54,10 @@ SOJU_SAFETY_CONFIG = {
 }
 
 
-def _get_db_path() -> str:
+def _get_db_path(store_id: str = None) -> str:
     """DB 경로 반환"""
-    return str(Path(__file__).parent.parent.parent.parent / "data" / "bgf_sales.db")
+    from src.infrastructure.database.connection import resolve_db_path
+    return resolve_db_path(store_id=store_id)
 
 
 @dataclass
@@ -152,7 +153,7 @@ def analyze_soju_pattern(
     config = SOJU_SAFETY_CONFIG
 
     if db_path is None:
-        db_path = _get_db_path()
+        db_path = _get_db_path(store_id)
 
     # 오늘 요일 (발주 기준)
     order_weekday = datetime.now().weekday()  # 0=월, 6=일

@@ -96,16 +96,38 @@ def login():
         logger.warning(f"[AUTH] 로그인 실패: {username} from {ip}")
         return jsonify({"error": "아이디 또는 비밀번호가 올바르지 않습니다.", "code": "INVALID_CREDENTIALS"}), 401
 
+    # 매장명 조회
+    store_name = user["store_id"]
+    try:
+        from src.infrastructure.database.connection import DBRouter
+        common_conn = DBRouter.get_common_connection()
+        try:
+            row = common_conn.execute(
+                "SELECT store_name FROM stores WHERE store_id = ?",
+                (user["store_id"],)
+            ).fetchone()
+            if row and row[0]:
+                store_name = row[0]
+        finally:
+            common_conn.close()
+    except Exception:
+        pass
+
     # 세션 생성
     session.permanent = True
     session["user_id"] = user["id"]
     session["username"] = user["username"]
     session["store_id"] = user["store_id"]
+    session["store_name"] = store_name
     session["role"] = user["role"]
     session["full_name"] = user.get("full_name") or user["username"]
+    # 온보딩 완료 사용자는 step을 세션에 복원 (미들웨어 리다이렉트 방지)
+    onb_step = user.get("onboarding_step", 0)
+    if onb_step and onb_step >= 5:
+        session["onboarding_step"] = onb_step
 
     repo.update_last_login(user["id"])
-    logger.info(f"[AUTH] 로그인 성공: {username} (role={user['role']}, store={user['store_id']})")
+    logger.info(f"[AUTH] 로그인 성공: {username} (role={user['role']}, store={store_name})")
 
     return jsonify({
         "message": "로그인 성공",
@@ -113,6 +135,7 @@ def login():
             "id": user["id"],
             "username": user["username"],
             "store_id": user["store_id"],
+            "store_name": store_name,
             "role": user["role"],
             "full_name": user.get("full_name") or user["username"],
         },
@@ -132,11 +155,31 @@ def logout():
 @login_required
 def get_session():
     """현재 세션 정보."""
+    # 매장명이 세션에 없으면 DB에서 조회
+    store_name = session.get("store_name")
+    if not store_name:
+        try:
+            from src.infrastructure.database.connection import DBRouter
+            common_conn = DBRouter.get_common_connection()
+            try:
+                row = common_conn.execute(
+                    "SELECT store_name FROM stores WHERE store_id = ?",
+                    (session["store_id"],)
+                ).fetchone()
+                if row and row[0]:
+                    store_name = row[0]
+                    session["store_name"] = store_name
+            finally:
+                common_conn.close()
+        except Exception:
+            store_name = session["store_id"]
+
     return jsonify({
         "user": {
             "id": session["user_id"],
             "username": session["username"],
             "store_id": session["store_id"],
+            "store_name": store_name or session["store_id"],
             "role": session["role"],
             "full_name": session.get("full_name", session["username"]),
         }

@@ -186,6 +186,10 @@ class OrderAnalysisRepository:
         if not items:
             return 0
 
+        # 날짜 포맷 통일 (YYYYMMDD → YYYY-MM-DD)
+        if len(order_date) == 8 and '-' not in order_date:
+            order_date = f"{order_date[:4]}-{order_date[4:6]}-{order_date[6:]}"
+
         conn = self.get_connection()
         try:
             now = self._now()
@@ -539,8 +543,9 @@ class OrderAnalysisRepository:
         try:
             cursor = conn.execute(
                 """SELECT item_cd, item_nm, mid_cd,
-                    SUM(CASE WHEN diff_type = 'removed' THEN 1 ELSE 0 END) as removal_count,
-                    COUNT(*) as total_appearances
+                    COUNT(DISTINCT CASE WHEN diff_type = 'removed'
+                        THEN order_date END) as removal_count,
+                    COUNT(DISTINCT order_date) as total_appearances
                 FROM order_diffs
                 WHERE store_id = ?
                     AND order_date >= date('now', ?)
@@ -551,6 +556,36 @@ class OrderAnalysisRepository:
                 (store_id, f"-{days} days"),
             )
             return [dict(row) for row in cursor.fetchall()]
+        finally:
+            conn.close()
+
+    def get_removal_order_dates(
+        self, store_id: str, days: int = 14
+    ) -> Dict[str, List[str]]:
+        """상품별 제거된 발주일 목록 (품절 필터용)
+
+        Returns:
+            {item_cd: [order_date, ...], ...}
+        """
+        conn = self.get_connection()
+        try:
+            cursor = conn.execute(
+                """SELECT item_cd, order_date
+                FROM order_diffs
+                WHERE store_id = ?
+                    AND order_date >= date('now', ?)
+                    AND diff_type = 'removed'
+                GROUP BY item_cd, order_date
+                ORDER BY item_cd, order_date""",
+                (store_id, f"-{days} days"),
+            )
+            result: Dict[str, List[str]] = {}
+            for row in cursor.fetchall():
+                ic = row["item_cd"]
+                if ic not in result:
+                    result[ic] = []
+                result[ic].append(row["order_date"])
+            return result
         finally:
             conn.close()
 

@@ -168,8 +168,9 @@ class ManualOrderDetector:
         item_nm = recv.get('item_nm', '')
         center_nm = recv.get('center_nm', '')
 
-        # 상품명 끝자리로 추론
-        delivery = get_delivery_type(item_nm)
+        # 상품명 끝자리로 추론 (item_cd 있으면 order_tracking 우선 조회)
+        item_cd = recv.get('item_cd', None)
+        delivery = get_delivery_type(item_nm, item_cd=item_cd)
         if delivery:
             return delivery
 

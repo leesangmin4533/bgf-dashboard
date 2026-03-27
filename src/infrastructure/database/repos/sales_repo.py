@@ -241,7 +241,7 @@ class SalesRepository(BaseRepository):
                     """
                     SELECT id, remaining_qty FROM order_tracking
                     WHERE item_cd = ? AND store_id = ?
-                    AND status IN ('ordered','arrived','selling')
+                    AND status IN ('ordered','arrived')
                     AND remaining_qty > 0
                     ORDER BY order_date ASC, id ASC
                     """,

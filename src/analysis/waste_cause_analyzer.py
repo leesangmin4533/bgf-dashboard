@@ -355,32 +355,34 @@ class WasteCauseAnalyzer:
         return ctx
 
     def _get_weather_context(self, waste_date: str) -> Optional[dict]:
-        """기온 데이터 조회 (실측 + 전일)"""
+        """기온 데이터 조회 (실측 + 전일, 매장별 store_id 격리)"""
         try:
             common_conn = DBRouter.get_common_connection()
-            # 당일 기온
+            # 당일 기온 (매장별)
             row = common_conn.execute("""
                 SELECT factor_value FROM external_factors
                 WHERE factor_date = ? AND factor_key IN ('temperature_forecast', 'temperature')
+                      AND store_id = ?
                 ORDER BY CASE factor_key
                     WHEN 'temperature_forecast' THEN 1
                     WHEN 'temperature' THEN 2
                 END
                 LIMIT 1
-            """, (waste_date,)).fetchone()
+            """, (waste_date, self.store_id)).fetchone()
             today_temp = float(row["factor_value"]) if row else None
 
-            # 전일 기온
+            # 전일 기온 (매장별)
             prev_date = (datetime.strptime(waste_date, "%Y-%m-%d") - timedelta(days=1)).strftime("%Y-%m-%d")
             row = common_conn.execute("""
                 SELECT factor_value FROM external_factors
                 WHERE factor_date = ? AND factor_key IN ('temperature_forecast', 'temperature')
+                      AND store_id = ?
                 ORDER BY CASE factor_key
                     WHEN 'temperature_forecast' THEN 1
                     WHEN 'temperature' THEN 2
                 END
                 LIMIT 1
-            """, (prev_date,)).fetchone()
+            """, (prev_date, self.store_id)).fetchone()
             prev_temp = float(row["factor_value"]) if row else None
             common_conn.close()
 
@@ -432,7 +434,7 @@ class WasteCauseAnalyzer:
             common_conn = DBRouter.get_common_connection()
             row = common_conn.execute("""
                 SELECT factor_value FROM external_factors
-                WHERE factor_date = ? AND factor_key = 'is_holiday'
+                WHERE factor_date = ? AND factor_key = 'is_holiday' AND store_id = ''
             """, (waste_date,)).fetchone()
             common_conn.close()
             if row:

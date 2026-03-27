@@ -70,7 +70,8 @@ class BaseReport:
 
     @staticmethod
     def _default_db_path() -> str:
-        return str(Path(__file__).parent.parent.parent / "data" / "bgf_sales.db")
+        from src.infrastructure.database.connection import resolve_db_path
+        return resolve_db_path()
 
     @staticmethod
     def _number_format(value) -> str:

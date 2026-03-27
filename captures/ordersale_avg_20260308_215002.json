@@ -1,0 +1,98 @@
+{
+  "timestamp": "2026-03-08T21:49:46.479213",
+  "store_id": "46513",
+  "items": {
+    "8800271904432": {
+      "dsItem": {
+        "rowCount": 1
+      },
+      "currentItem": {
+        "ITEM_CD": "",
+        "ITEM_NM": "",
+        "NOW_QTY": "",
+        "PYUN_QTY": "",
+        "ORD_UNIT_QTY": "",
+        "ORD_MUL_QTY": "",
+        "PITEM_ID": "",
+        "EXPIRE_DAY": "",
+        "MID_NM": ""
+      },
+      "dsOrderSale": {
+        "columns": [
+          "ORD_YMD",
+          "JIP_ITEM_CD",
+          "ITEM_CD",
+          "ORD_QTY",
+          "BUY_QTY",
+          "SALE_QTY",
+          "DISUSE_QTY",
+          "SUM_UNIT_ID"
+        ],
+        "rowCount": 0,
+        "rows": []
+      },
+      "dsOrderSaleBind": {
+        "columns": [
+          "DAY1",
+          "DAY2",
+          "DAY3",
+          "DAY4",
+          "DAY5",
+          "DAY6",
+          "DAY7",
+          "DAY8",
+          "AVG"
+        ],
+        "columnCount": 9,
+        "rowCount": 0,
+        "rows": []
+      }
+    },
+    "8800279675761": {
+      "dsItem": {
+        "rowCount": 1
+      },
+      "currentItem": {
+        "ITEM_CD": "",
+        "ITEM_NM": "",
+        "NOW_QTY": "",
+        "PYUN_QTY": "",
+        "ORD_UNIT_QTY": "",
+        "ORD_MUL_QTY": "",
+        "PITEM_ID": "",
+        "EXPIRE_DAY": "",
+        "MID_NM": ""
+      },
+      "dsOrderSale": {
+        "columns": [
+          "ORD_YMD",
+          "JIP_ITEM_CD",
+          "ITEM_CD",
+          "ORD_QTY",
+          "BUY_QTY",
+          "SALE_QTY",
+          "DISUSE_QTY",
+          "SUM_UNIT_ID"
+        ],
+        "rowCount": 0,
+        "rows": []
+      },
+      "dsOrderSaleBind": {
+        "columns": [
+          "DAY1",
+          "DAY2",
+          "DAY3",
+          "DAY4",
+          "DAY5",
+          "DAY6",
+          "DAY7",
+          "DAY8",
+          "AVG"
+        ],
+        "columnCount": 9,
+        "rowCount": 0,
+        "rows": []
+      }
+    }
+  }
+}

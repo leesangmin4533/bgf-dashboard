@@ -578,8 +578,180 @@ class WasteSlipCollector:
         return all_items
 
     # ================================================================
+    # Direct API 상세 품목 수집
+    # ================================================================
+
+    def _try_direct_api_details(
+        self, slip_list: List[Dict[str, Any]]
+    ) -> Optional[List[Dict[str, Any]]]:
+        """Direct API로 상세 품목 일괄 수집
+
+        첫 번째 전표는 팝업 열기를 통해 searchDetailType1 템플릿을 캡처하고,
+        이후 전표부터 Direct API로 조회합니다.
+
+        Args:
+            slip_list: 전표 헤더 목록
+
+        Returns:
+            성공 시 상세 품목 리스트, 실패 시 None (팝업 폴백)
+        """
+        if not slip_list:
+            return None
+
+        try:
+            from src.collectors.direct_frame_fetcher import (
+                DirectWasteSlipDetailFetcher,
+            )
+
+            fetcher = DirectWasteSlipDetailFetcher(self.driver)
+
+            # 먼저 기존 캡처에서 템플릿 찾기
+            if not fetcher.capture_template():
+                # 템플릿이 없으면 첫 번째 전표로 팝업을 열어 캡처 유도
+                logger.info(
+                    "[WasteSlipDetailAPI] 템플릿 미발견, "
+                    "첫 번째 전표 팝업으로 캡처 시도"
+                )
+                first_slip = slip_list[0]
+                first_items = self._trigger_first_popup_for_capture(first_slip)
+
+                # 캡처 재시도
+                if not fetcher.capture_template():
+                    logger.info(
+                        "[WasteSlipDetailAPI] 팝업 후에도 템플릿 캡처 실패"
+                    )
+                    return None
+
+                # 첫 번째 전표 품목은 팝업에서 이미 수집됨
+                if len(slip_list) == 1:
+                    # 전표가 1건뿐이면 팝업 결과 반환
+                    if first_items:
+                        logger.info(
+                            f"[WasteSlipDetailAPI] 전표 1건 팝업 수집: "
+                            f"{len(first_items)}건"
+                        )
+                        return first_items
+                    return None
+
+                # 나머지 전표는 Direct API로 조회
+                remaining_slips = slip_list[1:]
+                remaining_items = fetcher.fetch_all_slip_details(
+                    remaining_slips, delay=0.3
+                )
+
+                if remaining_items is not None:
+                    all_items = (first_items or []) + remaining_items
+                    logger.info(
+                        f"[WasteSlipDetailAPI] 혼합 수집 성공: "
+                        f"팝업 1건 + API {len(remaining_slips)}건 = "
+                        f"총 {len(all_items)}건 품목"
+                    )
+                    return all_items if all_items else None
+
+                return None
+
+            # 템플릿이 이미 캡처되어 있으면 전체 Direct API 조회
+            items = fetcher.fetch_all_slip_details(slip_list, delay=0.3)
+            if items:
+                logger.info(
+                    f"[WasteSlipDetailAPI] Direct API 성공: {len(items)}건"
+                )
+                return items
+            return None
+
+        except Exception as e:
+            logger.warning(f"[WasteSlipDetailAPI] 실패: {e}")
+            return None
+
+    def _trigger_first_popup_for_capture(
+        self, slip: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
+        """첫 번째 전표의 팝업을 열어 searchDetailType1 XHR 캡처 유도
+
+        팝업에서 품목 데이터도 함께 추출하여 반환합니다.
+
+        Args:
+            slip: 전표 헤더 딕셔너리
+
+        Returns:
+            추출된 품목 리스트 (CHIT_YMD, CHIT_NO 포함)
+        """
+        chit_no = str(slip.get("CHIT_NO", "") or "")
+        chit_ymd = str(slip.get("CHIT_YMD", "") or "")
+
+        try:
+            # 1) dsGs 파라미터 설정
+            if not self._set_dsgs_params(0):
+                return []
+
+            # 2) 기존 팝업 닫기
+            self._close_existing_popup()
+
+            # 3) 팝업 열기
+            if not self._open_detail_popup():
+                return []
+
+            # 4) dsGsTmp 강제 갱신 + fn_selSearch (→ XHR 캡처됨)
+            if not self._update_dsgs_tmp_and_search(slip):
+                return []
+
+            # 5) 데이터 추출
+            items = self._extract_popup_items()
+
+            if items:
+                for item in items:
+                    item["CHIT_YMD"] = chit_ymd
+                    item["CHIT_NO"] = chit_no
+
+            # 팝업 닫기
+            self._close_existing_popup()
+
+            return items
+
+        except Exception as e:
+            logger.warning(
+                f"[WasteSlipDetailAPI] 첫 전표 팝업 캡처 실패: {e}"
+            )
+            return []
+
+    # ================================================================
     # 공개 API
     # ================================================================
+
+    def _install_interceptor(self) -> None:
+        """XHR 인터셉터 설치 (Direct API 캡처용)"""
+        try:
+            from src.collectors.direct_frame_fetcher import install_interceptor
+            install_interceptor(self.driver)
+        except Exception as e:
+            logger.debug(f"인터셉터 설치 실패 (무시): {e}")
+
+    def _try_direct_api_slips(
+        self, from_date: str, to_date: str
+    ) -> Optional[List[Dict[str, Any]]]:
+        """Direct API로 폐기 전표 조회
+
+        Returns:
+            성공 시 전표 목록, 실패 시 None (Selenium 폴백)
+        """
+        try:
+            from src.collectors.direct_frame_fetcher import DirectWasteSlipFetcher
+
+            fetcher = DirectWasteSlipFetcher(self.driver)
+            if not fetcher.capture_template():
+                return None
+
+            slips = fetcher.fetch_waste_slips(from_date, to_date, WASTE_CHIT_DIV_CODE)
+            if slips:
+                logger.info(
+                    f"[WasteSlipAPI] Direct API 성공: {len(slips)}건"
+                )
+                return slips
+            return None
+
+        except Exception as e:
+            logger.warning(f"[WasteSlipAPI] Direct API 실패: {e}")
+            return None
 
     def collect_waste_slips(
         self,
@@ -589,6 +761,8 @@ class WasteSlipCollector:
         save_to_db: bool = True,
     ) -> Dict[str, Any]:
         """폐기 전표 수집 (메뉴 이동 -> 필터 -> 조회 -> 수집 -> 저장)
+
+        Direct API 우선 시도 → 실패 시 Selenium 폴백.
 
         Args:
             from_date: 시작일 (YYYYMMDD). None이면 today - days (기본 전날)
@@ -616,16 +790,21 @@ class WasteSlipCollector:
             return {"success": False, "error": "menu navigation failed"}
 
         try:
+            # 인터셉터 설치 (Selenium 조회의 XHR 캡처용)
+            self._install_interceptor()
+
             # 2) 필터 설정
             if not self._set_date_range_and_filter(from_date, to_date):
                 return {"success": False, "error": "filter setup failed"}
 
-            # 3) 조회 실행
+            # 3) 조회 실행 (Selenium - 인터셉터가 XHR 캡처)
             if not self._execute_search():
                 return {"success": False, "error": "search execution failed"}
 
-            # 4) 데이터 수집
-            slips = self._collect_waste_slips()
+            # 4) 데이터 수집 - Direct API 우선 시도
+            slips = self._try_direct_api_slips(from_date, to_date)
+            if slips is None:
+                slips = self._collect_waste_slips()
 
             if not slips:
                 logger.info("[WasteSlip] 폐기 전표 없음")
@@ -637,10 +816,18 @@ class WasteSlipCollector:
                     "to_date": to_date,
                 }
 
-            # 5) 상세 품목 수집 (팝업 기반)
+            # 5) 상세 품목 수집 - Direct API 우선 시도
             detail_items: List[Dict[str, Any]] = []
             try:
-                detail_items = self._collect_detail_items(slips)
+                detail_items_or_none = self._try_direct_api_details(slips)
+                if detail_items_or_none is not None:
+                    detail_items = detail_items_or_none
+                else:
+                    # Direct API 실패 → Selenium 팝업 폴백
+                    logger.info(
+                        "[WasteSlip] Direct API 미사용, 팝업 폴백"
+                    )
+                    detail_items = self._collect_detail_items(slips)
             except Exception as detail_err:
                 logger.warning(
                     f"[WasteSlip] 상세 품목 수집 실패 "
@@ -659,9 +846,18 @@ class WasteSlipCollector:
                         "maega_total": 0,
                     }
                 date_summary[ymd]["slip_count"] += 1
-                date_summary[ymd]["item_count"] += slip.get("ITEM_CNT") or 0
-                date_summary[ymd]["wonga_total"] += slip.get("WONGA_AMT") or 0
-                date_summary[ymd]["maega_total"] += slip.get("MAEGA_AMT") or 0
+                # nexacro에서 문자열로 반환되는 숫자 필드 안전 변환
+                def _safe_int(v):
+                    if v is None:
+                        return 0
+                    try:
+                        return int(v)
+                    except (ValueError, TypeError):
+                        return 0
+
+                date_summary[ymd]["item_count"] += _safe_int(slip.get("ITEM_CNT"))
+                date_summary[ymd]["wonga_total"] += _safe_int(slip.get("WONGA_AMT"))
+                date_summary[ymd]["maega_total"] += _safe_int(slip.get("MAEGA_AMT"))
 
             # 7) DB 저장
             saved = 0

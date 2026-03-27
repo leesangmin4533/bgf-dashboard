@@ -60,8 +60,14 @@ SCHEDULED_JOBS: List[JobDefinition] = [
     JobDefinition(
         name="ml_training",
         flow_class="src.application.use_cases.ml_training_flow.MLTrainingFlow",
+        schedule="23:45",
+        multi_store=True,  # 매일 증분학습 (90일 윈도우)
+    ),
+    JobDefinition(
+        name="ml_training_full",
+        flow_class="src.application.use_cases.ml_training_flow.MLTrainingFlow",
         schedule="Sun 03:00",
-        multi_store=True,  # 매장별 개별 학습
+        multi_store=True,  # 주간 전체 학습 (90일 윈도우)
     ),
     JobDefinition(
         name="batch_collect",
@@ -69,5 +75,37 @@ SCHEDULED_JOBS: List[JobDefinition] = [
         schedule="11:00",
         multi_store=True,
         needs_driver=True,
+    ),
+    JobDefinition(
+        name="dessert_decision_weekly",
+        flow_class="src.application.use_cases.dessert_decision_flow.DessertDecisionFlow",
+        schedule="Mon 22:00",
+        multi_store=True,
+    ),
+    JobDefinition(
+        name="dessert_decision_biweekly",
+        flow_class="src.application.use_cases.dessert_decision_flow.DessertDecisionFlow",
+        schedule="Mon 22:15",
+        multi_store=True,
+    ),
+    JobDefinition(
+        name="dessert_decision_monthly",
+        flow_class="src.application.use_cases.dessert_decision_flow.DessertDecisionFlow",
+        schedule="22:30",
+        multi_store=True,
+    ),
+    JobDefinition(
+        name="monthly_store_analysis",
+        flow_class="src.application.services.analysis_service.run_store_analysis",
+        schedule="04:00",
+        multi_store=False,  # 자체 매장 루프 사용 (run_scheduler 래퍼에서 처리)
+    ),
+    JobDefinition(
+        name="post_order_pending_sync",
+        flow_class="src.application.use_cases.pending_sync_flow.PendingSyncFlow",
+        schedule="10:10",
+        multi_store=True,
+        needs_driver=True,  # 자체 로그인 (독립 세션)
+        enabled=True,
     ),
 ]

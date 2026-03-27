@@ -1,0 +1,2918 @@
+[
+  {
+    "item_cd": "8410261608303",
+    "item_nm": "유앤)돈시몬오렌지주스200",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8410261613314",
+    "item_nm": "유앤)돈시몬토마토주스200",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801043650182",
+    "item_nm": "농심)카프리썬오렌지팩200",
+    "month_evt": "2+1",
+    "next_month_evt": ""
+  },
+  {
+    "item_cd": "8801043650311",
+    "item_nm": "농심)카프리오렌지망고",
+    "month_evt": "2+1",
+    "next_month_evt": ""
+  },
+  {
+    "item_cd": "8801047284642",
+    "item_nm": "동원)비타C자몽에이드500",
+    "month_evt": "2+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801056095413",
+    "item_nm": "롯데)오가닉사과당근주스",
+    "month_evt": "2+1",
+    "next_month_evt": ""
+  },
+  {
+    "item_cd": "8801056168308",
+    "item_nm": "롯데)오가닉포도당근주스",
+    "month_evt": "2+1",
+    "next_month_evt": ""
+  },
+  {
+    "item_cd": "8801069416236",
+    "item_nm": "남양)과수원사과200ml",
+    "month_evt": "2+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801105907605",
+    "item_nm": "코카)레몬에이드P350ml",
+    "month_evt": "",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801105908367",
+    "item_nm": "해태)아침에사과P500ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801105910124",
+    "item_nm": "해태)코코팜피치캔240ml",
+    "month_evt": "",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801105911299",
+    "item_nm": "해태)포도봉봉캔340ml",
+    "month_evt": "",
+    "next_month_evt": "할인"
+  },
+  {
+    "item_cd": "8801105911312",
+    "item_nm": "해태)코코팜포도캔340ml",
+    "month_evt": "",
+    "next_month_evt": "할인"
+  },
+  {
+    "item_cd": "8801105915006",
+    "item_nm": "해태)갈아만든배캔340ml",
+    "month_evt": "2+1",
+    "next_month_evt": ""
+  },
+  {
+    "item_cd": "8801105915709",
+    "item_nm": "해태)갈아만든배P500ml",
+    "month_evt": "2+1",
+    "next_month_evt": ""
+  },
+  {
+    "item_cd": "8801114174463",
+    "item_nm": "풀무원)아임리얼100레몬",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801115334095",
+    "item_nm": "서울)올데이프룻오렌250ml",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801115334101",
+    "item_nm": "서울)올데이프룻자두250ml",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801115334460",
+    "item_nm": "서울)올데이제로청매실",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801115336150",
+    "item_nm": "서울)아침에주스포도210ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801121027042",
+    "item_nm": "매일)썬업오렌지750ml",
+    "month_evt": "할인",
+    "next_month_evt": "할인"
+  },
+  {
+    "item_cd": "8801128945462",
+    "item_nm": "팔도)뽀로로사과맛P235ml",
+    "month_evt": "2+1",
+    "next_month_evt": ""
+  },
+  {
+    "item_cd": "8801155743758",
+    "item_nm": "동원)쿨피스에이드복숭아",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801155743765",
+    "item_nm": "동원)쿨피스에이드자두",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801382126560",
+    "item_nm": "웅진)초록매실P500ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801382127789",
+    "item_nm": "웅진)자연은알로에P500ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801382130314",
+    "item_nm": "웅진)자연은토마토P500ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801382137917",
+    "item_nm": "웅진)자연은제주감귤500ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801382149866",
+    "item_nm": "웅진)자연은샤인머스캣500",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801382150206",
+    "item_nm": "웅진)자연은말린복숭아500",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801382150220",
+    "item_nm": "웅진)자연은말린자몽P500",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801382150497",
+    "item_nm": "웅진)티니핑딸기P200ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801382150770",
+    "item_nm": "웅진)티니핑밀크P200ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8806002023205",
+    "item_nm": "광동)레몬에이드P500ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8806124206067",
+    "item_nm": "한미)텐텐비타튼튼딸기",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8806124206081",
+    "item_nm": "한미)텐텐비타튼튼베리",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8806371309771",
+    "item_nm": "푸르밀)웰치포도에이드",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8806371309818",
+    "item_nm": "푸르밀)웰치사과에이드",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8809041429120",
+    "item_nm": "OKF)옐로스무디P350ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8809226406403",
+    "item_nm": "함소아)유기농당근포도",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8809226406410",
+    "item_nm": "함소아)유기농푸룬사과",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8809288634967",
+    "item_nm": "BR)레인보우샤베트워터500",
+    "month_evt": "2+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8809288634974",
+    "item_nm": "BR)피치요거트워터P500",
+    "month_evt": "2+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8809288635315",
+    "item_nm": "BR)망고탱고워터P500",
+    "month_evt": "2+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8809388466116",
+    "item_nm": "이디야)블렌딩티유자자몽",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8809388466123",
+    "item_nm": "이디야)블렌딩티망고피치",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8809403539207",
+    "item_nm": "인테)슈로코코제로피치340",
+    "month_evt": "2+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8809403539221",
+    "item_nm": "인테)슈로코코제로요구340",
+    "month_evt": "2+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8809713910185",
+    "item_nm": "OKF)샤인머스켓P500ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8850389118870",
+    "item_nm": "모구)솜사탕젤리P320ml",
+    "month_evt": "",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "4005906404835",
+    "item_nm": "농심)파워오투오렌지P500",
+    "month_evt": "",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "4897036691007",
+    "item_nm": "코카)몬스터에너지캔355ml",
+    "month_evt": "할인",
+    "next_month_evt": ""
+  },
+  {
+    "item_cd": "4897036691120",
+    "item_nm": "코카)몬스터울트라캔355ml",
+    "month_evt": "할인",
+    "next_month_evt": ""
+  },
+  {
+    "item_cd": "4897036692424",
+    "item_nm": "코카)몬스터파이프캔355ml",
+    "month_evt": "할인",
+    "next_month_evt": ""
+  },
+  {
+    "item_cd": "4897036693339",
+    "item_nm": "코카)몬스터망고로코355ml",
+    "month_evt": "할인",
+    "next_month_evt": ""
+  },
+  {
+    "item_cd": "4897036693728",
+    "item_nm": "코카)몬스터제로캔355ml",
+    "month_evt": "할인",
+    "next_month_evt": ""
+  },
+  {
+    "item_cd": "4897036694534",
+    "item_nm": "코카)몬스터파피용캔355",
+    "month_evt": "할인",
+    "next_month_evt": ""
+  },
+  {
+    "item_cd": "4897036694565",
+    "item_nm": "코카)몬스터피치캔355ml",
+    "month_evt": "할인",
+    "next_month_evt": ""
+  },
+  {
+    "item_cd": "4897036694817",
+    "item_nm": "코카)몬스터오지레몬캔355",
+    "month_evt": "할인",
+    "next_month_evt": ""
+  },
+  {
+    "item_cd": "4897036695203",
+    "item_nm": "코카)몬스터스트로베리355",
+    "month_evt": "할인",
+    "next_month_evt": ""
+  },
+  {
+    "item_cd": "8800261387450",
+    "item_nm": "랩노쉬)N프로틴초코P350",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8800261387467",
+    "item_nm": "랩노쉬)N프로틴그레인P350",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801007071046",
+    "item_nm": "HK)컨디션헛개병100ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801007178233",
+    "item_nm": "HK)컨디션레이디병100ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801013777260",
+    "item_nm": "삼양사)상쾌환부스터병100",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801013777468",
+    "item_nm": "삼양사)상쾌환부스터제로",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801033000119",
+    "item_nm": "정식품)베지밀A병190ml",
+    "month_evt": "",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801033000126",
+    "item_nm": "정식품)베지밀B병190ml",
+    "month_evt": "",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801033775031",
+    "item_nm": "정식품)검은콩베지밀팩190",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801033775932",
+    "item_nm": "정식품)검은콩깨베지밀",
+    "month_evt": "2+1",
+    "next_month_evt": ""
+  },
+  {
+    "item_cd": "8801033799075",
+    "item_nm": "정식품)베지밀B검은콩병",
+    "month_evt": "2+1",
+    "next_month_evt": ""
+  },
+  {
+    "item_cd": "8801033808913",
+    "item_nm": "정식품)고단백두유초코팩",
+    "month_evt": "1+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801033811357",
+    "item_nm": "정식품)고단백플레인팩",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801033812293",
+    "item_nm": "정식품)말차블렌딩소이",
+    "month_evt": "기간2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801056002725",
+    "item_nm": "롯데)2프로복숭아제로P500",
+    "month_evt": "",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801056038861",
+    "item_nm": "롯데)핫식스캔250ml",
+    "month_evt": "",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801056098834",
+    "item_nm": "롯데)핫식스더킹파워캔355",
+    "month_evt": "1+1",
+    "next_month_evt": "할인"
+  },
+  {
+    "item_cd": "8801056171032",
+    "item_nm": "롯데)핫식스더킹포스캔355",
+    "month_evt": "1+1",
+    "next_month_evt": "할인"
+  },
+  {
+    "item_cd": "8801056178925",
+    "item_nm": "롯데)핫식스더킹러쉬캔355",
+    "month_evt": "1+1",
+    "next_month_evt": "할인"
+  },
+  {
+    "item_cd": "8801056228255",
+    "item_nm": "롯데)핫식스더킹제로캔355",
+    "month_evt": "1+1",
+    "next_month_evt": "할인"
+  },
+  {
+    "item_cd": "8801056234423",
+    "item_nm": "롯데)핫식스더킹피치캔355",
+    "month_evt": "1+1",
+    "next_month_evt": "할인"
+  },
+  {
+    "item_cd": "8801056240998",
+    "item_nm": "롯데)핫식스더킹퍼플캔355",
+    "month_evt": "1+1",
+    "next_month_evt": "할인"
+  },
+  {
+    "item_cd": "8801056247997",
+    "item_nm": "롯데)핫식스더킹제로캔500",
+    "month_evt": "할인",
+    "next_month_evt": "할인"
+  },
+  {
+    "item_cd": "8801056248451",
+    "item_nm": "롯데)깨수깡캔160ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801056249212",
+    "item_nm": "롯데)핫식스더킹애플캔355",
+    "month_evt": "1+1",
+    "next_month_evt": "할인"
+  },
+  {
+    "item_cd": "8801056251062",
+    "item_nm": "롯데)2프로레몬제로P500ml",
+    "month_evt": "",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801056251253",
+    "item_nm": "롯데)더킹아이스피치캔355",
+    "month_evt": "1+1",
+    "next_month_evt": "할인"
+  },
+  {
+    "item_cd": "8801056252243",
+    "item_nm": "롯데)핫식스더킹퍼플캔500",
+    "month_evt": "할인",
+    "next_month_evt": "할인"
+  },
+  {
+    "item_cd": "8801069421445",
+    "item_nm": "남양)맛있는두유담백190",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801069421476",
+    "item_nm": "남양)맛있는두유검은콩190",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801094000240",
+    "item_nm": "코카)일로하스피치P540",
+    "month_evt": "1+1",
+    "next_month_evt": ""
+  },
+  {
+    "item_cd": "8801094000288",
+    "item_nm": "코카)파워라임제로P600",
+    "month_evt": "할인",
+    "next_month_evt": ""
+  },
+  {
+    "item_cd": "8801094212728",
+    "item_nm": "코카)파워에이드제로P600",
+    "month_evt": "할인",
+    "next_month_evt": ""
+  },
+  {
+    "item_cd": "8801094363000",
+    "item_nm": "코카)파워에이드캔240ml",
+    "month_evt": "1+1",
+    "next_month_evt": ""
+  },
+  {
+    "item_cd": "8801094412371",
+    "item_nm": "코카)토레타제로P500ml",
+    "month_evt": "",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801094602703",
+    "item_nm": "코카)파워스칼렛스톰600P",
+    "month_evt": "할인",
+    "next_month_evt": "할인"
+  },
+  {
+    "item_cd": "8801094603700",
+    "item_nm": "코카)파워에이드퍼플P600",
+    "month_evt": "",
+    "next_month_evt": "할인"
+  },
+  {
+    "item_cd": "8801121022375",
+    "item_nm": "매일)두유렌틸콩190ml",
+    "month_evt": "2+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801121025710",
+    "item_nm": "매일)검은콩두유팩190ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801121032145",
+    "item_nm": "매일)고단백플레인190ml",
+    "month_evt": "2+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801121768464",
+    "item_nm": "매일)두유오리지널팩190ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801128283595",
+    "item_nm": "hy)쿠퍼스깨곰",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801382150626",
+    "item_nm": "웅진)푸룬부스터P200ml",
+    "month_evt": "2+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801382152149",
+    "item_nm": "웅진)프로타민초코250ml",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801753100298",
+    "item_nm": "연세)검은콩고칼슘두유",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8805915912804",
+    "item_nm": "종근당)아임비타에너지샷",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8806002001685",
+    "item_nm": "광동)진쌍화병100ml",
+    "month_evt": "2+1",
+    "next_month_evt": ""
+  },
+  {
+    "item_cd": "8806002007298",
+    "item_nm": "광동)비타500병180ml",
+    "month_evt": "2+1",
+    "next_month_evt": ""
+  },
+  {
+    "item_cd": "8806002010861",
+    "item_nm": "광동)헛개파워병100ml",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8806002011967",
+    "item_nm": "광동)대추쌍화병150ml",
+    "month_evt": "2+1",
+    "next_month_evt": ""
+  },
+  {
+    "item_cd": "8806002020242",
+    "item_nm": "광동)비타500D병100ml",
+    "month_evt": "",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8806002021096",
+    "item_nm": "광동)유자쌍화병150ml",
+    "month_evt": "2+1",
+    "next_month_evt": ""
+  },
+  {
+    "item_cd": "8806002022185",
+    "item_nm": "광동)비타500제로병100ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8806002025445",
+    "item_nm": "광동)비타500이온킥500ml",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8806004001126",
+    "item_nm": "현대)미에로사이다캔355",
+    "month_evt": "",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8806004382119",
+    "item_nm": "현대)미에로화이바병210ml",
+    "month_evt": "",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8806004407133",
+    "item_nm": "현대)미에로화이바P350ml",
+    "month_evt": "2+1",
+    "next_month_evt": ""
+  },
+  {
+    "item_cd": "8806011416562",
+    "item_nm": "동아)모닝케어프레스온H병",
+    "month_evt": "2+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8806011416579",
+    "item_nm": "동아)모닝케어프레스온G병",
+    "month_evt": "2+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8806011416685",
+    "item_nm": "동아)얼박사캔355ml",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8806016181915",
+    "item_nm": "동화)부채표쌍화원병100ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8806016185265",
+    "item_nm": "동화)배러레스트P120g",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8806016185289",
+    "item_nm": "동화)배러푸룬P120g",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8806016189010",
+    "item_nm": "동화)하루한병아르긴병100",
+    "month_evt": "2+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8809097856437",
+    "item_nm": "종근당)멀티비타4U병100ml",
+    "month_evt": "1+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8809125061857",
+    "item_nm": "종근당)헛개땡큐골드병",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8809330479928",
+    "item_nm": "영진)알부민리얼바몬드",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8809422040876",
+    "item_nm": "HK)컨디션CEO병150ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8809422046045",
+    "item_nm": "HK)컨디션탄산제로병100ml",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8809422046762",
+    "item_nm": "HK)컨디션메론소다제로병",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8809556567485",
+    "item_nm": "서영)모닝이즈백병100ml",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8809626920295",
+    "item_nm": "링티)제로복숭아P500ml",
+    "month_evt": "2+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8809626921407",
+    "item_nm": "링티)제로레몬라이트P500",
+    "month_evt": "1+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8809626921612",
+    "item_nm": "링티)씨너지에너지캔250",
+    "month_evt": "1+1",
+    "next_month_evt": ""
+  },
+  {
+    "item_cd": "8809799270203",
+    "item_nm": "링티)제로레몬라임500ml",
+    "month_evt": "2+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8809799270661",
+    "item_nm": "링티)애플라이트P500ml",
+    "month_evt": "1+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "9002490100070",
+    "item_nm": "동서)레드불캔250ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "3068320024400",
+    "item_nm": "롯데)에비앙P500ml",
+    "month_evt": "",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801043022781",
+    "item_nm": "농심)백산수P500ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801047287957",
+    "item_nm": "동원)먹는샘물무P500ml",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801056049881",
+    "item_nm": "롯데)아이시스8.0P500ml",
+    "month_evt": "2+1",
+    "next_month_evt": ""
+  },
+  {
+    "item_cd": "8801056049904",
+    "item_nm": "롯데)아이시스8.0P2L",
+    "month_evt": "",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801056169817",
+    "item_nm": "HEYROO미네랄워터P500ml",
+    "month_evt": "아침애",
+    "next_month_evt": "아침애"
+  },
+  {
+    "item_cd": "8801117070007",
+    "item_nm": "오리온)제주용암수P530ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801382147060",
+    "item_nm": "웅진)빅토리아청포P500ml",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8803186200125",
+    "item_nm": "청정)몽베스트무P500ml",
+    "month_evt": "1+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801037001716",
+    "item_nm": "티오피)스모키라떼캔275ml",
+    "month_evt": "",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801037001730",
+    "item_nm": "티오피)스모키블랙캔275ml",
+    "month_evt": "",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801037006193",
+    "item_nm": "티오피)돌체라떼캔275",
+    "month_evt": "",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801037009026",
+    "item_nm": "티오피)스모키라떼캔200ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801037021981",
+    "item_nm": "티오피)배럴에이지드마일",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801037022056",
+    "item_nm": "티오피)배럴에이지드볼드",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801037039993",
+    "item_nm": "티오피)스위트아메캔200ml",
+    "month_evt": "",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801037040029",
+    "item_nm": "티오피)마스터라떼캔200ml",
+    "month_evt": "",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801037042863",
+    "item_nm": "티오피)더블랙캔200ml",
+    "month_evt": "",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801037057843",
+    "item_nm": "티오피)스윗아메캔380ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801037057867",
+    "item_nm": "티오피)더블랙캔380ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801037064346",
+    "item_nm": "티오피)마스터라떼캔380ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801037087543",
+    "item_nm": "티오피)마스터라떼캔275ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801037087550",
+    "item_nm": "티오피)스윗아메캔275ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801037087741",
+    "item_nm": "티오피)더블랙캔275ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801037093742",
+    "item_nm": "마스터)블랙P500ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801037093766",
+    "item_nm": "마스터)라떼P500ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801056018900",
+    "item_nm": "칸타타)아메캔275ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801056018948",
+    "item_nm": "칸타타)라떼캔275ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801056032159",
+    "item_nm": "칸타타)콜드브루캔275ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801056048129",
+    "item_nm": "칸타타)라떼캔200ml",
+    "month_evt": "2+1",
+    "next_month_evt": ""
+  },
+  {
+    "item_cd": "8801056048150",
+    "item_nm": "칸타타)아메캔200ml",
+    "month_evt": "2+1",
+    "next_month_evt": ""
+  },
+  {
+    "item_cd": "8801056050269",
+    "item_nm": "레쓰비)라떼캔240ml",
+    "month_evt": "할인",
+    "next_month_evt": ""
+  },
+  {
+    "item_cd": "8801056051921",
+    "item_nm": "칸타타)카라멜캔275ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801056094591",
+    "item_nm": "콘트라)블랙P500ml",
+    "month_evt": "",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801056096052",
+    "item_nm": "콘트라)라떼P500ml",
+    "month_evt": "",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801056251963",
+    "item_nm": "레쓰비)밀크커피캔240ml",
+    "month_evt": "할인",
+    "next_month_evt": ""
+  },
+  {
+    "item_cd": "8801094502669",
+    "item_nm": "코카)조지아블랙P470ml",
+    "month_evt": "1+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801094512613",
+    "item_nm": "코카)조지아로우라떼P470",
+    "month_evt": "",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801094512668",
+    "item_nm": "코카)조지아라떼P470ml",
+    "month_evt": "",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801094542603",
+    "item_nm": "코카)조지아스윗블랙470ml",
+    "month_evt": "1+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801104212403",
+    "item_nm": "빙그레)아카페라카라멜",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801104212601",
+    "item_nm": "빙그레)아카페라바닐라",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801104304023",
+    "item_nm": "빙그레)아카페라UP아메리",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801104304047",
+    "item_nm": "빙그레)아카페라UP라떼",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801104306591",
+    "item_nm": "빙그레)아카페라UP바닐라",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801104666152",
+    "item_nm": "빙그레)오늘의커피라떼",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801104666176",
+    "item_nm": "빙그레)오늘의커피바닐라",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801104667029",
+    "item_nm": "빙그레)스페셜티킬리만자",
+    "month_evt": "1+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801104667043",
+    "item_nm": "빙그레)스페셜티예가체프",
+    "month_evt": "1+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801104669658",
+    "item_nm": "빙그레)올데이아메리카노",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801104669672",
+    "item_nm": "빙그레)올데이헤이즐넛1L",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801104940931",
+    "item_nm": "빙그레)아카페라UP연유",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801104944915",
+    "item_nm": "빙그레)아카페라벤티아메",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801104944939",
+    "item_nm": "빙그레)아카페라벤티헤이",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801104946261",
+    "item_nm": "박대리)퇴근커피카라멜300",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801104946285",
+    "item_nm": "박대리)출근커피바닐라300",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801104948005",
+    "item_nm": "빙그레)아카페라UP디카페",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801104948760",
+    "item_nm": "박대리)맛점커피바나나300",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801104949187",
+    "item_nm": "빙그레)오늘의커피연유",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801104950008",
+    "item_nm": "빙그레)정지영아메P500",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801104950022",
+    "item_nm": "빙그레)정지영디카페P500",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801115136682",
+    "item_nm": "서울)포리커피200ml",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801115140016",
+    "item_nm": "서울)커피타운바닐라250ml",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801115140023",
+    "item_nm": "서울)커피타운모카250ml",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801115140054",
+    "item_nm": "서울)커피타운헤이즐넛250",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801115140207",
+    "item_nm": "서울)말차에스프레소200ml",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801115381754",
+    "item_nm": "동서)티오피마일드에스프",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801115381761",
+    "item_nm": "동서)티오피볼드에스프",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801115384212",
+    "item_nm": "동서)티오피트리플에스프",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801115384250",
+    "item_nm": "동서)티오피너티카라멜",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801121027523",
+    "item_nm": "매일)바리스타디카페325ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801121031834",
+    "item_nm": "매일)바리스타아메P475ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801121031858",
+    "item_nm": "매일)바리스타라떼P475ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801121040416",
+    "item_nm": "매일)바리스타돌체325ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801121106792",
+    "item_nm": "매일)바리스타에스프250ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801121107942",
+    "item_nm": "매일)바리스타모카250ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801121755679",
+    "item_nm": "매일)바리스타카라멜250ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801121761823",
+    "item_nm": "매일)바리스타로슈거250ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801121768167",
+    "item_nm": "매일)바리스드립라떼325ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801121768174",
+    "item_nm": "매일)바리스타블랙325ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801121771396",
+    "item_nm": "매일)바리스타쇼콜라325ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801121771402",
+    "item_nm": "매일)바리스타바닐라325ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801155744991",
+    "item_nm": "동원)소화잘되는카페라떼",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801155745004",
+    "item_nm": "동원)소화잘되는바닐라떼",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801155745929",
+    "item_nm": "동원)소화잘되는카라멜",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8806371360352",
+    "item_nm": "푸르밀)예가체프라떼300ml",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8806371360369",
+    "item_nm": "푸르밀)케냐AA라떼300ml",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8808024031909",
+    "item_nm": "쟈뎅)로얄헤이즐넛P900ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8808024031916",
+    "item_nm": "쟈뎅)시그니처블랙P900ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8809286693706",
+    "item_nm": "할리스)바닐라딜라이트",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8809286693713",
+    "item_nm": "할리스)카페라떼300ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8809286694192",
+    "item_nm": "할리스)카라멜마끼아또",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8809286695106",
+    "item_nm": "할리스)시그니처아메P550",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8809286695113",
+    "item_nm": "할리스)블랙아리아아메550",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8809388463917",
+    "item_nm": "이디야)카페라떼300ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8809388463924",
+    "item_nm": "이디야)토피넛라떼300ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8809388463931",
+    "item_nm": "이디야)돌체콜드브루300ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8809388464464",
+    "item_nm": "이디야)바닐라라떼300ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8809388464471",
+    "item_nm": "이디야)쇼콜라모카300ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "4901085003800",
+    "item_nm": "농심)오이오차녹차P500",
+    "month_evt": "증정",
+    "next_month_evt": "증정"
+  },
+  {
+    "item_cd": "4901085596333",
+    "item_nm": "농심)루이보스티P600ml",
+    "month_evt": "증정 1+1",
+    "next_month_evt": "증정 1+1"
+  },
+  {
+    "item_cd": "8801001238049",
+    "item_nm": "하이트)블랙보리P520ml",
+    "month_evt": "2+1",
+    "next_month_evt": "할인"
+  },
+  {
+    "item_cd": "8801001238179",
+    "item_nm": "하이트)블랙보리라이트520",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801001238391",
+    "item_nm": "하이트)보리누룽지P520",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801047284482",
+    "item_nm": "동원)복숭아제로아이스500",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801047284499",
+    "item_nm": "동원)레몬제로아이스티500",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801047284550",
+    "item_nm": "동원)사과제로아이스티500",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801047284581",
+    "item_nm": "동원)복숭아제로아이스900",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801047284598",
+    "item_nm": "동원)샤인제로아이스티500",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801047289685",
+    "item_nm": "동원)양반오미자차500ml",
+    "month_evt": "2+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801047495499",
+    "item_nm": "동원)윤곽나인P500ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801047496083",
+    "item_nm": "동원)한라봉제로아이스500",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801056044534",
+    "item_nm": "롯데)립톤복숭아제로P500",
+    "month_evt": "2+1",
+    "next_month_evt": "할인"
+  },
+  {
+    "item_cd": "8801056227371",
+    "item_nm": "롯데)더하다옥수수P500ml",
+    "month_evt": "2+1",
+    "next_month_evt": ""
+  },
+  {
+    "item_cd": "8801056227517",
+    "item_nm": "롯데)더하다보리차P500ml",
+    "month_evt": "2+1",
+    "next_month_evt": ""
+  },
+  {
+    "item_cd": "8801056250850",
+    "item_nm": "롯데)깨수깡귤헛개P500ml",
+    "month_evt": "",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801069174020",
+    "item_nm": "남양)17차P500ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801097481015",
+    "item_nm": "동아)데자와밀크티캔240ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801104949941",
+    "item_nm": "신이어)유기농보리차P600",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801128900201",
+    "item_nm": "팔도)비락식혜캔238ml",
+    "month_evt": "",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801223013202",
+    "item_nm": "일화)호박팥차P500ml",
+    "month_evt": "2+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801382124528",
+    "item_nm": "웅진)아침햇살P500ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801382124849",
+    "item_nm": "웅진)하늘보리P500ml",
+    "month_evt": "할인",
+    "next_month_evt": "할인"
+  },
+  {
+    "item_cd": "8801382135036",
+    "item_nm": "웅진)오곡누룽지P500ml",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801382143123",
+    "item_nm": "코코몽)하늘보리P200ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801382145769",
+    "item_nm": "웅진)결명자차P500ml",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801382148449",
+    "item_nm": "웅진)옥수수수염차500ml",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801382148500",
+    "item_nm": "웅진)티즐제로피치P500",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801382149743",
+    "item_nm": "웅진)티즐제로자몽티P500",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801382151449",
+    "item_nm": "웅진)유기농하늘보리P500",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801382151777",
+    "item_nm": "웅진)카무트현미차P500ml",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801382152798",
+    "item_nm": "웅진)생차녹차P500ml",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801382152811",
+    "item_nm": "웅진)생차호지차P500ml",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8806002005805",
+    "item_nm": "광동)옥수수수염차P1.5L",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8806002006437",
+    "item_nm": "광동)옥수수수염P500ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8806002009391",
+    "item_nm": "광동)진한헛개차P1.5L",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8806002009957",
+    "item_nm": "광동)진한헛개차P500ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8806002023168",
+    "item_nm": "광동)썬키스트허니유자280",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8806002023182",
+    "item_nm": "광동)썬키스트모과생강280",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8808024030803",
+    "item_nm": "쟈뎅)제주청보리차P500ml",
+    "month_evt": "2+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8808024034269",
+    "item_nm": "쟈뎅)히비스애플오렌지500",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8808024034276",
+    "item_nm": "쟈뎅)루이보스피치망고500",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8808024050597",
+    "item_nm": "쟈뎅)프루토프루타피치500",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8808024050603",
+    "item_nm": "쟈뎅)프루토프루타레몬500",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8809422044430",
+    "item_nm": "HK)티로그청귤녹차P500",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8809422044447",
+    "item_nm": "HK)티로그복숭아홍차P500",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8809695255236",
+    "item_nm": "팔도)이천비락식혜335ml",
+    "month_evt": "2+1",
+    "next_month_evt": ""
+  },
+  {
+    "item_cd": "8809799270678",
+    "item_nm": "링티)굿나잇티P240ml",
+    "month_evt": "2+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8712000056896",
+    "item_nm": "하이)하이네켄논알콜캔500",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8800261383179",
+    "item_nm": "이그니스)바이탈레몬캔500",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8800261385081",
+    "item_nm": "클룹)애사비화이트발사믹",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8800261385821",
+    "item_nm": "이그니스)바이탈자몽캔500",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8800261386378",
+    "item_nm": "클룹)애사비매실제로",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801001236076",
+    "item_nm": "하이트)진로토닉워터300ml",
+    "month_evt": "",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801001236199",
+    "item_nm": "하이트)진로토닉워터600ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801001236243",
+    "item_nm": "하이트)토닉워터제로300ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801001236434",
+    "item_nm": "하이트)하이트논알콜캔500",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801043064088",
+    "item_nm": "농심)웰치제로포도캔355",
+    "month_evt": "",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801043065467",
+    "item_nm": "농심)웰치제로포도P600",
+    "month_evt": "1+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801043450690",
+    "item_nm": "농심)웰치포도캔355ml",
+    "month_evt": "2+1",
+    "next_month_evt": ""
+  },
+  {
+    "item_cd": "8801056040925",
+    "item_nm": "롯데)칠성사이다캔355ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801056150013",
+    "item_nm": "롯데)펩시콜라캔355ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801056175900",
+    "item_nm": "롯데)펩시제로라임캔355ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801056175955",
+    "item_nm": "롯데)펩시제로라임P500ml",
+    "month_evt": "할인",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801056177553",
+    "item_nm": "롯데)칠성사이다제로P1.5L",
+    "month_evt": "기간1+1",
+    "next_month_evt": ""
+  },
+  {
+    "item_cd": "8801056177584",
+    "item_nm": "롯데)칠성사이다제로P500",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801056177645",
+    "item_nm": "롯데)칠성사이다제로캔355",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801056193010",
+    "item_nm": "롯데)펩시콜라P600ml",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801056226459",
+    "item_nm": "롯데)펩시제로라임P1.5L",
+    "month_evt": "기간1+1",
+    "next_month_evt": ""
+  },
+  {
+    "item_cd": "8801056231682",
+    "item_nm": "롯데)탐스제로파인애플355",
+    "month_evt": "할인",
+    "next_month_evt": ""
+  },
+  {
+    "item_cd": "8801056233204",
+    "item_nm": "롯데)밀키스제로캔250ml",
+    "month_evt": "",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801056241506",
+    "item_nm": "롯데)펩시제로제로캔355ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801056245085",
+    "item_nm": "롯데)펩시제로제로P500ml",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801056248567",
+    "item_nm": "롯데)탐스오렌지캔355ml",
+    "month_evt": "할인",
+    "next_month_evt": ""
+  },
+  {
+    "item_cd": "8801056248604",
+    "item_nm": "롯데)탐스포도캔355ml",
+    "month_evt": "할인",
+    "next_month_evt": ""
+  },
+  {
+    "item_cd": "8801056248703",
+    "item_nm": "롯데)펩시제로라임캔310ml",
+    "month_evt": "1+1",
+    "next_month_evt": "할인"
+  },
+  {
+    "item_cd": "8801056249359",
+    "item_nm": "롯데)칠성사이다제로캔310",
+    "month_evt": "1+1",
+    "next_month_evt": "할인"
+  },
+  {
+    "item_cd": "8801056249519",
+    "item_nm": "롯데)칠성사이다오렌지500",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801056249892",
+    "item_nm": "롯데)마운틴듀제로캔355ml",
+    "month_evt": "1+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801056251727",
+    "item_nm": "롯데)칠성사이다라임P500",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801056251895",
+    "item_nm": "롯데)칠성사이다라임캔355",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801056716011",
+    "item_nm": "롯데)마운틴듀캔355ml",
+    "month_evt": "1+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801094000318",
+    "item_nm": "코카)스프라이트제로칠350",
+    "month_evt": "1+1",
+    "next_month_evt": ""
+  },
+  {
+    "item_cd": "8801094000394",
+    "item_nm": "코카)환타멜론P600ml",
+    "month_evt": "할인",
+    "next_month_evt": "할인"
+  },
+  {
+    "item_cd": "8801094000431",
+    "item_nm": "코카)암바사제로500P",
+    "month_evt": "1+1",
+    "next_month_evt": ""
+  },
+  {
+    "item_cd": "8801094000455",
+    "item_nm": "코카)닥터페퍼제로스트350",
+    "month_evt": "",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801094000554",
+    "item_nm": "코카)코카콜라제로제로500",
+    "month_evt": "",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801094013004",
+    "item_nm": "코카)코카콜라캔250ml",
+    "month_evt": "할인",
+    "next_month_evt": ""
+  },
+  {
+    "item_cd": "8801094013615",
+    "item_nm": "코카)코카콜라레드캔490ml",
+    "month_evt": "",
+    "next_month_evt": "할인"
+  },
+  {
+    "item_cd": "8801094017200",
+    "item_nm": "코카)코카콜라캔350ml",
+    "month_evt": "할인",
+    "next_month_evt": ""
+  },
+  {
+    "item_cd": "8801094023218",
+    "item_nm": "코카)코카콜라제로제로350",
+    "month_evt": "1+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801094043278",
+    "item_nm": "코카)닥터페퍼제로캔350ml",
+    "month_evt": "",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801094062675",
+    "item_nm": "코카)코카제로레몬P500ml",
+    "month_evt": "",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801094063283",
+    "item_nm": "코카)코카제로레몬캔350ml",
+    "month_evt": "1+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801094082406",
+    "item_nm": "코카)코카콜라제로P1.5L",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801094082604",
+    "item_nm": "코카)코카콜라제로P500ml",
+    "month_evt": "",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801094083007",
+    "item_nm": "코카)코카콜라제로캔250ml",
+    "month_evt": "",
+    "next_month_evt": "할인"
+  },
+  {
+    "item_cd": "8801094083205",
+    "item_nm": "코카)코카콜라제로캔350ml",
+    "month_evt": "1+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801094083625",
+    "item_nm": "코카)코카콜라제로캔490ml",
+    "month_evt": "",
+    "next_month_evt": "할인"
+  },
+  {
+    "item_cd": "8801094112707",
+    "item_nm": "코카)환타오렌지P600ml",
+    "month_evt": "할인",
+    "next_month_evt": "할인"
+  },
+  {
+    "item_cd": "8801094132705",
+    "item_nm": "코카)환타파인P600ml",
+    "month_evt": "할인",
+    "next_month_evt": "할인"
+  },
+  {
+    "item_cd": "8801094202408",
+    "item_nm": "코카)스프라이트P1.5L",
+    "month_evt": "1+1",
+    "next_month_evt": ""
+  },
+  {
+    "item_cd": "8801094202606",
+    "item_nm": "코카)스프라이트P500ml",
+    "month_evt": "",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801094263218",
+    "item_nm": "코카)환타파인제로캔350ml",
+    "month_evt": "",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801094347208",
+    "item_nm": "코카)환타오렌지제로캔350",
+    "month_evt": "",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801094962104",
+    "item_nm": "코카)스프라이트제로P500",
+    "month_evt": "",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801097135413",
+    "item_nm": "동아)나랑드사이다캔345ml",
+    "month_evt": "2+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801097160064",
+    "item_nm": "동아)데미소다애플캔250ml",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801097168909",
+    "item_nm": "동아)데미레드애플캔350ml",
+    "month_evt": "2+1",
+    "next_month_evt": ""
+  },
+  {
+    "item_cd": "8801097235014",
+    "item_nm": "동아)나랑드사이다P500ml",
+    "month_evt": "2+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801097334212",
+    "item_nm": "동아)오란씨파인캔350ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801119221117",
+    "item_nm": "하이트)하이트논알콜캔350",
+    "month_evt": "할인",
+    "next_month_evt": "할인"
+  },
+  {
+    "item_cd": "8801223014025",
+    "item_nm": "일화)레몬애사비소다캔250",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801223014612",
+    "item_nm": "1945라임사이다350",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801223100254",
+    "item_nm": "일화)맥콜캔250ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801223100261",
+    "item_nm": "일화)맥콜P500ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801858045258",
+    "item_nm": "오비)카스논알콜캔355",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801858047399",
+    "item_nm": "오비)카스레몬논알콜캔330",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801858048259",
+    "item_nm": "오비)카스레몬논알콜캔473",
+    "month_evt": "할인",
+    "next_month_evt": "할인"
+  },
+  {
+    "item_cd": "8801858048600",
+    "item_nm": "오비)카스올제로캔350",
+    "month_evt": "",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8806002025346",
+    "item_nm": "광동)썬키스트애사비제로",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8806002025421",
+    "item_nm": "광동)썬키스트애사비레몬",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8806004000945",
+    "item_nm": "현대)미에로화이스파클500",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8809495075478",
+    "item_nm": "클룹)제로소다포도캔500ml",
+    "month_evt": "2+1",
+    "next_month_evt": ""
+  },
+  {
+    "item_cd": "8801056083557",
+    "item_nm": "롯데)칸타타스윗아메리230",
+    "month_evt": "컵얼음",
+    "next_month_evt": "컵얼음"
+  },
+  {
+    "item_cd": "8801056083564",
+    "item_nm": "롯데)칸타타블랙아메리230",
+    "month_evt": "컵얼음",
+    "next_month_evt": "컵얼음"
+  },
+  {
+    "item_cd": "8801056083571",
+    "item_nm": "롯데)칸타타헤이즐넛230ml",
+    "month_evt": "컵얼음",
+    "next_month_evt": "컵얼음"
+  },
+  {
+    "item_cd": "8801056230111",
+    "item_nm": "롯데)칸타타블랙아메320ml",
+    "month_evt": "컵얼음",
+    "next_month_evt": "컵얼음"
+  },
+  {
+    "item_cd": "8801056233433",
+    "item_nm": "롯데)칸타타헤이즐넛320ml",
+    "month_evt": "컵얼음",
+    "next_month_evt": "컵얼음"
+  },
+  {
+    "item_cd": "8801056248536",
+    "item_nm": "롯데)레쓰비마일드230ml",
+    "month_evt": "컵얼음",
+    "next_month_evt": "컵얼음"
+  },
+  {
+    "item_cd": "8802259022954",
+    "item_nm": "롯데)메가톤라떼230ml",
+    "month_evt": "컵얼음 할인",
+    "next_month_evt": "할인 컵얼음"
+  },
+  {
+    "item_cd": "8802774001700",
+    "item_nm": "태웅)레모나에이드230ml",
+    "month_evt": "컵얼음",
+    "next_month_evt": "컵얼음"
+  },
+  {
+    "item_cd": "8806002024486",
+    "item_nm": "광동)비타500이온플러스",
+    "month_evt": "컵얼음 1+1",
+    "next_month_evt": "1+1 컵얼음"
+  },
+  {
+    "item_cd": "8808024025786",
+    "item_nm": "쟈뎅)시그니처스위트320ml",
+    "month_evt": "컵얼음",
+    "next_month_evt": "컵얼음"
+  },
+  {
+    "item_cd": "8808024025809",
+    "item_nm": "쟈뎅)시그니헤이즐넛320ml",
+    "month_evt": "컵얼음",
+    "next_month_evt": "컵얼음"
+  },
+  {
+    "item_cd": "8808024026981",
+    "item_nm": "쟈뎅)시그니아메블랙320ml",
+    "month_evt": "컵얼음",
+    "next_month_evt": "컵얼음"
+  },
+  {
+    "item_cd": "8808024033644",
+    "item_nm": "쟈뎅)마이쮸납작복숭아230",
+    "month_evt": "컵얼음 할인",
+    "next_month_evt": "할인 컵얼음"
+  },
+  {
+    "item_cd": "8808024033668",
+    "item_nm": "쟈뎅)마이쮸트리플베리230",
+    "month_evt": "컵얼음 할인",
+    "next_month_evt": "할인 컵얼음"
+  },
+  {
+    "item_cd": "8809948525864",
+    "item_nm": "비비랩)애사비워터230ml",
+    "month_evt": "컵얼음 할인",
+    "next_month_evt": "할인 컵얼음"
+  },
+  {
+    "item_cd": "8801104273602",
+    "item_nm": "빙그레)오프룻딸기컵",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801104665421",
+    "item_nm": "빙그레)닥터캡슐사과",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801104669283",
+    "item_nm": "빙그레)닥터캡슐베리",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801104951302",
+    "item_nm": "빙그레)닥터캡슐복숭아",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801115212713",
+    "item_nm": "서울)비요뜨초코링",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801115213604",
+    "item_nm": "서울)비요뜨쿠키앤크림",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801115215851",
+    "item_nm": "서울)마이픽딸기초코링",
+    "month_evt": "1+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801115224143",
+    "item_nm": "서울)마이픽플레인쿠키링",
+    "month_evt": "1+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801115224341",
+    "item_nm": "서울)복숭아요구르트750ml",
+    "month_evt": "할인",
+    "next_month_evt": "할인"
+  },
+  {
+    "item_cd": "8801115224709",
+    "item_nm": "서울)비요뜨베리콩포트",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801121024737",
+    "item_nm": "매일)엔요280ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801121048887",
+    "item_nm": "매일)그릭드링킹플레인190",
+    "month_evt": "할인 1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801121767139",
+    "item_nm": "매일)바이오드링킹딸기",
+    "month_evt": "기간2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801121770757",
+    "item_nm": "매일)바이오드링킹블루",
+    "month_evt": "기간2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801128281003",
+    "item_nm": "hy)야쿠르트750ml",
+    "month_evt": "기간2+1",
+    "next_month_evt": ""
+  },
+  {
+    "item_cd": "8801128283472",
+    "item_nm": "hy)갓비움애사비마일드",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801128307239",
+    "item_nm": "hy)갓비움230ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801128308076",
+    "item_nm": "hy)야쿠르트제로190ml",
+    "month_evt": "2+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801155732769",
+    "item_nm": "동원)얼라이브청포도250ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801155735074",
+    "item_nm": "동원)얼라이브자몽250ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801155735081",
+    "item_nm": "동원)얼라이브망고250ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801155735135",
+    "item_nm": "동원)얼라이브오렌지250ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801155735647",
+    "item_nm": "동원)얼라이브망고200ml",
+    "month_evt": "2+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801155744502",
+    "item_nm": "동원)하이요구르트280ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801155744762",
+    "item_nm": "동원)얼라이브자몽200ml",
+    "month_evt": "2+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801753110501",
+    "item_nm": "연세)블루베리요거트300",
+    "month_evt": "2+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801753110976",
+    "item_nm": "연세)스트로베리요거트300",
+    "month_evt": "2+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801753111201",
+    "item_nm": "연세)복숭아요거트300",
+    "month_evt": "2+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801753111966",
+    "item_nm": "연세)플레인요거트300ml",
+    "month_evt": "2+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8809274510893",
+    "item_nm": "풀무원)액티비아업딸기",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8809274512651",
+    "item_nm": "풀무원)액티비아업복숭아",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8809274513887",
+    "item_nm": "풀무원)요거톡초코그래놀",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8809274513948",
+    "item_nm": "풀무원)요거톡스타볼",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8809274516215",
+    "item_nm": "풀무원)그릭플레인150g",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8809274516277",
+    "item_nm": "풀무원)그릭딸기베리150g",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8809274516420",
+    "item_nm": "풀무원)액티비아딸기150g",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8809350882296",
+    "item_nm": "서울FB)패밀리요구르트",
+    "month_evt": "할인",
+    "next_month_evt": "할인"
+  },
+  {
+    "item_cd": "0000088002798",
+    "item_nm": "빙그레)바나나우유240ml",
+    "month_evt": "할인",
+    "next_month_evt": "할인"
+  },
+  {
+    "item_cd": "8801056249038",
+    "item_nm": "롯데)오트몬드초코250ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801056249076",
+    "item_nm": "롯데)오트몬드쿠앤크250ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801069171067",
+    "item_nm": "남양)초코에몽드링크190ml",
+    "month_evt": "할인",
+    "next_month_evt": "할인"
+  },
+  {
+    "item_cd": "8801069173603",
+    "item_nm": "남양)맛있는우유900ml",
+    "month_evt": "할인",
+    "next_month_evt": "할인"
+  },
+  {
+    "item_cd": "8801069180977",
+    "item_nm": "남양)딸기에몽드링크190ml",
+    "month_evt": "할인",
+    "next_month_evt": "할인"
+  },
+  {
+    "item_cd": "8801069185194",
+    "item_nm": "남양)초코에몽250ml",
+    "month_evt": "할인 2+1",
+    "next_month_evt": "할인 2+1"
+  },
+  {
+    "item_cd": "8801069403724",
+    "item_nm": "남양)소화잘되는우유900ml",
+    "month_evt": "할인",
+    "next_month_evt": "할인"
+  },
+  {
+    "item_cd": "8801069415833",
+    "item_nm": "남양)테이크핏프로틴곡물",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801069416007",
+    "item_nm": "남양)테이크핏프로틴초코",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801069416441",
+    "item_nm": "남양)아몬드데이오리지널",
+    "month_evt": "1+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801069416458",
+    "item_nm": "남양)아몬드데이언스위트",
+    "month_evt": "1+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801069417554",
+    "item_nm": "남양)테이크핏프로틴바나",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801069419619",
+    "item_nm": "남양)테이크핏호박고구마",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801069422411",
+    "item_nm": "남양)말차에몽190ml",
+    "month_evt": "할인",
+    "next_month_evt": "할인"
+  },
+  {
+    "item_cd": "8801104212205",
+    "item_nm": "빙그레)바나나우유라이트",
+    "month_evt": "할인",
+    "next_month_evt": "할인"
+  },
+  {
+    "item_cd": "8801104221467",
+    "item_nm": "빙그레)딸기맛우유240ml",
+    "month_evt": "할인",
+    "next_month_evt": "할인"
+  },
+  {
+    "item_cd": "8801104670876",
+    "item_nm": "빙그레)더단백초코드링크",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801104673211",
+    "item_nm": "빙그레)더단백커피드링크",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801104940870",
+    "item_nm": "빙그레)메로나맛우유240ml",
+    "month_evt": "할인",
+    "next_month_evt": "할인"
+  },
+  {
+    "item_cd": "8801104942935",
+    "item_nm": "빙그레)더단백딸기드링크",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801104946179",
+    "item_nm": "빙그레)더단백멜론드링크",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801104948128",
+    "item_nm": "빙그레)무설탕딸기우유",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801104948142",
+    "item_nm": "빙그레)무설탕초코우유",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801115114390",
+    "item_nm": "서울)후레쉬우유900ml",
+    "month_evt": "할인",
+    "next_month_evt": "할인"
+  },
+  {
+    "item_cd": "8801115115113",
+    "item_nm": "서울)멸균우유200ml",
+    "month_evt": "할인",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801115115809",
+    "item_nm": "서울)저지방멸균우유200ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801115118817",
+    "item_nm": "서울)프로틴에너지초코",
+    "month_evt": "할인 2+1",
+    "next_month_evt": "할인"
+  },
+  {
+    "item_cd": "8801115118886",
+    "item_nm": "서울)내안의진짜초코280ml",
+    "month_evt": "1+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801115118893",
+    "item_nm": "서울)내안의진짜딸기280ml",
+    "month_evt": "1+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801115134213",
+    "item_nm": "서울)딸기우유300ml",
+    "month_evt": "할인 기간2+1",
+    "next_month_evt": "할인 2+1"
+  },
+  {
+    "item_cd": "8801115134220",
+    "item_nm": "서울)초코우유300ml",
+    "month_evt": "할인 기간2+1",
+    "next_month_evt": "할인 2+1"
+  },
+  {
+    "item_cd": "8801115135708",
+    "item_nm": "서울)커피우유300ml",
+    "month_evt": "할인 기간2+1",
+    "next_month_evt": "할인 2+1"
+  },
+  {
+    "item_cd": "8801115384007",
+    "item_nm": "서울)꿀딴지초코우유180ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801115384014",
+    "item_nm": "서울)꿀딴지딸기우유180ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801121032435",
+    "item_nm": "매일)허쉬초코프로틴235ml",
+    "month_evt": "할인",
+    "next_month_evt": "할인"
+  },
+  {
+    "item_cd": "8801121033531",
+    "item_nm": "매일)어메징오트오리지널",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801121044698",
+    "item_nm": "매일)허쉬초코딸기190ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801121044711",
+    "item_nm": "매일)허쉬초코바나나190ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801121049280",
+    "item_nm": "매일)바나나맛있다무가당",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801121190197",
+    "item_nm": "매일)허쉬초코드링크235ml",
+    "month_evt": "할인",
+    "next_month_evt": "할인"
+  },
+  {
+    "item_cd": "8801121759943",
+    "item_nm": "매일)허쉬초코쿠앤크235ml",
+    "month_evt": "할인",
+    "next_month_evt": "할인"
+  },
+  {
+    "item_cd": "8801128283908",
+    "item_nm": "감숙왕)초코바나나우유190",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801128283915",
+    "item_nm": "감숙왕)딸기바나나우유190",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801128306249",
+    "item_nm": "hy)호우섬홍콩밀크티350ml",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8801155000516",
+    "item_nm": "동원)덴마크미숫미숫우유",
+    "month_evt": "",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801155731625",
+    "item_nm": "동원)덴마크초코초코우유",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801155731632",
+    "item_nm": "동원)덴마크딸기딸기우유",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801155731830",
+    "item_nm": "동원)덴마크바나바나우유",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801155731847",
+    "item_nm": "동원)덴마크커피커피우유",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8801155743772",
+    "item_nm": "동원)소화잘되는딸기190ml",
+    "month_evt": "할인 2+1",
+    "next_month_evt": "할인 2+1"
+  },
+  {
+    "item_cd": "8801155743789",
+    "item_nm": "동원)소화잘되는초코190ml",
+    "month_evt": "할인 2+1",
+    "next_month_evt": "할인 2+1"
+  },
+  {
+    "item_cd": "8801155745387",
+    "item_nm": "동원)가나디초코우유500ml",
+    "month_evt": "할인",
+    "next_month_evt": "할인"
+  },
+  {
+    "item_cd": "8801155745394",
+    "item_nm": "동원)가나디딸기우유500ml",
+    "month_evt": "할인",
+    "next_month_evt": "할인"
+  },
+  {
+    "item_cd": "8801392081484",
+    "item_nm": "CJ)얼티브프로틴맛밤",
+    "month_evt": "1+1",
+    "next_month_evt": "1+1"
+  },
+  {
+    "item_cd": "8809226406564",
+    "item_nm": "미니언즈)프로틴액트초코",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8809288633045",
+    "item_nm": "비알)배스킨라빈스베리",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8809288633052",
+    "item_nm": "비알)배스킨라빈스쿠앤크",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8809288633595",
+    "item_nm": "비알)배스킨라빈스솜사탕",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8809288635377",
+    "item_nm": "비알)엄마는외계인밀키컵",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8809288635384",
+    "item_nm": "비알)아몬드봉봉밀키컵300",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8809350881077",
+    "item_nm": "서울FB)뽀로로바나나우유",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8809350881091",
+    "item_nm": "서울FB)뽀로로딸기우유",
+    "month_evt": "할인 2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8809350881183",
+    "item_nm": "서울FB)어른우유흑임자250",
+    "month_evt": "2+1",
+    "next_month_evt": "할인"
+  },
+  {
+    "item_cd": "8809350881244",
+    "item_nm": "서울FB)뽀로로초코우유",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8809350883903",
+    "item_nm": "서울FB)어른우유미숫250",
+    "month_evt": "2+1",
+    "next_month_evt": "할인"
+  },
+  {
+    "item_cd": "8809350884535",
+    "item_nm": "서울FB)어른우유호두250",
+    "month_evt": "2+1",
+    "next_month_evt": "할인"
+  },
+  {
+    "item_cd": "8809846900886",
+    "item_nm": "매일)셀렉스프로핏모카250",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8809846900893",
+    "item_nm": "매일)셀렉스프로핏밀크250",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8809846901548",
+    "item_nm": "매일)셀렉스프로핏바나250",
+    "month_evt": "2+1",
+    "next_month_evt": "2+1"
+  },
+  {
+    "item_cd": "8809197840091",
+    "item_nm": "del)컵얼음180g",
+    "month_evt": "컵얼음 증정",
+    "next_month_evt": "컵얼음"
+  },
+  {
+    "item_cd": "8809197840107",
+    "item_nm": "del)빅컵얼음230g",
+    "month_evt": "할인 점별할인",
+    "next_month_evt": "할인 점별할인"
+  },
+  {
+    "item_cd": "8809197840336",
+    "item_nm": "del)벤티컵얼음400g",
+    "month_evt": "할인 컵얼음",
+    "next_month_evt": "할인 컵얼음"
+  }
+]

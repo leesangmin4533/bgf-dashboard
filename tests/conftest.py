@@ -3,8 +3,10 @@
 
 - in-memory SQLite DB (테스트 간 격리)
 - 테스트용 판매 데이터 생성 헬퍼
+- 테스트 시 파일 로그 핸들러 비활성화 (프로덕션 로그 오염 방지)
 """
 
+import logging
 import sqlite3
 import sys
 from datetime import datetime, timedelta
@@ -17,6 +19,46 @@ import pytest
 PROJECT_ROOT = Path(__file__).parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _suppress_file_log_handlers():
+    """
+    테스트 실행 시 파일 로그 핸들러를 비활성화하여 프로덕션 로그 오염 방지.
+
+    문제: 테스트 중 MagicMock 드라이버의 execute_script()가 None을 반환하면
+    "dataset 채우기: 응답 없음" 등의 WARNING이 order.log에 기록되어
+    라이브 로그와 구분이 어려움 (93건+ 테스트 노이즈 발생).
+
+    해결: RotatingFileHandler를 세션 동안 비활성화.
+    """
+    from logging.handlers import RotatingFileHandler
+
+    disabled_handlers = []
+
+    # 모든 로거에서 파일 핸들러를 찾아 비활성화
+    for logger_name in list(logging.Logger.manager.loggerDict):
+        logger = logging.getLogger(logger_name)
+        for handler in logger.handlers[:]:
+            if isinstance(handler, RotatingFileHandler):
+                logger.removeHandler(handler)
+                disabled_handlers.append((logger_name, handler))
+
+    # 루트 로거도 확인
+    root = logging.getLogger()
+    for handler in root.handlers[:]:
+        if isinstance(handler, RotatingFileHandler):
+            root.removeHandler(handler)
+            disabled_handlers.append(('root', handler))
+
+    yield
+
+    # 세션 종료 시 복원
+    for logger_name, handler in disabled_handlers:
+        if logger_name == 'root':
+            logging.getLogger().addHandler(handler)
+        else:
+            logging.getLogger(logger_name).addHandler(handler)
 
 
 @pytest.fixture
@@ -84,7 +126,14 @@ def in_memory_db():
             mid_cd TEXT,
             order_unit_qty INTEGER DEFAULT 1,
             expiration_days INTEGER,
-            orderable_day TEXT DEFAULT '일월화수목금토'
+            orderable_day TEXT DEFAULT '일월화수목금토',
+            demand_pattern TEXT DEFAULT NULL,
+            sell_price INTEGER,
+            margin_rate REAL,
+            lead_time_days INTEGER DEFAULT 1,
+            large_cd TEXT,
+            small_cd TEXT,
+            class_nm TEXT
         )
     """)
 
@@ -304,6 +353,25 @@ def in_memory_db():
         )
     """)
 
+    # order_exclusions 테이블 (v43)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS order_exclusions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            store_id TEXT NOT NULL,
+            eval_date TEXT NOT NULL,
+            item_cd TEXT NOT NULL,
+            item_nm TEXT,
+            mid_cd TEXT,
+            exclusion_type TEXT NOT NULL,
+            predicted_qty INTEGER DEFAULT 0,
+            current_stock INTEGER DEFAULT 0,
+            pending_qty INTEGER DEFAULT 0,
+            detail TEXT,
+            created_at TEXT NOT NULL,
+            UNIQUE(store_id, eval_date, item_cd)
+        )
+    """)
+
     conn.commit()
     yield conn
     conn.close()
@@ -498,6 +566,25 @@ def flask_app(in_memory_db, tmp_path):
             checked_at TEXT,
             created_at TEXT,
             UNIQUE(eval_date, item_cd)
+        )
+    """)
+
+    # order_exclusions 테이블 (v43)
+    file_conn.execute("""
+        CREATE TABLE IF NOT EXISTS order_exclusions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            store_id TEXT NOT NULL,
+            eval_date TEXT NOT NULL,
+            item_cd TEXT NOT NULL,
+            item_nm TEXT,
+            mid_cd TEXT,
+            exclusion_type TEXT NOT NULL,
+            predicted_qty INTEGER DEFAULT 0,
+            current_stock INTEGER DEFAULT 0,
+            pending_qty INTEGER DEFAULT 0,
+            detail TEXT,
+            created_at TEXT NOT NULL,
+            UNIQUE(store_id, eval_date, item_cd)
         )
     """)
 
@@ -735,6 +822,51 @@ def flask_app(in_memory_db, tmp_path):
             created_at TEXT NOT NULL,
             updated_at TEXT,
             UNIQUE(store_id, chit_date, chit_no, item_cd)
+        )
+    """)
+
+    # detected_new_products 테이블 (v45 + lifecycle v46)
+    file_conn.execute("""
+        CREATE TABLE IF NOT EXISTS detected_new_products (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            item_cd TEXT NOT NULL,
+            item_nm TEXT,
+            mid_cd TEXT,
+            mid_cd_source TEXT DEFAULT 'fallback',
+            first_receiving_date TEXT NOT NULL,
+            receiving_qty INTEGER DEFAULT 0,
+            order_unit_qty INTEGER DEFAULT 1,
+            center_cd TEXT,
+            center_nm TEXT,
+            cust_nm TEXT,
+            registered_to_products INTEGER DEFAULT 0,
+            registered_to_details INTEGER DEFAULT 0,
+            registered_to_inventory INTEGER DEFAULT 0,
+            detected_at TEXT NOT NULL,
+            store_id TEXT,
+            lifecycle_status TEXT DEFAULT 'detected',
+            monitoring_start_date TEXT,
+            monitoring_end_date TEXT,
+            total_sold_qty INTEGER DEFAULT 0,
+            sold_days INTEGER DEFAULT 0,
+            similar_item_avg REAL,
+            status_changed_at TEXT,
+            UNIQUE(item_cd, first_receiving_date)
+        )
+    """)
+
+    # new_product_daily_tracking 테이블 (v46)
+    file_conn.execute("""
+        CREATE TABLE IF NOT EXISTS new_product_daily_tracking (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            item_cd TEXT NOT NULL,
+            tracking_date TEXT NOT NULL,
+            sales_qty INTEGER DEFAULT 0,
+            stock_qty INTEGER DEFAULT 0,
+            order_qty INTEGER DEFAULT 0,
+            store_id TEXT,
+            created_at TEXT NOT NULL,
+            UNIQUE(item_cd, tracking_date, store_id)
         )
     """)
 

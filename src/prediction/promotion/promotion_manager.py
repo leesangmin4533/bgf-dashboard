@@ -13,6 +13,20 @@ from pathlib import Path
 from src.settings.constants import DEFAULT_STORE_ID
 
 
+class _NoCloseConnection:
+    """close() 호출을 무시하는 커넥션 래퍼 (persistent 모드용)"""
+    __slots__ = ('_conn',)
+
+    def __init__(self, conn: sqlite3.Connection):
+        self._conn = conn
+
+    def close(self):
+        pass
+
+    def __getattr__(self, name):
+        return getattr(self._conn, name)
+
+
 @dataclass
 class PromotionStatus:
     """상품의 행사 상태"""
@@ -57,17 +71,63 @@ class PromotionManager:
 
     def __init__(self, db_path: Optional[str] = None, store_id: Optional[str] = None) -> None:
         if db_path is None:
-            db_path = Path(__file__).parent.parent.parent.parent / "data" / "bgf_sales.db"
+            from src.infrastructure.database.connection import resolve_db_path
+            db_path = resolve_db_path(store_id=store_id)
         self.db_path = str(db_path)
         self.store_id = store_id
+        self._persistent_conn = None
 
     def _get_connection(self, timeout: int = 30) -> sqlite3.Connection:
+        if self._persistent_conn is not None:
+            return _NoCloseConnection(self._persistent_conn)
         conn = sqlite3.connect(self.db_path, timeout=timeout)
         conn.row_factory = sqlite3.Row
         if self.store_id:
             from src.infrastructure.database.connection import attach_common_with_views
             attach_common_with_views(conn, self.store_id)
         return conn
+
+    def open_persistent_connection(self) -> None:
+        """배치 예측 시 커넥션 재사용"""
+        if self._persistent_conn is None:
+            self._persistent_conn = self._get_connection()
+
+    def close_persistent_connection(self) -> None:
+        """배치 예측 종료 시 커넥션 해제"""
+        if self._persistent_conn is not None:
+            try:
+                self._persistent_conn.close()
+            except Exception:
+                pass
+            self._persistent_conn = None
+
+    def has_promotion_history(self, item_cd: str) -> bool:
+        """상품의 행사 이력 존재 여부 확인
+
+        promotions 테이블에 해당 상품의 레코드가 1건이라도 있으면 True.
+        행사 이력 없는 상품에 대한 Branch D 비행사보정 오적용 방지에 사용.
+
+        Args:
+            item_cd: 상품코드
+
+        Returns:
+            True면 행사 이력 있음, False면 한번도 행사에 등록된 적 없음
+        """
+        conn = self._get_connection()
+        try:
+            cursor = conn.cursor()
+            from src.db.store_query import store_filter
+            sf, sp = store_filter(None, self.store_id)
+            cursor.execute(f"""
+                SELECT 1 FROM promotions
+                WHERE item_cd = ? {sf}
+                LIMIT 1
+            """, (item_cd,) + sp)
+            return cursor.fetchone() is not None
+        except Exception:
+            return False
+        finally:
+            conn.close()
 
     def get_promotion_status(self, item_cd: str) -> Optional[PromotionStatus]:
         """
@@ -158,6 +218,40 @@ class PromotionManager:
             promo_avg=stats.get('promo_avg', 0),
             promo_multiplier=stats.get('multiplier', 1.0),
         )
+
+    def get_active_end_date(self, item_cd: str) -> Optional[str]:
+        """현재 활성 행사의 종료일 (DB 직접 조회)
+
+        PromotionAdjuster가 연장 여부를 확인할 때 사용.
+        status 객체의 end_date가 캐시/지연으로 오래된 경우,
+        DB의 최신 end_date를 비교하여 연장 감지.
+
+        Args:
+            item_cd: 상품코드
+
+        Returns:
+            종료일 문자열 (YYYY-MM-DD) 또는 None
+        """
+        conn = self._get_connection()
+        try:
+            cursor = conn.cursor()
+            today = date.today().strftime('%Y-%m-%d')
+            from src.db.store_query import store_filter
+            sf, sp = store_filter(None, self.store_id)
+            cursor.execute(f"""
+                SELECT end_date FROM promotions
+                WHERE item_cd = ?
+                  AND start_date <= ?
+                  AND end_date >= ?
+                  AND is_active = 1
+                  {sf}
+                ORDER BY end_date DESC
+                LIMIT 1
+            """, (item_cd, today, today) + sp)
+            row = cursor.fetchone()
+            return row['end_date'] if row else None
+        finally:
+            conn.close()
 
     def get_ending_promotions(self, days: int = 3) -> List[PromotionStatus]:
         """
@@ -444,9 +538,9 @@ class PromotionManager:
                     normal_sales.append(qty)
 
             # 통계 계산 및 저장
+            store_val = self.store_id or DEFAULT_STORE_ID
             if normal_sales:
                 avg = sum(normal_sales) / len(normal_sales)
-                store_val = self.store_id or DEFAULT_STORE_ID
                 cursor.execute("""
                     INSERT OR REPLACE INTO promotion_stats
                     (store_id, item_cd, promo_type, avg_daily_sales, total_days, total_sales, last_calculated)

@@ -9,6 +9,7 @@
    - 품절빈도 임계값: 업그레이드 적중률 기반
 """
 
+import math
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -19,7 +20,11 @@ from src.infrastructure.database.repos import (
     CalibrationRepository,
 )
 from src.prediction.eval_config import EvalConfig, ParamSpec
-from src.settings.constants import FOOD_MID_CODES, MAX_PARAMS_PER_CALIBRATION
+from src.settings.constants import (
+    FOOD_MID_CODES, MAX_PARAMS_PER_CALIBRATION,
+    FOOD_CATEGORIES, PROMO_MIN_STOCK_UNITS,
+    MIN_DISPLAY_QTY, EVAL_CYCLE_MAX_DAYS, LOW_TURNOVER_THRESHOLD,
+)
 
 logger = get_logger(__name__)
 
@@ -251,11 +256,14 @@ class EvalCalibrator:
                 prev_stock = record.get("current_stock", 0) or 0
                 next_day_stock = max(0, prev_stock - actual_sold)
 
-            was_stockout = next_day_stock <= 0
             disuse_qty = yesterday_sales.get(item_cd, {}).get("disuse_qty", 0)
             was_waste = disuse_qty > 0
+            # food-stockout-misclassify: 폐기 소멸(disuse>0)이면 품절이 아님
+            was_stockout = next_day_stock <= 0 and not was_waste
+            was_waste_expiry = next_day_stock <= 0 and was_waste
 
-            # 판정
+            # 판정 — was_waste_expiry를 record에 전달
+            record["was_waste_expiry"] = was_waste_expiry
             outcome = self._judge_outcome(decision, actual_sold, next_day_stock, was_stockout, record)
 
             # DB 업데이트
@@ -346,10 +354,13 @@ class EvalCalibrator:
                     prev_stock = record.get("current_stock", 0) or 0
                     next_day_stock = max(0, prev_stock - actual_sold)
 
-                was_stockout = next_day_stock <= 0
                 disuse_qty = eval_day_sales.get(item_cd, {}).get("disuse_qty", 0)
                 was_waste = disuse_qty > 0
+                # food-stockout-misclassify: 폐기 소멸이면 품절 아님
+                was_stockout = next_day_stock <= 0 and not was_waste
+                was_waste_expiry = next_day_stock <= 0 and was_waste
 
+                record["was_waste_expiry"] = was_waste_expiry
                 outcome = self._judge_outcome(decision, actual_sold, next_day_stock, was_stockout, record)
 
                 updates.append((
@@ -405,12 +416,9 @@ class EvalCalibrator:
             return "OVER_ORDER"
 
         elif decision == "NORMAL_ORDER":
-            # 일반 발주 → 판매 발생 + 재고 감소면 적중
-            if actual_sold > 0:
-                return "CORRECT"
-            if was_stockout:
-                return "UNDER_ORDER"
-            return "OVER_ORDER"
+            return self._judge_normal_order(
+                actual_sold, next_day_stock, was_stockout, record
+            )
 
         elif decision == "PASS":
             # 안전재고 위임 → 품절 안 났으면 적중
@@ -425,6 +433,105 @@ class EvalCalibrator:
             return "MISS"
 
         return "CORRECT"
+
+    def _judge_normal_order(
+        self, actual_sold: int, next_day_stock: int,
+        was_stockout: bool, record: Dict[str, Any]
+    ) -> str:
+        """NORMAL_ORDER 전용 판정 (푸드 제외, 주기/안전재고 기반)
+
+        판정 우선순위:
+        1. 푸드류(001~005, 012) → 기존 로직 (actual_sold > 0)
+        2. 최소 진열 미달 → UNDER_ORDER
+        3. 저회전(daily_avg < 1.0) → 판매주기 내 판매 여부
+        4. 고회전(daily_avg >= 1.0) → 재고 유지 여부
+        """
+        mid_cd = record.get("mid_cd", "")
+        daily_avg = record.get("daily_avg", 0) or 0
+        promo_type = record.get("promo_type")
+
+        # 1) 푸드류 → food-stockout-misclassify: 폐기 소멸 구분
+        was_waste_expiry = record.get("was_waste_expiry", False)
+        if mid_cd in FOOD_CATEGORIES:
+            if actual_sold > 0:
+                return "CORRECT"
+            if was_waste_expiry:
+                # 유통기한 만료로 stock=0 → 과잉발주 (품절 아님)
+                return "OVER_ORDER"
+            if was_stockout:
+                return "UNDER_ORDER"
+            return "OVER_ORDER"
+
+        # 2) 최소 진열 체크 — 미달이면 UNDER_ORDER
+        min_display = self._get_min_display_qty(record)
+        if next_day_stock < min_display and (was_stockout or next_day_stock <= 0):
+            return "UNDER_ORDER"
+
+        # 3) 당일 판매가 있으면 무조건 적중 (공통)
+        if actual_sold > 0:
+            return "CORRECT"
+
+        # 4) 저회전: 판매주기 기반 판정
+        if daily_avg < LOW_TURNOVER_THRESHOLD and daily_avg > 0:
+            cycle_days = min(math.ceil(1.0 / daily_avg), EVAL_CYCLE_MAX_DAYS)
+
+            # 최근 주기일 내 판매 합계 조회
+            eval_date = record.get("eval_date", "")
+            if eval_date and cycle_days > 1:
+                recent_sold = self._get_recent_sales_sum(
+                    record.get("item_cd", ""), eval_date, cycle_days
+                )
+                if recent_sold > 0:
+                    return "CORRECT"
+
+            # 주기 내 판매 없음
+            if was_stockout:
+                return "UNDER_ORDER"
+            return "OVER_ORDER"
+
+        # 5) 고회전: 재고 유지 기반 판정
+        if daily_avg >= LOW_TURNOVER_THRESHOLD:
+            if not was_stockout:
+                return "CORRECT"  # 재고 존재 = 성공
+            return "UNDER_ORDER"
+
+        # 6) daily_avg = 0 (데이터 없음) → 기존 폴백
+        if was_stockout:
+            return "UNDER_ORDER"
+        return "OVER_ORDER"
+
+    def _get_min_display_qty(self, record: Dict[str, Any]) -> int:
+        """행사/비행사에 따른 최소 진열 수량"""
+        promo_type = record.get("promo_type")
+        if promo_type:
+            return PROMO_MIN_STOCK_UNITS.get(promo_type, MIN_DISPLAY_QTY)
+        return MIN_DISPLAY_QTY
+
+    def _get_recent_sales_sum(
+        self, item_cd: str, eval_date: str, lookback_days: int
+    ) -> int:
+        """eval_outcomes에서 최근 N일간 actual_sold_qty 합계 조회"""
+        if not item_cd or not eval_date:
+            return 0
+        try:
+            start_date = (
+                datetime.strptime(eval_date, "%Y-%m-%d")
+                - timedelta(days=lookback_days - 1)
+            ).strftime("%Y-%m-%d")
+
+            rows = self.outcome_repo.get_by_item_date_range(
+                item_cd=item_cd,
+                start_date=start_date,
+                end_date=eval_date,
+                store_id=self.store_id,
+            )
+            return sum(
+                r.get("actual_sold_qty") or 0
+                for r in rows
+            )
+        except Exception as e:
+            logger.debug(f"최근 판매 합계 조회 실패 ({item_cd}): {e}")
+            return 0
 
     def _get_sales_map(self, date: str) -> Dict[str, Dict[str, Any]]:
         """특정 날짜의 판매 데이터를 item_cd 기준 dict로 반환"""

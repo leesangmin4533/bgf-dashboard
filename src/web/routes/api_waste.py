@@ -77,6 +77,58 @@ def get_waste_summary():
         return jsonify({"error": "처리에 실패했습니다"}), 500
 
 
+@waste_bp.route("/waterfall", methods=["GET"])
+def get_waste_waterfall():
+    """상품별 발주->판매->폐기 워터폴 데이터
+
+    Query params:
+        store_id: 매장 코드 (기본: DEFAULT_STORE_ID)
+        days: 조회 기간 (기본: 14)
+        limit: 반환할 상품 수 (기본: 10, 폐기량 내림차순)
+    """
+    store_id = request.args.get("store_id", DEFAULT_STORE_ID)
+    days = int(request.args.get("days", 14))
+    limit = int(request.args.get("limit", 10))
+
+    start_date = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+    end_date = datetime.now().strftime("%Y-%m-%d")
+
+    try:
+        repo = WasteCauseRepository(store_id=store_id)
+        causes = repo.get_causes_for_period(start_date, end_date, store_id=store_id)
+
+        # 상품별 집계
+        item_agg = {}
+        for c in causes:
+            key = c["item_cd"]
+            if key not in item_agg:
+                item_agg[key] = {
+                    "item_cd": key,
+                    "item_nm": c.get("item_nm", key),
+                    "order_qty": 0,
+                    "sold_qty": 0,
+                    "waste_qty": 0,
+                    "primary_cause": c.get("primary_cause", "MIXED"),
+                }
+            item_agg[key]["order_qty"] += c.get("order_qty") or 0
+            item_agg[key]["sold_qty"] += c.get("actual_sold_qty") or 0
+            item_agg[key]["waste_qty"] += c.get("waste_qty") or 0
+
+        # 폐기량 내림차순 정렬
+        items = sorted(
+            item_agg.values(), key=lambda x: x["waste_qty"], reverse=True
+        )[:limit]
+
+        return jsonify({
+            "store_id": store_id,
+            "days": days,
+            "items": items,
+        })
+    except Exception as e:
+        logger.error(f"워터폴 데이터 조회 실패: {e}")
+        return jsonify({"error": "처리에 실패했습니다"}), 500
+
+
 @waste_bp.route("/feedback/<item_cd>", methods=["GET"])
 def get_item_feedback(item_cd):
     """특정 상품의 현재 활성 피드백 조회
@@ -158,7 +210,8 @@ def get_waste_calibration():
                 "current_params": {
                     "safety_days": params.safety_days,
                     "gap_coefficient": params.gap_coefficient,
-                    "waste_buffer": params.waste_buffer,
+                    "waste_buffer": params.waste_buffer,  # deprecated: 20%×category_total로 대체
+                    "waste_buffer_note": "미사용 (동적 20% 버퍼로 대체됨)",
                 },
                 "history": history,
             }
@@ -227,7 +280,8 @@ def get_waste_calibration_detail(mid_cd):
             "current_params": {
                 "safety_days": params.safety_days,
                 "gap_coefficient": params.gap_coefficient,
-                "waste_buffer": params.waste_buffer,
+                "waste_buffer": params.waste_buffer,  # deprecated: 20%×category_total로 대체
+                "waste_buffer_note": "미사용 (동적 20% 버퍼로 대체됨)",
             },
             "history": history,
         })

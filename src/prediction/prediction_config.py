@@ -36,39 +36,38 @@ logger = get_logger(__name__)
 # predict_days: 도시락/김밥은 1일, 나머지는 3일
 CATEGORY_CONFIG = {
     # 도시락/김밥류 - 유통기한 짧음 (1일 예측)
-    "001": {"name": "도시락", "shelf_life": 1, "predict_days": 1, "safety_factor": 1.2},
-    "002": {"name": "김밥", "shelf_life": 1, "predict_days": 1, "safety_factor": 1.2},
-    "003": {"name": "샌드위치", "shelf_life": 2, "predict_days": 3, "safety_factor": 1.3},
-    "004": {"name": "햄버거", "shelf_life": 2, "predict_days": 3, "safety_factor": 1.3},
+    "001": {"name": "도시락", "shelf_life": 1, "predict_days": 1},
+    "002": {"name": "김밥", "shelf_life": 1, "predict_days": 1},
+    "003": {"name": "샌드위치", "shelf_life": 2, "predict_days": 3},
+    "004": {"name": "햄버거", "shelf_life": 2, "predict_days": 3},
 
     # 유제품 (3일 예측)
-    "047": {"name": "우유", "shelf_life": 7, "predict_days": 3, "safety_factor": 1.3},
-    "048": {"name": "요구르트", "shelf_life": 14, "predict_days": 3, "safety_factor": 1.3},
+    "047": {"name": "우유", "shelf_life": 7, "predict_days": 3},
+    "048": {"name": "요구르트", "shelf_life": 14, "predict_days": 3},
 
     # 음료 (3일 예측)
-    "044": {"name": "음료수", "shelf_life": 180, "predict_days": 3, "safety_factor": 1.5},
-    "045": {"name": "커피음료", "shelf_life": 180, "predict_days": 3, "safety_factor": 1.5},
+    "044": {"name": "음료수", "shelf_life": 180, "predict_days": 3},
+    "045": {"name": "커피음료", "shelf_life": 180, "predict_days": 3},
 
     # 주류 (3일 예측)
-    "049": {"name": "맥주", "shelf_life": 180, "predict_days": 3, "safety_factor": 1.5},
-    "050": {"name": "소주", "shelf_life": 365, "predict_days": 3, "safety_factor": 1.5},
+    "049": {"name": "맥주", "shelf_life": 180, "predict_days": 3},
+    "050": {"name": "소주", "shelf_life": 365, "predict_days": 3},
 
     # 과자/스낵 (3일 예측)
-    "016": {"name": "스낵", "shelf_life": 60, "predict_days": 3, "safety_factor": 1.5},
-    "017": {"name": "비스킷", "shelf_life": 90, "predict_days": 3, "safety_factor": 1.5},
+    "016": {"name": "스낵", "shelf_life": 60, "predict_days": 3},
+    "017": {"name": "비스킷", "shelf_life": 90, "predict_days": 3},
 
     # 라면/면류 (3일 예측)
-    "032": {"name": "라면", "shelf_life": 180, "predict_days": 3, "safety_factor": 1.3},
+    "032": {"name": "라면", "shelf_life": 180, "predict_days": 3},
 
     # 담배 (3일 예측)
-    "072": {"name": "담배", "shelf_life": 365, "predict_days": 3, "safety_factor": 2.0},
+    "072": {"name": "담배", "shelf_life": 365, "predict_days": 3},
 }
 
 # 기본값 (카테고리 매핑 안될 때)
 DEFAULT_CONFIG = {
     "shelf_life": 30,
     "predict_days": 3,
-    "safety_factor": 1.5
 }
 
 # 요일별 판매 계수 (기본값 - fallback용)
@@ -141,7 +140,8 @@ WEEKDAY_COEFFICIENTS = {
     # mid_cd: [일, 월, 화, 수, 목, 금, 토]
 
     # === 주류 (금/토 급증) ===
-    "049": [0.97, 1.15, 1.22, 1.21, 1.37, 2.54, 2.37],  # 맥주
+    # 맥주(049) 요일 계수는 BEER_WEEKDAY_COEF 사용 (beer.py 참조)
+    # WEEKDAY_COEFFICIENTS["049"] 는 미사용으로 제거됨
     "050": [0.91, 0.90, 1.06, 1.16, 1.55, 1.88, 2.14],  # 소주
     "051": [1.00, 1.00, 1.00, 1.00, 1.00, 1.30, 1.50],  # 전통주 (추정)
     "605": [1.00, 1.00, 1.00, 1.00, 1.00, 1.30, 1.40],  # 기타주류 (추정)
@@ -443,15 +443,8 @@ FOOD_CATEGORIES = ['001', '002', '003', '004', '005', '012']
 from src.prediction.categories.food import FOOD_EXPIRY_SAFETY_CONFIG  # noqa: E402
 from src.prediction.categories.food import FOOD_EXPIRY_FALLBACK  # noqa: E402
 
-# 푸드류 폐기율 계수 (기존 사용 중인 값)
-FOOD_DISUSE_COEFFICIENT = {
-    # 폐기율 범위: 계수
-    (0.00, 0.05): 1.0,   # 5% 미만: 정상
-    (0.05, 0.10): 0.9,   # 5~10%: 10% 감소
-    (0.10, 0.15): 0.8,   # 10~15%: 20% 감소
-    (0.15, 0.20): 0.65,  # 15~20%: 35% 감소
-    (0.20, 1.00): 0.5,   # 20% 이상: 50% 감소
-}
+# 푸드류 폐기율 계수: food.py의 정의를 사용 (중복 제거)
+# → food.py의 FOOD_DISUSE_COEFFICIENT (deprecated) / get_dynamic_disuse_coefficient() 참조
 
 
 # =============================================================================
@@ -498,6 +491,50 @@ PREDICTION_PARAMS = {
     "stockout_filter": {
         "enabled": True,              # 품절일 필터링 활성화
         "min_available_days": 3,      # 필터 후 최소 가용일 수 (미달 시 필터링 포기)
+    },
+
+    # ML 학습/추론 시 품절일 imputation 설정
+    # stock_qty=0 AND sale_qty=0인 날의 판매량을 비품절 평균으로 대체
+    # 최근 14일 → 30일 2단계 폴백으로 계절성 반영
+    "ml_stockout_filter": {
+        "enabled": True,              # ML 품절일 imputation 활성화
+        "min_available_days": 3,      # 비품절일 최소 일수 (미달 시 imputation 포기)
+    },
+
+    # 카테고리 총량 floor 보정 (신선식품 과소발주 방지)
+    # 품목 로테이션이 심한 신선식품은 개별 예측 합 < 실제 카테고리 수요
+    # 카테고리 일 총매출 WMA와 비교하여 부족분을 보충
+    "category_floor": {
+        "enabled": True,
+        "target_mid_cds": ["001", "002", "003", "004", "005", "012"],  # 신선식품 + 빵
+        "threshold": 0.7,             # 개별합이 총량의 70% 미만이면 보정
+        "max_add_per_item": 1,        # 품목당 최대 추가 발주
+        "wma_days": 7,                # 카테고리 총량 WMA 기간
+        "min_candidate_sell_days": 1,  # 보충 후보 최소 판매일수 (최근 7일)
+    },
+
+    # CUT 대체 보충: 발주중지 상품의 수요를 동일 mid_cd 내 대체 상품에 배분
+    # 참고: 012(빵)는 유통기한 3일로 CUT 리스크 낮아 기본 미포함. 필요 시 target_mid_cds에 "012" 추가.
+    "cut_replacement": {
+        "enabled": True,
+        "target_mid_cds": ["001", "002", "003", "004", "005"],
+        "replacement_ratio": 0.8,      # CUT 수요의 80%까지 보충
+        "max_add_per_item": 2,         # 상품당 최대 +2개
+        "max_candidates": 5,           # mid_cd당 최대 후보 5개
+        "min_sell_days": 1,            # 최근 7일 중 최소 판매일수
+    },
+
+    # 대분류(large_cd) 기반 카테고리 총량 floor 보정
+    # large_cd 단위 총량 WMA → mid_cd 비율 배분 → 개별 예측 합이 부족하면 보충
+    # 기존 category_floor(mid_cd level) 뒤에 실행되어 상위 수준 보정 역할
+    "large_category_floor": {
+        "enabled": True,
+        "target_large_cds": ["01", "02", "12"],  # 간편식사, 즉석식품, 과자류
+        "threshold": 0.75,             # mid_cd 예상 수요의 75% 미만이면 보정
+        "max_add_per_item": 2,         # 품목당 최대 추가 발주
+        "wma_days": 14,                # large_cd 총량 WMA 기간
+        "ratio_days": 14,              # mid_cd 비율 계산 기간
+        "min_candidate_sell_days": 2,  # 보충 후보 최소 판매일수 (최근 7일)
     },
 
     # 연관 상품 분석 설정
@@ -591,9 +628,10 @@ ORDER_ADJUSTMENT_RULES = {
 # =============================================================================
 # 7. 담배 동적 안전재고 분석 함수
 # =============================================================================
-def _get_db_path() -> str:
+def _get_db_path(store_id: str = None) -> str:
     """DB 경로 반환"""
-    return str(Path(__file__).parent.parent.parent / "data" / "bgf_sales.db")
+    from src.infrastructure.database.connection import resolve_db_path
+    return resolve_db_path(store_id=store_id)
 
 
 @dataclass
@@ -1400,7 +1438,8 @@ def calculate_weekday_factors_from_db(db_path: Optional[str] = None, store_id: O
         {0: 0.95, 1: 1.02, ...} 형태의 요일별 계수
     """
     if db_path is None:
-        db_path = Path(__file__).parent.parent.parent / "data" / "bgf_sales.db"
+        from src.infrastructure.database.connection import resolve_db_path
+        db_path = Path(resolve_db_path(store_id=store_id))
 
     if not db_path.exists():
         return WEEKDAY_FACTORS.copy()

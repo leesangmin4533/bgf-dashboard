@@ -48,7 +48,12 @@ class RateLimiter:
 # ── 인증 + 매장 접근 권한 체크 ──────────────────────────────
 
 # 인증 불필요 경로
-_PUBLIC_PREFIXES = ("/api/auth/login", "/api/auth/logout", "/api/auth/signup", "/login", "/static/")
+_PUBLIC_PREFIXES = (
+    "/api/auth/login", "/api/auth/logout", "/api/auth/signup",
+    "/api/onboarding/",        # 온보딩 전체 API (자체 _require_onboarding 인증 사용)
+    "/onboarding",             # 온보딩 SPA 페이지 (Step 1 가입 포함)
+    "/login", "/static/",
+)
 
 
 def check_auth_and_store_access():
@@ -71,6 +76,18 @@ def check_auth_and_store_access():
         if path.startswith("/api/"):
             return jsonify({"error": "로그인이 필요합니다", "code": "UNAUTHORIZED"}), 401
         return redirect("/login")
+
+    # 온보딩 미완료 리다이렉트 (페이지 요청만, API/onboarding/static 제외)
+    if (not path.startswith("/api/") and
+        not path.startswith("/onboarding") and
+        not path.startswith("/static/")):
+        onboarding_step = session.get("onboarding_step")
+        if onboarding_step is not None and onboarding_step < 5:
+            # user_id가 있으면 이미 가입 완료 → 세션 값 자동 보정
+            if session.get("user_id"):
+                session["onboarding_step"] = 5
+            else:
+                return redirect("/onboarding")
 
     # admin은 모든 매장 접근 가능
     if session.get("role") == "admin":

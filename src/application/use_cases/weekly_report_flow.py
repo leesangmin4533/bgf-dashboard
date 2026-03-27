@@ -38,6 +38,15 @@ class WeeklyReportFlow:
             scheduler = ReportScheduler(store_id=self.store_id)
             result = scheduler.send_weekly_report()
             logger.info(f"WeeklyReport 완료: store={self.store_id}")
+
+            # 주간 정확도 리포트
+            try:
+                from src.prediction.accuracy.reporter import run_weekly_accuracy_report
+                accuracy_result = run_weekly_accuracy_report()
+                logger.info(f"[WeeklyReport] 정확도 리포트: {accuracy_result.get('message', '')}")
+            except Exception as e:
+                logger.warning(f"[WeeklyReport] 정확도 리포트 실패: {e}")
+
             return {"success": result.get("success", False), "result": result}
         except Exception as e:
             logger.error(f"WeeklyReport 실패: {e}", exc_info=True)

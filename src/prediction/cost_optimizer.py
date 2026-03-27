@@ -6,13 +6,12 @@
 """
 
 import json
-import sqlite3
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional
 
 from src.infrastructure.database.repos import ProductDetailRepository
-from src.db.store_query import store_filter
+from src.infrastructure.database.connection import DBRouter
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -20,7 +19,6 @@ logger = get_logger(__name__)
 # 설정 파일 경로
 CONFIG_DIR = Path(__file__).parent.parent.parent / "config"
 COST_CONFIG_PATH = CONFIG_DIR / "eval_params.json"
-DB_PATH = Path(__file__).parent.parent.parent / "data" / "bgf_sales.db"
 
 # 기본 설정값 (eval_params.json에 cost_optimization 섹션이 없을 때 사용)
 DEFAULT_COST_CONFIG = {
@@ -268,25 +266,26 @@ class CostOptimizer:
     # --- 판매비중 ---
 
     def _calculate_category_shares(self) -> Dict[str, float]:
-        """중분류별 판매비중 계산 (30일 기준, store_id 필터)"""
+        """중분류별 판매비중 계산 (30일 기준, 매장 분할 DB)"""
         if self._category_share_cache is not None:
             return self._category_share_cache
 
         shares: Dict[str, float] = {}
+        if not self.store_id:
+            self._category_share_cache = shares
+            return shares
+
         try:
-            conn = sqlite3.connect(str(DB_PATH), timeout=10)
-            conn.row_factory = sqlite3.Row
+            conn = DBRouter.get_store_connection_with_common(self.store_id)
             try:
-                sf, sp = store_filter("ds", self.store_id)
                 cursor = conn.cursor()
-                cursor.execute(f"""
+                cursor.execute("""
                     SELECT p.mid_cd, SUM(ds.sale_qty) as total_qty
                     FROM daily_sales ds
-                    JOIN products p ON ds.item_cd = p.item_cd
-                    WHERE ds.sale_date >= date('now', '-30 days')
-                    {sf}
+                    JOIN common.products p ON ds.item_cd = p.item_cd
+                    WHERE ds.sales_date >= date('now', '-30 days')
                     GROUP BY p.mid_cd
-                """, sp)
+                """)
 
                 rows = cursor.fetchall()
                 grand_total = sum(r["total_qty"] for r in rows) or 1

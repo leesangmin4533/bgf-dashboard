@@ -35,16 +35,18 @@ LOG_FILES: Dict[str, str] = {
     "error": "error.log",
 }
 
-# 로그 라인 정규식
-# Format: "2026-02-21 07:00:04 | INFO     | src.scheduler.daily_job | message"
+# 로그 라인 정규식 (session_id 포함 새 포맷 + 이전 포맷 하위 호환)
+# 새 포맷: "2026-02-28 13:24:41 | INFO     | a1b2c3d4 | src.scheduler.daily_job | message"
+# 이전 포맷: "2026-02-21 07:00:04 | INFO     | src.scheduler.daily_job | message"
 LOG_LINE_RE = re.compile(
     r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})"  # group(1): timestamp
     r" \| "
     r"(\w+)\s*"                                    # group(2): level
     r" \| "
-    r"([\w.]+)"                                    # group(3): module
+    r"(?:([a-f0-9-]{8})\s* \| )?"                  # group(3): session_id (optional, 8자 hex or '--------')
+    r"([\w.]+)"                                    # group(4): module
     r" \| "
-    r"(.*)$"                                       # group(4): message
+    r"(.*)$"                                       # group(5): message
 )
 
 # Phase 감지 정규식
@@ -93,6 +95,7 @@ class LogEntry:
     line_number: int
     phase: Optional[str] = None
     phase_name: Optional[str] = None
+    session_id: Optional[str] = None
 
 
 @dataclass
@@ -142,8 +145,9 @@ def parse_line(raw_line: str, line_number: int = 0) -> Optional[LogEntry]:
         return None
 
     level = m.group(2).strip().upper()
-    module = m.group(3).strip()
-    message = m.group(4)
+    session_id = m.group(3)  # None for old format, hex string for new
+    module = m.group(4).strip()
+    message = m.group(5)
 
     # Phase 감지
     phase = None
@@ -162,6 +166,7 @@ def parse_line(raw_line: str, line_number: int = 0) -> Optional[LogEntry]:
         line_number=line_number,
         phase=phase,
         phase_name=phase_name,
+        session_id=session_id,
     )
 
 

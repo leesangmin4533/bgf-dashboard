@@ -1,0 +1,1095 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>오더핏AI - 온보딩</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #FFFBEB;
+            color: #1C1208;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .onboarding-container {
+            width: 100%;
+            max-width: 480px;
+            padding: 20px;
+        }
+        .onboarding-card {
+            background: #FFFFFF;
+            border: 1px solid #FDE68A;
+            border-radius: 16px;
+            padding: 32px;
+            box-shadow: 0 20px 60px rgba(28,18,8,0.10);
+        }
+
+        /* 진행 바 */
+        .progress-bar {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 32px;
+            position: relative;
+        }
+        .progress-bar::before {
+            content: '';
+            position: absolute;
+            top: 14px;
+            left: 24px;
+            right: 24px;
+            height: 2px;
+            background: #FDE68A;
+        }
+        .progress-step {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+            z-index: 1;
+            flex: 1;
+        }
+        .step-circle {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: #FDE68A;
+            color: #B89070;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            font-weight: 700;
+            margin-bottom: 6px;
+            transition: all 0.3s;
+        }
+        .step-label {
+            font-size: 0.65rem;
+            color: #B89070;
+            text-align: center;
+            transition: color 0.3s;
+        }
+        .progress-step.active .step-circle {
+            background: #F59E0B;
+            color: #fff;
+        }
+        .progress-step.active .step-label { color: #D97706; }
+        .progress-step.done .step-circle {
+            background: #22c55e;
+            color: #fff;
+        }
+        .progress-step.done .step-label { color: #86efac; }
+
+        /* 폼 스타일 */
+        .form-group { margin-bottom: 18px; }
+        .form-group label {
+            display: block;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: #78503A;
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .form-group input {
+            width: 100%;
+            padding: 12px 16px;
+            background: #FEF9C3;
+            border: 1px solid #FDE68A;
+            border-radius: 10px;
+            color: #1C1208;
+            font-size: 16px;
+            font-family: inherit;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .form-group input:focus {
+            border-color: #EA580C;
+            box-shadow: 0 0 0 3px rgba(234,88,12,0.15);
+        }
+        .form-group input::placeholder { color: #B89070; }
+
+        /* 버튼 */
+        .btn-primary {
+            width: 100%;
+            padding: 14px;
+            background: #EA580C;
+            color: #fff;
+            font-size: 0.95rem;
+            font-weight: 600;
+            font-family: inherit;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: opacity 0.2s, transform 0.1s;
+            margin-top: 8px;
+        }
+        .btn-primary:hover { opacity: 0.9; }
+        .btn-primary:active { transform: scale(0.98); }
+        .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+        .btn-secondary {
+            width: 100%;
+            padding: 12px;
+            background: transparent;
+            color: #78503A;
+            font-size: 0.9rem;
+            font-weight: 500;
+            font-family: inherit;
+            border: 1px solid #FDE68A;
+            border-radius: 10px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        .btn-secondary:hover { background: rgba(234,88,12,0.04); }
+        .btn-inline {
+            padding: 10px 20px;
+            background: #FDE68A;
+            color: #1C1208;
+            font-size: 0.85rem;
+            font-weight: 500;
+            font-family: inherit;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+        .btn-inline:hover { background: #FBBF24; }
+
+        /* 메시지 */
+        .msg { padding: 10px 14px; border-radius: 8px; font-size: 0.85rem; margin-bottom: 16px; display: none; }
+        .msg.error { background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); color: #fca5a5; }
+        .msg.success { background: rgba(34,197,94,0.1); border: 1px solid rgba(34,197,94,0.3); color: #86efac; }
+        .msg.info { background: rgba(59,130,246,0.1); border: 1px solid rgba(59,130,246,0.3); color: #93c5fd; }
+        .msg.visible { display: block; }
+        .form-hint { font-size: 0.75rem; color: #B89070; margin-top: 6px; line-height: 1.4; }
+
+        /* 패널 */
+        .step-panel { display: none; }
+        .step-panel.active { display: block; }
+        .step-panel h2 { font-size: 1.1rem; font-weight: 700; margin-bottom: 6px; color: #1C1208; }
+        .step-panel p.desc { font-size: 0.85rem; color: #78503A; margin-bottom: 24px; }
+
+        /* 매장 조회 결과 */
+        .store-result {
+            padding: 14px;
+            background: rgba(34,197,94,0.08);
+            border: 1px solid rgba(34,197,94,0.2);
+            border-radius: 10px;
+            margin-bottom: 16px;
+            display: none;
+        }
+        .store-result.visible { display: block; }
+        .store-result .store-name { font-weight: 600; color: #86efac; font-size: 0.95rem; }
+        .store-result .store-addr { font-size: 0.8rem; color: #78503A; margin-top: 4px; }
+
+        /* 매장 입력 그룹 */
+        .input-group { display: flex; gap: 10px; }
+        .input-group input { flex: 1; }
+
+        /* 카테고리 체크박스 */
+        .category-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 18px; }
+        .category-item {
+            display: flex;
+            align-items: center;
+            padding: 14px 16px;
+            background: #FEF9C3;
+            border: 1px solid #FDE68A;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: border-color 0.2s;
+            min-height: 48px;
+        }
+        .category-item:hover { border-color: #FBBF24; }
+        .category-item.checked { border-color: #EA580C; background: rgba(234,88,12,0.08); }
+        .category-item input[type="checkbox"] { display: none; }
+        .category-check {
+            width: 20px;
+            height: 20px;
+            border: 2px solid #FBBF24;
+            border-radius: 5px;
+            margin-right: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            transition: all 0.2s;
+        }
+        .category-item.checked .category-check {
+            background: #EA580C;
+            border-color: #EA580C;
+        }
+        .category-check svg { display: none; width: 14px; height: 14px; color: #fff; }
+        .category-item.checked .category-check svg { display: block; }
+        .category-info { flex: 1; }
+        .category-name { font-size: 0.9rem; font-weight: 600; color: #1C1208; }
+        .category-margin { font-size: 0.75rem; color: #78503A; margin-top: 2px; }
+
+        /* BGF 상태 */
+        .bgf-status { padding: 12px; border-radius: 8px; text-align: center; margin: 16px 0; display: none; }
+        .bgf-status.running { display: block; background: rgba(59,130,246,0.1); border: 1px solid rgba(59,130,246,0.2); color: #93c5fd; }
+        .bgf-status.success { display: block; background: rgba(34,197,94,0.1); border: 1px solid rgba(34,197,94,0.2); color: #86efac; }
+        .bgf-status.failed { display: block; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.2); color: #fca5a5; }
+        .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid rgba(147,197,253,0.3); border-top-color: #93c5fd; border-radius: 50%; animation: spin 0.8s linear infinite; margin-right: 8px; vertical-align: middle; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* 보안 안내 */
+        .security-note { font-size: 0.78rem; color: #B89070; margin: 12px 0 16px; line-height: 1.5; }
+
+        /* 완료 화면 */
+        .complete-icon { text-align: center; margin: 20px 0; }
+        .complete-icon svg { width: 64px; height: 64px; color: #22c55e; }
+        .complete-msg { text-align: center; margin-bottom: 24px; }
+        .complete-msg h2 { font-size: 1.3rem; margin-bottom: 8px; }
+        .complete-msg p { color: #78503A; font-size: 0.9rem; line-height: 1.5; }
+
+        /* 반응형 */
+        @media (max-width: 768px) {
+            .onboarding-container { padding: 12px; max-width: 100%; }
+            .onboarding-card { padding: 24px 20px; }
+            .progress-bar { flex-wrap: nowrap; overflow-x: auto; }
+            .step-label { font-size: 0.6rem; }
+        }
+        .hidden { display: none !important; }
+
+        /* 프랜차이즈 선택 그리드 */
+        .franchise-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        .franchise-card {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px 12px 16px;
+            background: #FEF9C3;
+            border: 2px solid #FDE68A;
+            border-radius: 14px;
+            cursor: pointer;
+            transition: border-color 0.2s, background 0.2s, transform 0.1s;
+        }
+        .franchise-card:hover:not(.disabled) { border-color: #FBBF24; transform: translateY(-1px); }
+        .franchise-card.disabled {
+            opacity: 0.5;
+            cursor: default;
+            position: relative;
+        }
+        .franchise-card.disabled .franchise-radio { display: none; }
+        .franchise-badge {
+            display: inline-block;
+            font-size: 0.7rem;
+            font-weight: 600;
+            color: #92400E;
+            background: #FDE68A;
+            padding: 2px 10px;
+            border-radius: 10px;
+        }
+        .franchise-card.selected {
+            border-color: #EA580C;
+            background: rgba(234,88,12,0.06);
+        }
+        .franchise-logo {
+            width: 64px;
+            height: 64px;
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 10px;
+            overflow: hidden;
+        }
+        .franchise-logo svg { width: 64px; height: 64px; }
+        .franchise-name {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #1C1208;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+        .franchise-radio {
+            width: 22px;
+            height: 22px;
+            border: 2px solid #FBBF24;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+        .franchise-card.selected .franchise-radio {
+            border-color: #EA580C;
+        }
+        .franchise-radio-inner {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: transparent;
+            transition: background 0.2s;
+        }
+        .franchise-card.selected .franchise-radio-inner {
+            background: #EA580C;
+        }
+
+        /* 디버그 로그 패널 */
+        .debug-panel {
+            position: fixed; bottom: 0; left: 0; right: 0;
+            background: #0d1117; border-top: 2px solid #30363d;
+            max-height: 200px; z-index: 9999; font-family: monospace;
+            transition: max-height 0.3s ease;
+        }
+        .debug-panel.collapsed { max-height: 32px; }
+        .debug-header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 4px 12px; background: #161b22; cursor: pointer;
+            border-bottom: 1px solid #30363d; font-size: 0.75rem; color: #8b949e;
+        }
+        .debug-header:hover { background: #1c2128; }
+        .debug-log {
+            overflow-y: auto; max-height: 168px; padding: 4px 8px;
+            font-size: 0.72rem; line-height: 1.6;
+        }
+        .debug-log .log-entry { border-bottom: 1px solid #21262d; padding: 2px 0; }
+        .log-time { color: #6e7681; margin-right: 6px; }
+        .log-req { color: #58a6ff; }
+        .log-res { color: #3fb950; }
+        .log-err { color: #f85149; }
+        .log-info { color: #d2a8ff; }
+        .log-session { color: #f0883e; }
+
+        /* 닫기 버튼 */
+        .onboarding-card { position: relative; }
+        .btn-close {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            background: none;
+            border: none;
+            color: #B89070;
+            font-size: 1.2rem;
+            cursor: pointer;
+            padding: 4px 8px;
+            border-radius: 6px;
+            z-index: 2;
+            line-height: 1;
+        }
+        .btn-close:hover { background: rgba(255,255,255,0.05); color: #1C1208; }
+
+        /* 버튼 그룹 (이전 + 다음) */
+        .step-actions { display: flex; gap: 10px; margin-top: 8px; }
+        .step-actions .btn-primary { flex: 1; margin-top: 0; }
+        .step-actions .btn-secondary { flex: 0 0 auto; width: auto; padding: 14px 24px; margin-top: 0; }
+
+        /* 초기화 링크 */
+        .btn-reset-link {
+            display: block;
+            text-align: center;
+            margin-top: 16px;
+            font-size: 0.8rem;
+            color: #B89070;
+            cursor: pointer;
+            text-decoration: underline;
+            background: none;
+            border: none;
+            font-family: inherit;
+        }
+        .btn-reset-link:hover { color: #78503A; }
+
+        /* 확인 팝업 */
+        .confirm-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        }
+        .confirm-box {
+            background: #FFFFFF;
+            border: 1px solid #FDE68A;
+            border-radius: 12px;
+            padding: 24px;
+            max-width: 320px;
+            width: 90%;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+        }
+        .confirm-box p {
+            margin-bottom: 20px;
+            line-height: 1.6;
+            white-space: pre-line;
+            font-size: 0.9rem;
+            color: #1C1208;
+        }
+        .confirm-actions { display: flex; gap: 8px; justify-content: flex-end; }
+        .confirm-actions .btn-secondary { width: auto; padding: 10px 20px; margin-top: 0; font-size: 0.85rem; }
+        .confirm-actions .btn-primary { width: auto; padding: 10px 20px; margin-top: 0; font-size: 0.85rem; }
+    </style>
+</head>
+<body>
+    <div class="onboarding-container">
+        <div class="onboarding-card">
+            <button type="button" class="btn-close" id="btnClose">✕</button>
+            <!-- 진행 바 (4단계) -->
+            <div class="progress-bar" id="progressBar">
+                <div class="progress-step active" data-step="1">
+                    <div class="step-circle">1</div>
+                    <div class="step-label">회원가입</div>
+                </div>
+                <div class="progress-step" data-step="2">
+                    <div class="step-circle">2</div>
+                    <div class="step-label">프랜차이즈</div>
+                </div>
+                <div class="progress-step" data-step="3">
+                    <div class="step-circle">3</div>
+                    <div class="step-label">시스템 연결</div>
+                </div>
+                <div class="progress-step" data-step="4">
+                    <div class="step-circle">4</div>
+                    <div class="step-label">알림 설정</div>
+                </div>
+            </div>
+
+            <!-- STEP 1: 회원가입 -->
+            <div id="step-1" class="step-panel active">
+                <h2>회원가입</h2>
+                <p class="desc">오더핏AI 계정을 만드세요.</p>
+                <div class="msg error" id="step1Error"></div>
+                <form id="signupForm" autocomplete="off">
+                    <div class="form-group">
+                        <label>아이디</label>
+                        <input type="text" id="regUsername" placeholder="영문, 숫자, _ (3~30자)" required>
+                    </div>
+                    <div class="form-group">
+                        <label>비밀번호</label>
+                        <input type="password" id="regPassword" placeholder="4자 이상" required>
+                    </div>
+                    <div class="form-group">
+                        <label>비밀번호 확인</label>
+                        <input type="password" id="regPasswordConfirm" placeholder="비밀번호를 다시 입력하세요" required>
+                    </div>
+                    <div class="form-group">
+                        <label>이름</label>
+                        <input type="text" id="regFullName" placeholder="점주 이름">
+                    </div>
+                    <div class="form-group">
+                        <label>초대 코드 <span style="font-weight:400; text-transform:none; letter-spacing:0; color:#B89070">(선택)</span></label>
+                        <input type="text" id="inviteCode" placeholder="초대 코드가 있으면 입력하세요" maxlength="16">
+                        <p style="font-size:0.75rem; color:#B89070; margin-top:6px; line-height:1.4;">초대 코드 없이도 가입할 수 있습니다.</p>
+                    </div>
+                    <div class="form-group">
+                        <label>매장 주소 <span style="font-weight:400; text-transform:none; letter-spacing:0; color:#B89070">(선택)</span></label>
+                        <input type="text" id="storeLocation" placeholder="매장 주소를 입력하세요">
+                        <p class="form-hint">📍 상권분석에 활용됩니다</p>
+                    </div>
+                    <button type="submit" class="btn-primary" id="btnSignup">가입하기</button>
+                </form>
+                <button type="button" class="btn-reset-link" id="btnReset">처음부터 다시 시작</button>
+            </div>
+
+            <!-- STEP 2: 프랜차이즈 선택 -->
+            <div id="step-2" class="step-panel">
+                <h2>프랜차이즈 선택</h2>
+                <p class="desc">운영 중인 편의점 프랜차이즈를 선택하세요.</p>
+                <div class="msg error" id="step2Error"></div>
+                <div class="franchise-grid" id="franchiseGrid">
+                    <!-- CU (BGF리테일) -->
+                    <div class="franchise-card" data-franchise="cu">
+                        <div class="franchise-logo">
+                            <svg viewBox="0 0 64 64" fill="none">
+                                <rect width="64" height="64" rx="14" fill="#652D91"/>
+                                <text x="32" y="40" text-anchor="middle" font-family="Arial,sans-serif" font-weight="800" font-size="24" fill="#FFFFFF">CU</text>
+                            </svg>
+                        </div>
+                        <div class="franchise-name">CU</div>
+                        <div class="franchise-radio"><div class="franchise-radio-inner"></div></div>
+                    </div>
+                    <!-- GS25 (GS리테일) -->
+                    <div class="franchise-card disabled" data-franchise="gs25">
+                        <div class="franchise-logo">
+                            <svg viewBox="0 0 64 64" fill="none">
+                                <rect width="64" height="64" rx="14" fill="#FFFFFF" stroke="#E5E7EB" stroke-width="1"/>
+                                <!-- GS25 로고: 흰배경 + 파란GS + 주황25 가로형 -->
+                                <text x="4" y="42" font-family="Arial,Helvetica,sans-serif" font-weight="900" font-size="24" fill="#003DA5">GS</text>
+                                <text x="35" y="42" font-family="Arial,Helvetica,sans-serif" font-weight="900" font-size="24" fill="#F7941D">25</text>
+                            </svg>
+                        </div>
+                        <div class="franchise-name">GS25</div>
+                        <div class="franchise-badge">준비중</div>
+                    </div>
+                    <!-- 세븐일레븐 (코리아세븐) -->
+                    <div class="franchise-card disabled" data-franchise="seven">
+                        <div class="franchise-logo">
+                            <svg viewBox="0 0 64 64" fill="none">
+                                <rect width="64" height="64" rx="14" fill="#FFFFFF" stroke="#E0E0E0" stroke-width="1"/>
+                                <rect x="8" y="14" width="48" height="10" rx="2" fill="#008C47"/>
+                                <rect x="8" y="26" width="48" height="10" rx="2" fill="#F7941D"/>
+                                <rect x="8" y="38" width="48" height="10" rx="2" fill="#E3000B"/>
+                                <text x="32" y="34" text-anchor="middle" font-family="Arial,sans-serif" font-weight="900" font-size="22" fill="#008C47">7</text>
+                            </svg>
+                        </div>
+                        <div class="franchise-name">세븐일레븐</div>
+                        <div class="franchise-badge">준비중</div>
+                    </div>
+                    <!-- 이마트24 (이마트) -->
+                    <div class="franchise-card disabled" data-franchise="emart24">
+                        <div class="franchise-logo">
+                            <svg viewBox="0 0 64 64" fill="none">
+                                <rect width="64" height="64" rx="14" fill="#FFB81C"/>
+                                <text x="32" y="30" text-anchor="middle" font-family="Arial,sans-serif" font-weight="700" font-size="11" fill="#1A1A1A">emart</text>
+                                <text x="32" y="48" text-anchor="middle" font-family="Arial,sans-serif" font-weight="800" font-size="20" fill="#1A1A1A">24</text>
+                            </svg>
+                        </div>
+                        <div class="franchise-name">이마트24</div>
+                        <div class="franchise-badge">준비중</div>
+                    </div>
+                </div>
+                <div class="step-actions">
+                    <button type="button" class="btn-secondary" id="btnBack2">이전</button>
+                    <button type="button" class="btn-primary" id="btnStep2Next" disabled>다음</button>
+                </div>
+            </div>
+
+            <!-- STEP 3: 시스템 연결 (BGF) -->
+            <div id="step-3" class="step-panel">
+                <h2>발주 시스템 계정 연결</h2>
+                <p class="desc" id="step3Desc">프랜차이즈 발주 시스템 로그인 정보를 입력하세요.</p>
+                <div class="msg error" id="step3Error"></div>
+                <div class="form-group">
+                    <label id="bgfIdLabel">시스템 아이디</label>
+                    <input type="text" id="bgfId" placeholder="발주 시스템 아이디" autocomplete="off">
+                </div>
+                <div class="form-group">
+                    <label>비밀번호</label>
+                    <input type="password" id="bgfPassword" placeholder="발주 시스템 비밀번호" autocomplete="off">
+                </div>
+                <div class="security-note">
+                    입력하신 정보는 AES 암호화 후 저장됩니다.<br>
+                    발주 실행에만 사용되며, 외부에 공개되지 않습니다.
+                </div>
+                <div class="bgf-status" id="bgfStatus">
+                    <span class="spinner"></span> 연결 확인 중...
+                </div>
+                <div class="step-actions">
+                    <button type="button" class="btn-secondary" id="btnBack3">이전</button>
+                    <button type="button" class="btn-primary" id="btnBgfTest">계정 연결 테스트</button>
+                    <button type="button" class="btn-primary hidden" id="btnStep3Next" disabled>다음</button>
+                </div>
+            </div>
+
+            <!-- STEP 4: 카카오톡 연결 -->
+            <div id="step-4" class="step-panel">
+                <h2>카카오톡 알림 연결 (선택)</h2>
+                <p class="desc">매일 아침 발주 완료 알림을 카카오톡으로 받을 수 있습니다.<br>폐기 위험 상품, 행사 변경 알림도 함께 받아보세요.</p>
+                <div class="step-actions">
+                    <button type="button" class="btn-secondary" id="btnBack4">이전</button>
+                    <button type="button" class="btn-primary" id="btnKakao">카카오톡 연결하기</button>
+                </div>
+                <button type="button" class="btn-secondary" id="btnSkipKakao">나중에 하기</button>
+            </div>
+
+            <!-- 완료 -->
+            <div id="step-complete" class="step-panel">
+                <div class="complete-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                        <polyline points="22 4 12 14.01 9 11.01"/>
+                    </svg>
+                </div>
+                <div class="complete-msg">
+                    <h2>설정 완료!</h2>
+                    <p>내일 아침 7시, 오더핏AI이 자동으로<br>푸드 발주를 완료합니다.</p>
+                    <p id="kakaoMsg" class="hidden" style="margin-top:8px;">카카오톡으로 결과 알림을 보내드립니다.</p>
+                </div>
+                <button type="button" class="btn-primary" id="btnGoDashboard">대시보드로 이동</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 확인 팝업 -->
+    <div class="confirm-overlay" id="confirmOverlay" style="display:none">
+        <div class="confirm-box">
+            <p id="confirmMsg"></p>
+            <div class="confirm-actions">
+                <button type="button" class="btn-secondary" id="confirmCancelBtn">계속하기</button>
+                <button type="button" class="btn-primary" id="confirmOkBtn">나가기</button>
+            </div>
+        </div>
+    </div>
+
+<!-- 디버그 로그 패널 (?debug=1 일 때만 표시) -->
+<div class="debug-panel" id="debugPanel" style="display:none">
+    <div class="debug-header" id="debugToggle">
+        <span>Debug Log <span id="debugCount">(0)</span></span>
+        <span id="debugArrow">&#9660;</span>
+    </div>
+    <div class="debug-log" id="debugLog"></div>
+</div>
+
+<script>
+(function() {
+    // ── 디버그 모드: ?debug=1 일 때만 활성 ──
+    var _debugMode = new URLSearchParams(window.location.search).get('debug') === '1';
+    var _logCount = 0;
+    var _debugEl = null;
+
+    function dlog(type, msg) {
+        if (!_debugMode) return;
+        _logCount++;
+        if (!_debugEl) _debugEl = document.getElementById('debugLog');
+        var cntEl = document.getElementById('debugCount');
+        if (cntEl) cntEl.textContent = '(' + _logCount + ')';
+        var now = new Date();
+        var ts = now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0') + ':' + now.getSeconds().toString().padStart(2,'0');
+        var cls = 'log-' + type;
+        var entry = document.createElement('div');
+        entry.className = 'log-entry';
+        entry.innerHTML = '<span class="log-time">' + ts + '</span><span class="' + cls + '">' + msg + '</span>';
+        if (_debugEl) {
+            _debugEl.appendChild(entry);
+            _debugEl.scrollTop = _debugEl.scrollHeight;
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        // 디버그 패널: ?debug=1 일 때만 표시
+        if (_debugMode) {
+            var panel = document.getElementById('debugPanel');
+            if (panel) panel.style.display = '';
+            var toggle = document.getElementById('debugToggle');
+            var arrow = document.getElementById('debugArrow');
+            if (toggle && panel) {
+                toggle.addEventListener('click', function() {
+                    panel.classList.toggle('collapsed');
+                    arrow.innerHTML = panel.classList.contains('collapsed') ? '&#9650;' : '&#9660;';
+                });
+            }
+            dlog('info', 'Debug logger initialized');
+            dlog('session', 'Session cookies: ' + (document.cookie || '(empty)').substring(0, 80));
+        }
+    });
+
+    // fetch 래퍼 (디버그 모드일 때 로그 추가, 아닐 때는 일반 fetch)
+    function logFetch(url, opts) {
+        if (!_debugMode) return fetch(url, opts);
+        var method = (opts && opts.method) || 'GET';
+        var bodyPreview = '';
+        if (opts && opts.body) {
+            try { var b = JSON.parse(opts.body); bodyPreview = ' body=' + JSON.stringify(b).substring(0, 100); } catch(e) { bodyPreview = ' body=(parse error)'; }
+        }
+        dlog('req', method + ' ' + url + bodyPreview);
+        return fetch(url, opts).then(function(r) {
+            var status = r.status;
+            return r.clone().text().then(function(text) {
+                var preview = text.substring(0, 150);
+                if (status >= 400) {
+                    dlog('err', 'HTTP ' + status + ' ' + url + ' => ' + preview);
+                } else {
+                    dlog('res', 'HTTP ' + status + ' ' + url + ' => ' + preview);
+                }
+                return r;
+            });
+        }).catch(function(err) {
+            dlog('err', 'FETCH FAIL ' + url + ': ' + err);
+            throw err;
+        });
+    }
+
+    var currentStep = 1;
+    var bgfTaskId = null;
+    var pollInterval = null;
+    var isLoggedIn = false;
+    var confirmCallback = null;
+
+    function init() {
+        logFetch('/api/onboarding/status')
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                isLoggedIn = true;
+                dlog('session', 'status: step=' + data.step + ' completed=' + data.completed + ' bgf=' + data.bgf_connected + ' store=' + data.store_code);
+                if (data.completed) {
+                    dlog('info', 'Already completed, redirecting...');
+                    window.location.href = '/';
+                    return;
+                }
+                currentStep = (data.step || 0) + 1;
+                if (currentStep > 4) currentStep = 4;
+                showStep(currentStep);
+            })
+            .catch(function(err) {
+                dlog('err', 'status check failed: ' + err + ' (showing step 1)');
+                showStep(1);
+            });
+    }
+
+    function showStep(step) {
+        dlog('info', 'showStep(' + step + ') prev=' + currentStep);
+        currentStep = step;
+        var panels = document.querySelectorAll('.step-panel');
+        for (var i = 0; i < panels.length; i++) {
+            panels[i].classList.remove('active');
+        }
+        var target = step <= 4 ? document.getElementById('step-' + step) : document.getElementById('step-complete');
+        if (target) target.classList.add('active');
+
+        // 진행 바 업데이트
+        var steps = document.querySelectorAll('.progress-step');
+        for (var j = 0; j < steps.length; j++) {
+            var s = parseInt(steps[j].getAttribute('data-step'));
+            steps[j].classList.remove('active', 'done');
+            if (s < step) steps[j].classList.add('done');
+            else if (s === step) steps[j].classList.add('active');
+        }
+    }
+
+    function showMsg(id, text) {
+        var el = document.getElementById(id);
+        if (el) {
+            el.textContent = text;
+            el.classList.add('visible');
+        }
+    }
+    function hideMsg(id) {
+        var el = document.getElementById(id);
+        if (el) el.classList.remove('visible');
+    }
+
+    // ── STEP 1: 회원가입 ──
+    var signupForm = document.getElementById('signupForm');
+    if (signupForm) {
+        signupForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            hideMsg('step1Error');
+
+            var pw = document.getElementById('regPassword').value;
+            var pwc = document.getElementById('regPasswordConfirm').value;
+            if (pw !== pwc) {
+                showMsg('step1Error', '비밀번호가 일치하지 않습니다.');
+                return;
+            }
+
+            var btn = document.getElementById('btnSignup');
+            btn.disabled = true;
+            btn.textContent = '가입 중...';
+
+            logFetch('/api/onboarding/signup', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    invite_code: document.getElementById('inviteCode').value.trim(),
+                    username: document.getElementById('regUsername').value.trim(),
+                    password: pw,
+                    full_name: document.getElementById('regFullName').value.trim(),
+                    store_location: document.getElementById('storeLocation').value.trim()
+                })
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                btn.disabled = false;
+                btn.textContent = '가입하기';
+                if (data.success) {
+                    isLoggedIn = true;
+                    showStep(2);
+                } else {
+                    var msgs = {
+                        'invalid_invite_code': '유효하지 않은 초대 코드입니다.',
+                        'username_taken': '이미 사용 중인 아이디입니다.',
+                        'invalid_username': '아이디 형식이 올바르지 않습니다. (영문, 숫자, _ 3~30자)',
+                        'password_too_short': '비밀번호는 4자 이상이어야 합니다.'
+                    };
+                    showMsg('step1Error', msgs[data.error] || '가입에 실패했습니다.');
+                }
+            })
+            .catch(function() {
+                btn.disabled = false;
+                btn.textContent = '가입하기';
+                showMsg('step1Error', '서버 연결에 실패했습니다.');
+            });
+        });
+    }
+
+    // ── STEP 2: 프랜차이즈 선택 ──
+    var selectedFranchise = null;
+    var franchiseGrid = document.getElementById('franchiseGrid');
+    var btnStep2Next = document.getElementById('btnStep2Next');
+
+    if (franchiseGrid) {
+        var cards = franchiseGrid.querySelectorAll('.franchise-card');
+        for (var ci = 0; ci < cards.length; ci++) {
+            cards[ci].addEventListener('click', function() {
+                if (this.classList.contains('disabled')) return;
+                hideMsg('step2Error');
+                // 이전 선택 해제
+                for (var cj = 0; cj < cards.length; cj++) {
+                    cards[cj].classList.remove('selected');
+                }
+                // 새 선택
+                this.classList.add('selected');
+                selectedFranchise = this.getAttribute('data-franchise');
+                dlog('info', 'franchise selected: ' + selectedFranchise);
+                if (btnStep2Next) btnStep2Next.disabled = false;
+            });
+        }
+    }
+
+    if (btnStep2Next) {
+        btnStep2Next.addEventListener('click', function() {
+            if (!selectedFranchise) {
+                showMsg('step2Error', '프랜차이즈를 선택하세요.');
+                return;
+            }
+            // 카테고리 기본값(전체) 자동 저장 후 Step 3으로
+            logFetch('/api/onboarding/categories', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ categories: ['001','002','003','004','005','012'], franchise: selectedFranchise })
+            })
+            .then(function() { showStep(3); })
+            .catch(function() { showStep(3); });
+        });
+    }
+
+    // ── STEP 3: 시스템 연결 (BGF 등) ──
+    var btnBgfTest = document.getElementById('btnBgfTest');
+    if (btnBgfTest) {
+        btnBgfTest.addEventListener('click', function() {
+            hideMsg('step3Error');
+            var bgfId = document.getElementById('bgfId').value.trim();
+            var bgfPw = document.getElementById('bgfPassword').value;
+            if (!bgfId || !bgfPw) {
+                showMsg('step3Error', '아이디와 비밀번호를 입력하세요.');
+                return;
+            }
+            btnBgfTest.disabled = true;
+            btnBgfTest.textContent = '연결 중...';
+
+            var statusEl = document.getElementById('bgfStatus');
+            statusEl.className = 'bgf-status running';
+            statusEl.innerHTML = '<span class="spinner"></span> 연결 확인 중... (최대 90초)';
+
+            logFetch('/api/onboarding/bgf/test', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ bgf_id: bgfId, bgf_password: bgfPw })
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.task_id) {
+                    bgfTaskId = data.task_id;
+                    startBgfPolling();
+                } else if (data.error === 'rate_limited') {
+                    btnBgfTest.disabled = false;
+                    btnBgfTest.textContent = '계정 연결 테스트';
+                    statusEl.className = 'bgf-status failed';
+                    statusEl.textContent = '시도 횟수를 초과했습니다. ' + (data.retry_after || 180) + '초 후 다시 시도하세요.';
+                } else {
+                    btnBgfTest.disabled = false;
+                    btnBgfTest.textContent = '계정 연결 테스트';
+                    statusEl.className = 'bgf-status';
+                    showMsg('step3Error', '입력 정보를 확인해 주세요. (' + (data.error || 'unknown') + ')');
+                }
+            })
+            .catch(function() {
+                btnBgfTest.disabled = false;
+                btnBgfTest.textContent = '계정 연결 테스트';
+                statusEl.className = 'bgf-status';
+                showMsg('step3Error', '서버 연결에 실패했습니다.');
+            });
+        });
+    }
+
+    function startBgfPolling() {
+        var pollCount = 0;
+        var maxPolls = 45;
+        pollInterval = setInterval(function() {
+            pollCount++;
+            if (pollCount > maxPolls) {
+                clearInterval(pollInterval);
+                onBgfResult('failed', 'timeout');
+                return;
+            }
+            logFetch('/api/onboarding/bgf/status/' + bgfTaskId)
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (data.status === 'success') {
+                        clearInterval(pollInterval);
+                        onBgfResult('success');
+                    } else if (data.status === 'failed') {
+                        clearInterval(pollInterval);
+                        onBgfResult('failed', data.error);
+                    }
+                })
+                .catch(function() {
+                    clearInterval(pollInterval);
+                    onBgfResult('failed', 'network');
+                });
+        }, 2000);
+    }
+
+    function onBgfResult(status, error) {
+        dlog('info', 'onBgfResult: status=' + status + ' error=' + (error || 'none'));
+        var statusEl = document.getElementById('bgfStatus');
+        var testBtn = document.getElementById('btnBgfTest');
+        var nextBtn = document.getElementById('btnStep3Next');
+
+        if (status === 'success') {
+            statusEl.className = 'bgf-status success';
+            statusEl.textContent = '연결 완료!';
+            testBtn.classList.add('hidden');
+            nextBtn.classList.remove('hidden');
+            nextBtn.disabled = false;
+        } else {
+            statusEl.className = 'bgf-status failed';
+            var errMsgs = {
+                'invalid_credentials': '아이디 또는 비밀번호를 확인해 주세요.',
+                'timeout': '시스템 응답 시간이 초과되었습니다. 다시 시도해 주세요.',
+                'server_error': '시스템 점검 중입니다. 잠시 후 다시 시도해 주세요.',
+                'network': '네트워크 오류가 발생했습니다.'
+            };
+            statusEl.textContent = errMsgs[error] || '연결에 실패했습니다.';
+            testBtn.disabled = false;
+            testBtn.textContent = '계정 연결 테스트';
+        }
+    }
+
+    var btnStep3Next = document.getElementById('btnStep3Next');
+    if (btnStep3Next) {
+        btnStep3Next.addEventListener('click', function() {
+            showStep(4);
+        });
+    }
+
+    // ── STEP 4: 카카오톡 ──
+    var btnKakao = document.getElementById('btnKakao');
+    if (btnKakao) {
+        btnKakao.addEventListener('click', function() {
+            completeOnboarding(true);
+        });
+    }
+    var btnSkipKakao = document.getElementById('btnSkipKakao');
+    if (btnSkipKakao) {
+        btnSkipKakao.addEventListener('click', function() {
+            completeOnboarding(false);
+        });
+    }
+
+    function completeOnboarding(withKakao) {
+        logFetch('/api/onboarding/complete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ kakao_connected: withKakao })
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.success) {
+                if (withKakao) {
+                    document.getElementById('kakaoMsg').classList.remove('hidden');
+                }
+                // 진행바 전체 done
+                var steps = document.querySelectorAll('.progress-step');
+                for (var m = 0; m < steps.length; m++) {
+                    steps[m].classList.remove('active');
+                    steps[m].classList.add('done');
+                }
+                // 완료 패널
+                var panels = document.querySelectorAll('.step-panel');
+                for (var n = 0; n < panels.length; n++) {
+                    panels[n].classList.remove('active');
+                }
+                document.getElementById('step-complete').classList.add('active');
+            }
+        });
+    }
+
+    // ── 완료 → 대시보드 ──
+    var btnGo = document.getElementById('btnGoDashboard');
+    if (btnGo) {
+        btnGo.addEventListener('click', function() {
+            window.location.href = '/';
+        });
+    }
+
+    // ── 이전 버튼 ──
+    function goBack() {
+        if (currentStep <= 1) return;
+        showStep(currentStep - 1);
+    }
+
+    var btnBack2 = document.getElementById('btnBack2');
+    if (btnBack2) btnBack2.addEventListener('click', goBack);
+    var btnBack3 = document.getElementById('btnBack3');
+    if (btnBack3) btnBack3.addEventListener('click', goBack);
+    var btnBack4 = document.getElementById('btnBack4');
+    if (btnBack4) btnBack4.addEventListener('click', goBack);
+
+    // ── 닫기 버튼 ──
+    var btnCloseEl = document.getElementById('btnClose');
+    if (btnCloseEl) {
+        btnCloseEl.addEventListener('click', function() {
+            showConfirm(
+                '온보딩을 나가시겠어요?\n입력한 내용이 모두 초기화됩니다.',
+                '나가기',
+                '계속하기',
+                function() {
+                    logFetch('/api/onboarding/reset', { method: 'POST' })
+                        .then(function() { window.location.href = '/login'; })
+                        .catch(function() { window.location.href = '/login'; });
+                }
+            );
+        });
+    }
+
+    // ── 초기화 버튼 ──
+    var btnResetEl = document.getElementById('btnReset');
+    if (btnResetEl) {
+        btnResetEl.addEventListener('click', function() {
+            showConfirm(
+                '입력한 내용을 모두 지우고\n처음부터 다시 시작할까요?',
+                '초기화',
+                '취소',
+                function() {
+                    logFetch('/api/onboarding/reset', { method: 'POST' })
+                        .then(function() { window.location.reload(); })
+                        .catch(function() { window.location.reload(); });
+                }
+            );
+        });
+    }
+
+    // ── 확인 팝업 ──
+    function showConfirm(msg, okText, cancelText, onOk) {
+        document.getElementById('confirmMsg').textContent = msg;
+        document.getElementById('confirmOkBtn').textContent = okText || '확인';
+        document.getElementById('confirmCancelBtn').textContent = cancelText || '취소';
+        document.getElementById('confirmOverlay').style.display = 'flex';
+        confirmCallback = onOk;
+    }
+
+    function closeConfirm() {
+        document.getElementById('confirmOverlay').style.display = 'none';
+        confirmCallback = null;
+    }
+
+    var confirmOkBtnEl = document.getElementById('confirmOkBtn');
+    if (confirmOkBtnEl) {
+        confirmOkBtnEl.addEventListener('click', function() {
+            var cb = confirmCallback;
+            closeConfirm();
+            if (cb) cb();
+        });
+    }
+    var confirmCancelBtnEl = document.getElementById('confirmCancelBtn');
+    if (confirmCancelBtnEl) {
+        confirmCancelBtnEl.addEventListener('click', closeConfirm);
+    }
+
+    document.addEventListener('DOMContentLoaded', init);
+})();
+</script>
+</body>
+</html>

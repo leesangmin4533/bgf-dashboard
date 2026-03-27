@@ -88,6 +88,10 @@ def should_order_today(
     if orders_placed >= NEW_PRODUCT_DS_MIN_ORDERS:
         return False, "이미 3회 발주 완료"
 
+    # shelf_life_days None/0 폴백: 카테고리 기본값 → 30일
+    if not shelf_life_days or shelf_life_days <= 0:
+        shelf_life_days = 30
+
     # 과발주 방지: 재고가 유통기한×일평균×1.5 이상이면 스킵
     overstock_threshold = shelf_life_days * daily_avg_sales * NEW_PRODUCT_DS_OVERSTOCK_RATIO
     if current_stock > overstock_threshold and overstock_threshold > 0:

@@ -61,7 +61,7 @@ class TestPromoAdjustmentPredictor:
         result = p._apply_promotion_adjustment(
             item_cd="TEST001", product={}, order_qty=1, weekday_coef=1.0,
             safety_stock=1.0, current_stock=0, pending_qty=0, daily_avg=3.0
-        )
+        ).qty
         assert result == 2
 
     def test_2plus1_order1_becomes_3(self):
@@ -71,7 +71,7 @@ class TestPromoAdjustmentPredictor:
         result = p._apply_promotion_adjustment(
             item_cd="TEST002", product={}, order_qty=1, weekday_coef=1.0,
             safety_stock=1.0, current_stock=0, pending_qty=0, daily_avg=3.0
-        )
+        ).qty
         assert result == 3
 
     def test_2plus1_order2_becomes_3(self):
@@ -81,7 +81,7 @@ class TestPromoAdjustmentPredictor:
         result = p._apply_promotion_adjustment(
             item_cd="TEST003", product={}, order_qty=2, weekday_coef=1.0,
             safety_stock=1.0, current_stock=0, pending_qty=0, daily_avg=3.0
-        )
+        ).qty
         assert result == 3
 
     def test_1plus1_order0_stays_0(self):
@@ -91,7 +91,7 @@ class TestPromoAdjustmentPredictor:
         result = p._apply_promotion_adjustment(
             item_cd="TEST004", product={}, order_qty=0, weekday_coef=1.0,
             safety_stock=1.0, current_stock=0, pending_qty=0, daily_avg=3.0
-        )
+        ).qty
         assert result == 0
 
     def test_no_promo_order1_stays_1(self):
@@ -101,7 +101,7 @@ class TestPromoAdjustmentPredictor:
         result = p._apply_promotion_adjustment(
             item_cd="TEST005", product={}, order_qty=1, weekday_coef=1.0,
             safety_stock=1.0, current_stock=0, pending_qty=0, daily_avg=3.0
-        )
+        ).qty
         assert result == 1
 
     def test_1plus1_order3_stays_3(self):
@@ -111,7 +111,7 @@ class TestPromoAdjustmentPredictor:
         result = p._apply_promotion_adjustment(
             item_cd="TEST006", product={}, order_qty=3, weekday_coef=1.0,
             safety_stock=1.0, current_stock=0, pending_qty=0, daily_avg=3.0
-        )
+        ).qty
         assert result == 3
 
     def test_2plus1_order5_stays_5(self):
@@ -121,7 +121,7 @@ class TestPromoAdjustmentPredictor:
         result = p._apply_promotion_adjustment(
             item_cd="TEST007", product={}, order_qty=5, weekday_coef=1.0,
             safety_stock=1.0, current_stock=0, pending_qty=0, daily_avg=3.0
-        )
+        ).qty
         assert result == 5
 
     def test_1plus1_with_stock1_order1_becomes_2(self):
@@ -133,7 +133,7 @@ class TestPromoAdjustmentPredictor:
         result = p._apply_promotion_adjustment(
             item_cd="TEST008", product={}, order_qty=1, weekday_coef=1.0,
             safety_stock=1.0, current_stock=1, pending_qty=0, daily_avg=3.0
-        )
+        ).qty
         assert result == 2
 
     def test_2plus1_with_stock2_order1_becomes_3(self):
@@ -145,7 +145,7 @@ class TestPromoAdjustmentPredictor:
         result = p._apply_promotion_adjustment(
             item_cd="TEST009", product={}, order_qty=1, weekday_coef=1.0,
             safety_stock=1.0, current_stock=2, pending_qty=0, daily_avg=3.0
-        )
+        ).qty
         assert result == 3
 
     def test_expected_stock_fallback_still_works(self):
@@ -156,7 +156,7 @@ class TestPromoAdjustmentPredictor:
         result = p._apply_promotion_adjustment(
             item_cd="TEST010", product={}, order_qty=0, weekday_coef=1.0,
             safety_stock=1.0, current_stock=0, pending_qty=0, daily_avg=3.0
-        )
+        ).qty
         assert result == 0
 
 

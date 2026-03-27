@@ -5,6 +5,7 @@ PromotionRepository — 행사 정보 저장소
 """
 
 import calendar
+import re
 import sqlite3
 from datetime import datetime
 from typing import List, Dict, Any, Optional
@@ -15,6 +16,57 @@ from src.infrastructure.database.connection import DBRouter
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
+
+# 행사 유효성 검증 (발주단위명 오염 방지)
+_VALID_PROMO_RE = re.compile(r'^\d+\+\d+$')
+_NPN_SEARCH_RE = re.compile(r'(\d+\+\d+)')
+_INVALID_UNIT_NAMES = {'낱개', '묶음', 'BOX', '지함'}
+
+
+def _normalize_promo_text(value: str) -> str:
+    """BGF 행사 원시값에서 핵심 프로모션 타입 추출
+
+    "기간1+1" → "1+1", "기간2+1" → "2+1", "증정 2+1" → "2+1"
+    "아침애 할인" → "할인", "기간할인" → "할인"
+    "증정" → "증정", "기간증정" → "증정"
+    "컵얼음" → "컵얼음" (무효)
+    """
+    if not value:
+        return ''
+    text = value.replace('\r\n', ' ').replace('\r', ' ').replace('\n', ' ').strip()
+    if not text:
+        return ''
+    # 1) N+N 패턴 추출 (기간1+1, 증정 2+1, 할인 2+1 등)
+    m = _NPN_SEARCH_RE.search(text)
+    if m:
+        return m.group(1)
+    # 2) "할인"/"덤" → 단순화
+    if '할인' in text:
+        return '할인'
+    if '덤' in text:
+        return '덤'
+    # 3) "증정" → 단순화
+    if '증정' in text:
+        return '증정'
+    # 4) 그 외 원시값 반환 (validator가 거부)
+    return text
+
+
+def _is_valid_promo_type(value: str) -> bool:
+    """저장 전 promo_type 유효성 검증"""
+    if not value:
+        return False
+    # 줄바꿈 정규화
+    normalized = value.replace('\r\n', ' ').replace('\r', ' ').replace('\n', ' ').strip()
+    if not normalized or normalized in _INVALID_UNIT_NAMES or normalized.isdigit():
+        return False
+    # N+N 패턴 (1+1, 2+1 등)
+    if _VALID_PROMO_RE.match(normalized):
+        return True
+    # "할인", "덤", "증정" 포함
+    if '할인' in normalized or '덤' in normalized or normalized == '증정':
+        return True
+    return False
 
 
 class PromotionRepository(BaseRepository):
@@ -46,6 +98,23 @@ class PromotionRepository(BaseRepository):
         Returns:
             {'saved': bool, 'change_detected': bool, 'change_type': str}
         """
+        result = {'saved': False, 'change_detected': False}
+
+        # BGF 원시값 정규화 (기간1+1 → 1+1, 증정 2+1 → 2+1)
+        current_month_promo = _normalize_promo_text(current_month_promo)
+        next_month_promo = _normalize_promo_text(next_month_promo)
+
+        # 저장 전 유효성 검증 — 발주단위명 오염 방지
+        if current_month_promo and not _is_valid_promo_type(current_month_promo):
+            logger.warning(f"[행사 검증] {item_cd}: 당월 '{current_month_promo}' 무효 → 저장 건너뜀")
+            current_month_promo = ''
+        if next_month_promo and not _is_valid_promo_type(next_month_promo):
+            logger.warning(f"[행사 검증] {item_cd}: 익월 '{next_month_promo}' 무효 → 저장 건너뜀")
+            next_month_promo = ''
+
+        if not current_month_promo and not next_month_promo:
+            return result
+
         conn = self._get_conn()
         cursor = conn.cursor()
         now = self._now()

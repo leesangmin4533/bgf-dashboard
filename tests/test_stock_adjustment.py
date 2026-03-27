@@ -131,6 +131,7 @@ class TestApplyPendingAndStockV11:
         s._cut_items = set()
         s._unavailable_items = set()
         s._last_eval_results = {}
+        s._exclusion_records = []
         return s
 
     def _make_item(self, item_cd="TEST001", item_nm="테스트상품",
@@ -499,6 +500,7 @@ class TestShortExpiryFoodPendingDiscount:
         s._cut_items = set()
         s._unavailable_items = set()
         s._last_eval_results = {}
+        s._exclusion_records = []
         return s
 
     def _make_food_item(self, item_cd="FOOD001", item_nm="주먹밥",
@@ -647,7 +649,7 @@ class TestShortExpiryFoodPendingDiscount:
         assert len(result) == 0  # 비푸드 → 보호 안 됨 → 제거
 
     def test_stock_increase_not_protected(self):
-        """재고 증가면 보호 불필요 (미입고 증가가 아님)"""
+        """유통기한 1일 재고 증가: 재고 무시되어 여전히 발주"""
         s = self._make_system_with_eval()
         item = self._make_food_item(
             final_order_qty=1,
@@ -664,11 +666,12 @@ class TestShortExpiryFoodPendingDiscount:
             stock_data={"FOOD001": 2},  # 재고 증가 (pending 아님)
             min_order_qty=1
         )
-        # 재고 증가 → new_pending==original_pending → 보호 조건 불충족 → 제거
-        assert len(result) == 0
+        # 유통기한 1일 → 재고 무시 → need = 0.5 + 0.3 - 0 - 0 = 0.8 → 발주 1
+        assert len(result) == 1
+        assert result[0]["final_order_qty"] >= 1
 
-    def test_protection_only_when_pending_increased(self):
-        """pending 감소 시 보호 안 함"""
+    def test_protection_fires_when_pending_decreased(self):
+        """pending 감소 시 보호 발동 (예정보다 덜 들어옴 → 원발주 유지)"""
         s = self._make_system_with_eval()
         item = self._make_food_item(
             final_order_qty=5,
@@ -685,9 +688,10 @@ class TestShortExpiryFoodPendingDiscount:
             stock_data={"FOOD001": 3},  # stock도 증가
             min_order_qty=1
         )
-        # pending 감소(3→2) → new_pending < original_pending → 보호 안 함
-        # need=0.5+0.3-3-1(할인적용)=-3.2 → 0 → 제거
-        assert len(result) == 0
+        # pending 감소(3→2) → new_pending < original_pending → 보호 발동
+        # → 원발주 5개 유지
+        assert len(result) == 1
+        assert result[0]['final_order_qty'] == 5
 
 
 # ---------------------------------------------------------------------------

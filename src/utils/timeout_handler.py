@@ -28,7 +28,13 @@ class TimeoutError(Exception):
     pass
 
 
-def log_timeout_error(operation_name: str, elapsed_time: float, context: Optional[Dict[str, Any]] = None) -> None:
+def log_timeout_error(
+    operation_name: str,
+    elapsed_time: float,
+    context: Optional[Dict[str, Any]] = None,
+    store_id: Optional[str] = None,
+    session_id: Optional[str] = None,
+) -> None:
     """
     타임아웃 오류 로그 기록
 
@@ -36,15 +42,21 @@ def log_timeout_error(operation_name: str, elapsed_time: float, context: Optiona
         operation_name: 작업 이름
         elapsed_time: 경과 시간 (초)
         context: 추가 컨텍스트 정보
+        store_id: 매장 ID (선택)
+        session_id: 세션 ID (선택)
     """
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     log_file = LOG_DIR / f"timeout_{datetime.now().strftime('%Y%m%d')}.log"
+
+    store_label = store_id or "UNKNOWN"
+    session_label = session_id or "UNKNOWN"
 
     log_message = f"""
 {'='*60}
 [TIMEOUT ERROR] {timestamp}
 {'='*60}
 작업: {operation_name}
+매장: {store_label}  세션: {session_label}
 경과 시간: {elapsed_time:.2f}초 (제한: {DEFAULT_TIMEOUT}초)
 """
 
@@ -65,7 +77,11 @@ def log_timeout_error(operation_name: str, elapsed_time: float, context: Optiona
     context_str = ""
     if context:
         context_str = ", ".join(f"{key}: {value}" for key, value in context.items())
-    logger.error(f"{operation_name} - 경과 시간: {elapsed_time:.2f}초 (제한: {DEFAULT_TIMEOUT}초), 로그 파일: {log_file}" + (f", {context_str}" if context_str else ""))
+    logger.error(
+        f"[{store_label}] {operation_name} - 경과 시간: {elapsed_time:.2f}초 "
+        f"(제한: {DEFAULT_TIMEOUT}초), 로그 파일: {log_file}"
+        + (f", {context_str}" if context_str else "")
+    )
 
 
 class OperationTimer:

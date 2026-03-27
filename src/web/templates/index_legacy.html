@@ -1,0 +1,1240 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BGF 발주 시스템</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}?v=16">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/dessert.css') }}?v=1">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/category.css') }}?v=1">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/association.css') }}?v=1">
+    <script>
+        /* FOUC 방지: 페이지 로드 전 저장된 테마 즉시 적용 */
+        (function() {
+            var saved = localStorage.getItem('bgf-theme');
+            if (saved) document.documentElement.setAttribute('data-theme', saved);
+            else document.documentElement.setAttribute('data-theme', 'dark');
+        })();
+    </script>
+</head>
+<body>
+    <!-- 상단 네비게이션 -->
+    <nav class="top-nav">
+        <div class="nav-brand">BGF 발주 시스템</div>
+        <div class="nav-tabs">
+            <a href="#" class="nav-tab active" data-tab="home">오늘 요약</a>
+            <a href="#" class="nav-tab" data-tab="analytics">매출/분석</a>
+            <a href="#" class="nav-tab" data-tab="order">발주 관리</a>
+            <a href="#" class="nav-tab" data-tab="food-monitor">푸드 모니터</a>
+            <a href="#" class="nav-tab" data-tab="category">Category<span class="cat-tab-badge" id="categoryBadge" style="display:none">0</span></a>
+            <a href="#" class="nav-tab" data-tab="association">연관분석</a>
+            <a href="#" class="nav-tab" data-tab="settings" id="navTabSettings" style="display:none">설정</a>
+        </div>
+        <div class="nav-right">
+            <!-- 사용자 정보 -->
+            <div class="nav-user-info" id="navUserInfo" style="display:none;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                    <circle cx="12" cy="7" r="4"/>
+                </svg>
+                <span id="navUsername" style="font-size:0.85rem;font-weight:500;"></span>
+                <span id="navStoreBadge" style="font-size:0.7rem;background:rgba(99,102,241,0.2);color:#a5b4fc;padding:2px 8px;border-radius:6px;margin-left:4px;"></span>
+            </div>
+            <!-- 매장 선택 (admin만) -->
+            <div class="nav-store-picker" id="navStorePicker">
+                <svg class="nav-store-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+                    <polyline points="9 22 9 12 15 12 15 22"/>
+                </svg>
+                <select id="globalStoreSelect" class="nav-store-select">
+                    <option value="">로딩중...</option>
+                </select>
+            </div>
+            <div class="nav-status" id="serverStatus">● 연결됨</div>
+            <button class="theme-toggle" id="themeToggle" title="테마 전환" aria-label="테마 전환">
+                <div class="theme-toggle-knob">
+                    <svg id="themeIcon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3a7 7 0 0 0 9.79 9.79z"/>
+                    </svg>
+                </div>
+            </button>
+            <!-- 로그아웃 -->
+            <button class="theme-toggle" id="btnLogout" title="로그아웃" aria-label="로그아웃" style="margin-left:4px;">
+                <div class="theme-toggle-knob">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                        <polyline points="16 17 21 12 16 7"/>
+                        <line x1="21" y1="12" x2="9" y2="12"/>
+                    </svg>
+                </div>
+            </button>
+        </div>
+    </nav>
+
+    <!-- =============================== -->
+    <!-- 오늘 요약 탭                       -->
+    <!-- =============================== -->
+    <main id="tab-home" class="tab-content active">
+
+        <!-- 4개 메트릭 카드 -->
+        <div class="home-bento">
+            <!-- 오늘 발주 카드 -->
+            <div class="metric-card metric-success" id="homeCardOrder">
+                <div class="metric-icon">
+                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none">
+                        <path d="M9 11l3 3L22 4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                        <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" stroke="currentColor" stroke-width="2"/>
+                    </svg>
+                </div>
+                <div class="metric-body">
+                    <div class="metric-label" id="homeOrderLabel">오늘 발주</div>
+                    <div class="metric-value" id="homeOrderValue">-</div>
+                    <div class="metric-sub" id="homeOrderSub"></div>
+                    <div class="metric-spark" id="homeOrderSpark"></div>
+                </div>
+            </div>
+
+            <!-- 폐기 주의 카드 -->
+            <div class="metric-card metric-danger" id="homeCardExpiry" onclick="openExpiryModal()">
+                <div class="metric-icon">
+                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none">
+                        <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" stroke="currentColor" stroke-width="2"/>
+                        <line x1="12" y1="9" x2="12" y2="13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                        <line x1="12" y1="17" x2="12.01" y2="17" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
+                </div>
+                <div class="metric-body">
+                    <div class="metric-label">폐기 주의</div>
+                    <div class="metric-value" id="homeExpiryValue">0</div>
+                    <div class="metric-sub" id="homeExpirySub">위험 상품</div>
+                </div>
+            </div>
+
+            <!-- 오늘 매출 카드 -->
+            <div class="metric-card metric-info" id="homeCardSales">
+                <div class="metric-icon">
+                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none">
+                        <line x1="12" y1="1" x2="12" y2="23" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                        <path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
+                </div>
+                <div class="metric-body">
+                    <div class="metric-label">오늘 매출</div>
+                    <div class="metric-value" id="homeSalesValue">-</div>
+                    <div class="metric-sub" id="homeSalesSub"></div>
+                </div>
+            </div>
+
+            <!-- 시스템 상태 카드 -->
+            <div class="metric-card metric-primary" id="homeCardScheduler" onclick="openSchedulerModal()">
+                <div class="metric-icon">
+                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none">
+                        <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
+                        <path d="M12 6v6l4 2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
+                </div>
+                <div class="metric-body">
+                    <div class="metric-label">시스템 상태</div>
+                    <div class="metric-value" id="homeSchedulerValue">확인중</div>
+                    <div class="metric-sub" id="homeSchedulerSub"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 7일 스파크라인 추이 -->
+        <div class="home-sparkline-row">
+            <div class="sparkline-card">
+                <div class="sparkline-header">
+                    <span class="sparkline-title">발주량 추이 (7일)</span>
+                    <span class="sparkline-value" id="sparkOrderValue">-</span>
+                </div>
+                <canvas id="sparkOrderChart" height="50"></canvas>
+            </div>
+            <div class="sparkline-card">
+                <div class="sparkline-header">
+                    <span class="sparkline-title">매출 추이 (7일)</span>
+                    <span class="sparkline-value" id="sparkSalesValue">-</span>
+                </div>
+                <canvas id="sparkSalesChart" height="50"></canvas>
+            </div>
+            <div class="sparkline-card">
+                <div class="sparkline-header">
+                    <span class="sparkline-title">폐기 추이 (7일)</span>
+                    <span class="sparkline-value" id="sparkWasteValue">-</span>
+                </div>
+                <canvas id="sparkWasteChart" height="50"></canvas>
+            </div>
+        </div>
+
+        <!-- 폐기 주의 상품 인라인 리스트 -->
+        <div class="home-panel" id="homeExpiryInline">
+            <div class="home-panel-header">
+                <h3 class="home-panel-title">폐기 주의 상품 (상위 5개)</h3>
+                <button class="btn btn-sm" onclick="openExpiryModal()">더 보기</button>
+            </div>
+            <div class="home-panel-body" id="homeExpiryListBody">
+                <div class="hint">로딩중...</div>
+            </div>
+        </div>
+
+        <!-- 발주 실패 사유 -->
+        <div class="home-panel" id="homeFailPanel" style="display:none">
+            <div class="home-panel-header">
+                <h3 class="home-panel-title">오늘 발주 실패 사유</h3>
+                <span class="home-panel-badge" id="homeFailCount">0</span>
+            </div>
+            <div class="home-panel-body">
+                <div class="report-table-wrapper">
+                    <table class="report-table" id="homeFailTable">
+                        <thead>
+                            <tr>
+                                <th data-sort="text">상품명</th>
+                                <th data-sort="text">카테고리</th>
+                                <th data-sort="text">사유</th>
+                                <th data-sort="text">상태</th>
+                            </tr>
+                        </thead>
+                        <tbody id="homeFailTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 작업 진행 상황 (admin only) -->
+        <div class="home-panel" id="homePipelinePanel" data-admin-only style="display:none">
+            <div class="home-panel-header">
+                <h3 class="home-panel-title">작업 진행 상황</h3>
+            </div>
+            <div class="home-panel-body" id="homePipelineBody">
+                <div class="pipeline-steps">
+                    <div class="pipeline-step" id="pipeCollect">
+                        <div class="pipeline-dot"></div>
+                        <div class="pipeline-info">
+                            <div class="pipeline-name">데이터 수집</div>
+                            <div class="pipeline-time" id="pipeCollectTime">-</div>
+                        </div>
+                    </div>
+                    <div class="pipeline-connector"></div>
+                    <div class="pipeline-step" id="pipePrediction">
+                        <div class="pipeline-dot"></div>
+                        <div class="pipeline-info">
+                            <div class="pipeline-name">예측</div>
+                            <div class="pipeline-time" id="pipePredictionTime">-</div>
+                        </div>
+                    </div>
+                    <div class="pipeline-connector"></div>
+                    <div class="pipeline-step" id="pipeOrder">
+                        <div class="pipeline-dot"></div>
+                        <div class="pipeline-info">
+                            <div class="pipeline-name">발주</div>
+                            <div class="pipeline-time" id="pipeOrderTime">-</div>
+                        </div>
+                    </div>
+                    <div class="pipeline-connector"></div>
+                    <div class="pipeline-step" id="pipeEval">
+                        <div class="pipeline-dot"></div>
+                        <div class="pipeline-info">
+                            <div class="pipeline-name">평가</div>
+                            <div class="pipeline-time" id="pipeEvalTime">-</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 가입 요청 (admin only) -->
+        <div class="home-panel" id="homeSignupPanel" data-admin-only style="display:none">
+            <div class="home-panel-header">
+                <h3 class="home-panel-title">가입 요청</h3>
+                <span class="home-panel-badge" id="homeSignupCount">0</span>
+            </div>
+            <div class="home-panel-body">
+                <div class="report-table-wrapper">
+                    <table class="report-table" id="homeSignupTable">
+                        <thead>
+                            <tr>
+                                <th data-sort="text">매장 코드</th>
+                                <th data-sort="text">핸드폰</th>
+                                <th data-sort="text">요청일</th>
+                                <th>처리</th>
+                            </tr>
+                        </thead>
+                        <tbody id="homeSignupTableBody"></tbody>
+                    </table>
+                </div>
+                <div class="hint" id="homeSignupEmpty" style="display:none">대기 중인 가입 요청이 없습니다.</div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- =============================== -->
+    <!-- 매출/분석 탭                       -->
+    <!-- =============================== -->
+    <main id="tab-analytics" class="tab-content">
+
+        <!-- 서브탭 선택기 (pill style) -->
+        <div class="analytics-tab-selector">
+            <button class="analytics-tab-btn active" data-analytics="daily">일일 현황</button>
+            <button class="analytics-tab-btn" data-analytics="weekly">주간 추이</button>
+            <button class="analytics-tab-btn" data-analytics="category">카테고리</button>
+            <button class="analytics-tab-btn" data-analytics="accuracy">발주 성적표</button>
+            <button class="analytics-tab-btn" data-analytics="waste">폐기 분석</button>
+            <button class="analytics-tab-btn" data-analytics="inventory">재고</button>
+            <button class="analytics-tab-btn" data-analytics="receiving">입고</button>
+        </div>
+
+        <!-- 서브뷰 1: 일일 현황 (기존 report-daily) -->
+        <div id="analytics-daily" class="analytics-view active">
+            <div class="report-summary-cards" id="dailySummaryCards"></div>
+
+            <div class="report-charts-grid">
+                <div class="report-chart-card">
+                    <div class="chart-card-header">
+                        <h3 class="chart-title">카테고리별 발주량</h3>
+                    </div>
+                    <div class="chart-card-body">
+                        <canvas id="dailyCategoryChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="report-chart-card">
+                    <div class="chart-card-header">
+                        <h3 class="chart-title">발주량 분포</h3>
+                    </div>
+                    <div class="chart-card-body">
+                        <canvas id="dailySafetyHist" height="200"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="report-table-card" id="dailyTablePanel">
+                <div class="table-card-header">
+                    <h3 class="chart-title">상품별 상세</h3>
+                    <input type="text" id="dailySearch" class="report-search" placeholder="상품명, 카테고리 검색...">
+                </div>
+                <div class="table-card-body">
+                    <div class="report-table-wrapper">
+                        <table id="dailyTable" class="report-table">
+                            <thead>
+                                <tr>
+                                    <th data-sort="text">상품명</th>
+                                    <th data-sort="text">카테고리</th>
+                                    <th data-sort="num" class="text-right">일평균</th>
+                                    <th data-sort="num" class="text-right">안전재고</th>
+                                    <th data-sort="num" class="text-right">현재고</th>
+                                    <th data-sort="num" class="text-right">발주량</th>
+                                    <th data-sort="text" class="text-center">신뢰도</th>
+                                </tr>
+                            </thead>
+                            <tbody id="dailyTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 서브뷰 2: 주간 추이 (기존 report-weekly) -->
+        <div id="analytics-weekly" class="analytics-view">
+            <div class="report-summary-cards" id="weeklySummaryCards"></div>
+
+            <div class="report-chart-card full-width">
+                <div class="chart-card-header">
+                    <h3 class="chart-title">카테고리별 판매 추이</h3>
+                </div>
+                <div class="chart-card-body">
+                    <canvas id="weeklyTrendChart" height="300"></canvas>
+                </div>
+            </div>
+
+            <div class="report-charts-grid">
+                <div class="report-chart-card">
+                    <div class="chart-card-header">
+                        <h3 class="chart-title">예측 정확도</h3>
+                    </div>
+                    <div class="chart-card-body">
+                        <canvas id="weeklyAccuracyChart" height="250"></canvas>
+                    </div>
+                </div>
+
+                <div class="report-chart-card">
+                    <div class="chart-card-header">
+                        <h3 class="chart-title">요일별 판매 패턴</h3>
+                    </div>
+                    <div class="chart-card-body">
+                        <div id="weeklyHeatmap"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="report-table-card">
+                <div class="table-card-header">
+                    <h3 class="chart-title">판매 상위 TOP 10</h3>
+                </div>
+                <div class="table-card-body">
+                    <div id="weeklyTopItems"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 서브뷰 3: 카테고리 분석 (기존 report-category) -->
+        <div id="analytics-category" class="analytics-view">
+            <div class="category-selector-card">
+                <label class="category-label">카테고리 선택</label>
+                <div class="category-selector-controls">
+                    <select id="categorySelect" class="category-select"></select>
+                    <button id="btnLoadCategory" class="btn-analyze">분석 시작</button>
+                </div>
+            </div>
+
+            <div id="categoryContent" style="display:none">
+                <div class="report-summary-cards" id="catSummaryCards"></div>
+
+                <div class="report-chart-card full-width">
+                    <div class="chart-card-header">
+                        <h3 class="chart-title">요일별 판매 패턴</h3>
+                    </div>
+                    <div class="chart-card-body">
+                        <canvas id="catRadarChart" height="280"></canvas>
+                    </div>
+                </div>
+
+                <div class="report-charts-grid">
+                    <div class="report-chart-card">
+                        <div class="chart-card-header">
+                            <h3 class="chart-title">상품 회전 현황</h3>
+                        </div>
+                        <div class="chart-card-body">
+                            <canvas id="catDoughnutChart"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="report-chart-card">
+                        <div class="chart-card-header">
+                            <h3 class="chart-title">안전재고 설정</h3>
+                        </div>
+                        <div class="chart-card-body">
+                            <div id="catSafetyTable"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="report-table-card">
+                    <div class="table-card-header">
+                        <h3 class="chart-title">상품별 7일 추이</h3>
+                    </div>
+                    <div class="table-card-body">
+                        <div id="catSparklines"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 서브뷰 4: 발주 성적표 -->
+        <div id="analytics-accuracy" class="analytics-view">
+            <!-- 섹션 1: 종합 성적표 -->
+            <div class="score-hero" id="predScoreHero">
+                <div class="score-ring-wrap" id="predScoreRing">
+                    <div class="skeleton skeleton-value" style="width:100px;height:100px;border-radius:50%"></div>
+                </div>
+                <div class="score-summary" id="predScoreSummary">
+                    <div class="skeleton skeleton-value"></div>
+                </div>
+            </div>
+
+            <!-- 섹션 2: 주간 추이 -->
+            <div class="report-chart-card full-width">
+                <div class="chart-card-header">
+                    <h3 class="chart-title">주간 추이</h3>
+                    <span class="chart-subtitle" id="predTrendChange"></span>
+                </div>
+                <div class="chart-card-body">
+                    <canvas id="predScoreChart" height="220"></canvas>
+                </div>
+            </div>
+
+            <!-- 섹션 3: 카테고리별 신호등 -->
+            <div class="category-signal-grid" id="predCategorySignals">
+                <div class="skeleton skeleton-value" style="height:80px"></div>
+            </div>
+
+            <!-- 섹션 4: 주의 필요 상품 -->
+            <div class="report-table-card full-width">
+                <div class="table-card-header">
+                    <h3 class="chart-title">주의 필요 상품</h3>
+                </div>
+                <div class="table-card-body" id="predAttentionItems">
+                    <div class="hint">데이터 로딩중...</div>
+                </div>
+            </div>
+
+            <!-- 섹션 5: 알림 -->
+            <div class="pred-alerts" id="predAlerts"></div>
+
+            <!-- 고급 설정 (admin only, 접이식) -->
+            <details class="admin-details" data-admin-only style="display:none">
+                <summary>고급 설정 (관리자 전용)</summary>
+                <div class="pred-summary-grid">
+                    <div class="pred-summary-card pred-card-accent" id="predMLStatus">
+                        <div class="pred-card-body">
+                            <div class="pred-card-label">ML 모델</div>
+                            <div class="pred-card-value" id="predMLStatusValue">-</div>
+                            <div class="pred-card-sub" id="predMLStatusSub"></div>
+                        </div>
+                    </div>
+                    <div class="pred-summary-card pred-card-warning" id="predModelMix">
+                        <div class="pred-card-body">
+                            <div class="pred-card-label">예측 방식 비율</div>
+                            <div class="pred-card-value" id="predModelMixValue">-</div>
+                            <div class="pred-card-sub" id="predModelMixSub"></div>
+                        </div>
+                    </div>
+                </div>
+            </details>
+        </div>
+
+        <!-- 서브뷰 5: 폐기 분석 -->
+        <div id="analytics-waste" class="analytics-view">
+            <!-- 기간 선택기 -->
+            <div class="waste-period-selector">
+                <button class="waste-period-btn active" data-days="7">7일</button>
+                <button class="waste-period-btn" data-days="14">14일</button>
+                <button class="waste-period-btn" data-days="30">30일</button>
+            </div>
+
+            <!-- 요약 카드 -->
+            <div class="report-summary-cards" id="wasteSummaryCards"></div>
+
+            <!-- 차트: 파이 + 바 -->
+            <div class="report-charts-grid">
+                <div class="report-chart-card">
+                    <div class="chart-card-header">
+                        <h3 class="chart-title">원인별 폐기 비율</h3>
+                    </div>
+                    <div class="chart-card-body">
+                        <canvas id="wasteCausePieChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="report-chart-card">
+                    <div class="chart-card-header">
+                        <h3 class="chart-title">원인별 폐기 수량</h3>
+                    </div>
+                    <div class="chart-card-body">
+                        <canvas id="wasteCauseBarChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 워터폴 차트 (full-width) -->
+            <div class="report-chart-card full-width">
+                <div class="chart-card-header">
+                    <h3 class="chart-title">상품별 발주 -> 판매 -> 폐기 흐름</h3>
+                </div>
+                <div class="chart-card-body">
+                    <canvas id="wasteWaterfallChart" height="350"></canvas>
+                </div>
+            </div>
+
+            <!-- 상세 테이블 -->
+            <div class="report-table-card">
+                <div class="table-card-header">
+                    <h3 class="chart-title">폐기 상세 내역</h3>
+                    <input type="text" id="wasteSearch" class="report-search" placeholder="상품명 검색...">
+                </div>
+                <div class="table-card-body">
+                    <div class="report-table-wrapper">
+                        <table class="report-table">
+                            <thead>
+                                <tr>
+                                    <th data-sort="text">상품명</th>
+                                    <th data-sort="text">원인</th>
+                                    <th data-sort="num" class="text-right">발주량</th>
+                                    <th data-sort="num" class="text-right">판매량</th>
+                                    <th data-sort="num" class="text-right">폐기량</th>
+                                    <th data-sort="num" class="text-right">신뢰도</th>
+                                    <th data-sort="text">날짜</th>
+                                </tr>
+                            </thead>
+                            <tbody id="wasteTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 서브뷰 6: 재고 수명 -->
+        <div id="analytics-inventory" class="analytics-view">
+            <!-- 요약 카드 4개 -->
+            <div class="report-summary-cards" id="inventorySummaryCards">
+                <div class="summary-card card-info">
+                    <div class="card-label">총 재고 상품</div>
+                    <div class="card-value" id="invTotalItems">-</div>
+                </div>
+                <div class="summary-card card-danger">
+                    <div class="card-label">스테일 경고</div>
+                    <div class="card-value" id="invStaleItems">-</div>
+                    <div class="card-sub" id="invStaleSub"></div>
+                </div>
+                <div class="summary-card card-warning">
+                    <div class="card-label">오늘 만료 배치</div>
+                    <div class="card-value" id="invExpiringToday">-</div>
+                </div>
+                <div class="summary-card card-success">
+                    <div class="card-label">신선 재고 비율</div>
+                    <div class="card-value" id="invFreshRate">-</div>
+                </div>
+            </div>
+
+            <!-- 차트: 신선도 도넛 + TTL 분포 바 -->
+            <div class="report-charts-grid">
+                <div class="report-chart-card">
+                    <div class="chart-card-header">
+                        <h3 class="chart-title">재고 신선도 분포</h3>
+                    </div>
+                    <div class="chart-card-body">
+                        <canvas id="inventoryFreshnessChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="report-chart-card">
+                    <div class="chart-card-header">
+                        <h3 class="chart-title">TTL 분포</h3>
+                    </div>
+                    <div class="chart-card-body">
+                        <canvas id="inventoryTtlChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 배치 만료 타임라인 (full-width) -->
+            <div class="report-chart-card full-width">
+                <div class="chart-card-header">
+                    <h3 class="chart-title">배치 만료 타임라인 (3일)</h3>
+                </div>
+                <div class="chart-card-body">
+                    <canvas id="inventoryBatchChart" height="250"></canvas>
+                </div>
+            </div>
+
+            <!-- 스테일 상품 테이블 -->
+            <div class="report-table-card">
+                <div class="table-card-header">
+                    <h3 class="chart-title">스테일 상품 목록</h3>
+                    <input type="text" id="invStaleSearch" class="report-search" placeholder="상품명 검색...">
+                </div>
+                <div class="table-card-body">
+                    <div class="report-table-wrapper">
+                        <table class="report-table" id="invStaleTable">
+                            <thead>
+                                <tr>
+                                    <th data-sort="text">상품명</th>
+                                    <th data-sort="num" class="text-right">재고</th>
+                                    <th data-sort="num" class="text-right">경과시간</th>
+                                    <th data-sort="num" class="text-right">TTL</th>
+                                    <th data-sort="text">카테고리</th>
+                                    <th data-sort="text">상태</th>
+                                </tr>
+                            </thead>
+                            <tbody id="invStaleTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 서브뷰 7: 입고 지연 분석 -->
+        <div id="analytics-receiving" class="analytics-view">
+            <!-- 요약 카드 4개 -->
+            <div class="report-summary-cards" id="receivingSummaryCards">
+                <div class="summary-card card-info">
+                    <div class="card-label">평균 리드타임</div>
+                    <div class="card-value" id="rcvAvgLeadTime">-</div>
+                    <div class="card-sub">일</div>
+                </div>
+                <div class="summary-card card-danger">
+                    <div class="card-label">최대 리드타임</div>
+                    <div class="card-value" id="rcvMaxLeadTime">-</div>
+                    <div class="card-sub">일</div>
+                </div>
+                <div class="summary-card card-warning">
+                    <div class="card-label">숏배송율</div>
+                    <div class="card-value" id="rcvShortRate">-</div>
+                </div>
+                <div class="summary-card card-success">
+                    <div class="card-label">미입고 상품</div>
+                    <div class="card-value" id="rcvPendingCount">-</div>
+                    <div class="card-sub">품목</div>
+                </div>
+            </div>
+
+            <!-- 차트: 리드타임 추이 + 미입고 분포 -->
+            <div class="report-charts-grid">
+                <div class="report-chart-card">
+                    <div class="chart-card-header">
+                        <h3 class="chart-title">리드타임 추이 (30일)</h3>
+                    </div>
+                    <div class="chart-card-body">
+                        <canvas id="receivingTrendChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="report-chart-card">
+                    <div class="chart-card-header">
+                        <h3 class="chart-title">미입고 경과일 분포</h3>
+                    </div>
+                    <div class="chart-card-body">
+                        <canvas id="receivingPendingChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 지연 상품 테이블 -->
+            <div class="report-table-card">
+                <div class="table-card-header">
+                    <h3 class="chart-title">지연 상품 목록</h3>
+                    <input type="text" id="rcvSlowSearch" class="report-search" placeholder="상품명 검색...">
+                </div>
+                <div class="table-scroll">
+                    <table class="report-table" id="rcvSlowTable">
+                        <thead>
+                            <tr>
+                                <th>상품명</th>
+                                <th>미입고 경과일</th>
+                                <th>평균 리드타임</th>
+                                <th>숏배송율</th>
+                            </tr>
+                        </thead>
+                        <tbody id="rcvSlowBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- =============================== -->
+    <!-- 발주 관리 탭                       -->
+    <!-- =============================== -->
+    <main id="tab-order" class="tab-content">
+
+        <div class="order-container">
+            <!-- 발주 모드 선택 -->
+            <div class="order-mode-selector">
+                <button class="order-mode-btn active" data-mode="partial" id="btnModePartial">
+                    <svg class="mode-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="5" width="18" height="4" rx="1"/>
+                        <rect x="3" y="10" width="18" height="4" rx="1"/>
+                        <rect x="3" y="15" width="18" height="4" rx="1"/>
+                    </svg>
+                    <span class="mode-label">카테고리 선택</span>
+                    <span class="mode-desc">원하는 카테고리만 발주</span>
+                </button>
+                <button class="order-mode-btn" data-mode="full" id="btnModeFull">
+                    <svg class="mode-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="3" width="18" height="18" rx="2"/>
+                        <polyline points="9 11 12 14 16 10"/>
+                    </svg>
+                    <span class="mode-label">전체 상품</span>
+                    <span class="mode-desc">모든 상품 한번에 발주</span>
+                </button>
+            </div>
+
+            <!-- 카테고리 선택 발주 -->
+            <div class="order-section" id="sectionPartial" style="display:block">
+                <div class="order-section-header">
+                    <div>
+                        <h2 class="section-title">카테고리 선택</h2>
+                        <p class="section-desc">발주할 카테고리를 선택하세요</p>
+                    </div>
+                    <label class="select-all-label">
+                        <input type="checkbox" id="partialSelectAll" checked>
+                        <span>전체 선택</span>
+                    </label>
+                </div>
+
+                <div class="category-grid" id="partialCategoryGrid">
+                    <div class="hint">카테고리 로딩중...</div>
+                </div>
+
+                <div class="order-summary-card" id="partialSummary">
+                    <div class="summary-stat">
+                        <div class="summary-label">선택 카테고리</div>
+                        <div class="summary-value"><span id="partialCatCount">0</span>개</div>
+                    </div>
+                    <div class="summary-stat">
+                        <div class="summary-label">예상 상품수</div>
+                        <div class="summary-value" id="partialItemCount">-</div>
+                    </div>
+                    <div class="summary-stat">
+                        <div class="summary-label">예상 발주량</div>
+                        <div class="summary-value" id="partialQtyTotal">-</div>
+                    </div>
+                </div>
+
+                <div id="partialStatus" class="status-text order-status-bar"></div>
+
+                <div class="order-action-buttons">
+                    <button class="btn-order btn-order-preview" id="btnPartialPreview">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                            <circle cx="12" cy="12" r="3"/>
+                        </svg>
+                        <span>미리보기</span>
+                    </button>
+                    <button class="btn-order btn-order-excel" id="btnPartialExcel" onclick="exportPreviewExcel()" style="display:none">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="7 10 12 15 17 10"/>
+                            <line x1="12" y1="15" x2="12" y2="3"/>
+                        </svg>
+                        <span>엑셀 다운로드</span>
+                    </button>
+                    <button class="btn-order btn-order-execute" id="btnPartialExecute" data-admin-only style="display:none">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="9 11 12 14 22 4"/>
+                            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+                        </svg>
+                        <span>발주 실행</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- 전체 상품 발주 -->
+            <div class="order-section" id="sectionFull" style="display:none">
+                <div class="order-section-header">
+                    <div>
+                        <h2 class="section-title">전체 상품 발주</h2>
+                        <p class="section-desc">모든 카테고리의 상품을 한 번에 발주합니다</p>
+                    </div>
+                </div>
+
+                <div class="full-order-info">
+                    <div class="info-card">
+                        <svg class="info-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/>
+                            <path d="M12 16v-4m0-4h.01"/>
+                        </svg>
+                        <div class="info-content">
+                            <div class="info-title">전체 발주 안내</div>
+                            <ul class="info-list">
+                                <li>모든 카테고리의 상품이 대상입니다</li>
+                                <li>안전재고 기반으로 자동 계산됩니다</li>
+                                <li>발주 안 하는 상품은 자동으로 제외됩니다</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <details class="exclude-panel" id="excludePanel">
+                    <summary class="exclude-panel-summary">
+                        발주 안 하는 상품 (<span id="excludeTotalCount">0</span>건)
+                        <span class="exclude-store-badge">점포: <span id="excludeStoreId">-</span></span>
+                    </summary>
+                    <div class="exclude-panel-body">
+                        <div class="exclude-group">
+                            <div class="exclude-group-header">
+                                <label class="exclude-toggle">
+                                    <input type="checkbox" id="chkAutoOrder" checked>
+                                    <span>자동발주 제외</span>
+                                </label>
+                                <span class="exclude-count" id="autoOrderCount">0건</span>
+                                <span class="exclude-updated" id="autoOrderInfo">-</span>
+                            </div>
+                            <div class="exclude-items" id="autoOrderItems"></div>
+                        </div>
+                        <div class="exclude-group">
+                            <div class="exclude-group-header">
+                                <label class="exclude-toggle">
+                                    <input type="checkbox" id="chkSmartOrder" checked>
+                                    <span>스마트발주 제외</span>
+                                </label>
+                                <span class="exclude-count" id="smartOrderCount">0건</span>
+                                <span class="exclude-updated" id="smartOrderInfo">-</span>
+                            </div>
+                            <div class="exclude-items" id="smartOrderItems"></div>
+                        </div>
+                    </div>
+                </details>
+
+                <div class="order-action-buttons">
+                    <button class="btn-order btn-order-preview" id="btnFullPreview">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                            <circle cx="12" cy="12" r="3"/>
+                        </svg>
+                        <span>미리보기</span>
+                    </button>
+                    <button class="btn-order btn-order-excel" id="btnFullExcel" onclick="exportPreviewExcel()" style="display:none">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="7 10 12 15 17 10"/>
+                            <line x1="12" y1="15" x2="12" y2="3"/>
+                        </svg>
+                        <span>엑셀 다운로드</span>
+                    </button>
+                    <button class="btn-order btn-order-execute" id="btnFullExecute" data-admin-only style="display:none">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="9 11 12 14 22 4"/>
+                            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+                        </svg>
+                        <span>발주 실행</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- 상세 설정 (admin만) -->
+            <details class="order-log-section" data-admin-only style="display:none">
+                <summary style="cursor:pointer; font-size:0.9rem; color:var(--text-secondary); padding:8px 0;">상세 설정 및 실행 로그</summary>
+                <div class="order-settings">
+                    <div class="order-settings-row">
+                        <div class="order-setting-field">
+                            <label class="order-setting-label">최대 상품수</label>
+                            <input type="number" id="testMaxItems" value="10" min="0" class="order-setting-input">
+                        </div>
+                        <div class="order-setting-field">
+                            <label class="order-setting-label">최소 발주량</label>
+                            <input type="number" id="testMinQty" value="0" min="0" class="order-setting-input">
+                        </div>
+                        <div class="order-setting-actions">
+                            <button id="btnStopScript" class="btn btn-danger" disabled>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="btn-icon-sm">
+                                    <rect x="6" y="6" width="12" height="12"/>
+                                </svg>
+                                <span>중지</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="order-log-container">
+                    <div class="order-log-header">
+                        <h3 class="order-log-title">실행 로그</h3>
+                        <div class="order-log-controls">
+                            <span id="scriptElapsed" class="order-log-elapsed"></span>
+                            <button onclick="document.getElementById('scriptLog').textContent = ''; document.getElementById('scriptElapsed').textContent = '';" class="btn btn-sm">
+                                로그 지우기
+                            </button>
+                        </div>
+                    </div>
+                    <pre id="scriptLog" class="order-log-output"></pre>
+                </div>
+            </details>
+        </div>
+
+    </main>
+
+    <!-- =============================== -->
+    <!-- 설정 탭 (admin 전용)               -->
+    <!-- =============================== -->
+    <main id="tab-settings" class="tab-content">
+
+        <!-- 스케줄러 관리 -->
+        <div class="home-panel">
+            <div class="home-panel-header">
+                <h3 class="home-panel-title">스케줄러 관리</h3>
+            </div>
+            <div class="home-panel-body">
+                <div class="scheduler-control-panel">
+                    <div class="scheduler-status-info">
+                        <span class="status-badge" id="settingsSchedulerBadge">확인중</span>
+                        <span class="status-text" id="settingsSchedulerPid"></span>
+                    </div>
+                    <div class="scheduler-buttons">
+                        <button id="btnSettingsSchedulerStart" class="btn-scheduler-start" onclick="schedulerStart()">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                                <path d="M8 5v14l11-7z" fill="currentColor"/>
+                            </svg>
+                            <span>시작</span>
+                        </button>
+                        <button id="btnSettingsSchedulerStop" class="btn-scheduler-stop" onclick="schedulerStop()" style="display:none">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                                <rect x="6" y="6" width="12" height="12" fill="currentColor"/>
+                            </svg>
+                            <span>정지</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="schedule-timeline" id="settingsTimeline">
+                    <div class="hint">로딩중...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 가입 요청 -->
+        <div class="home-panel" id="settingsSignupPanel">
+            <div class="home-panel-header">
+                <h3 class="home-panel-title">가입 요청 대기</h3>
+                <span class="home-panel-badge" id="settingsSignupCount">0</span>
+            </div>
+            <div class="home-panel-body">
+                <div class="report-table-wrapper">
+                    <table class="report-table" id="settingsSignupTable" style="display:none">
+                        <thead>
+                            <tr>
+                                <th data-sort="text">매장 코드</th>
+                                <th data-sort="text">핸드폰</th>
+                                <th data-sort="text">요청일</th>
+                                <th>처리</th>
+                            </tr>
+                        </thead>
+                        <tbody id="settingsSignupTableBody"></tbody>
+                    </table>
+                </div>
+                <div class="hint" id="settingsSignupEmpty">대기 중인 가입 요청이 없습니다.</div>
+            </div>
+        </div>
+
+        <!-- 사용자 목록 -->
+        <div class="home-panel">
+            <div class="home-panel-header">
+                <h3 class="home-panel-title">등록된 사용자</h3>
+                <button class="btn-sm btn-approve" onclick="showCreateUserForm()" style="font-size:0.8rem;">+ 사용자 추가</button>
+            </div>
+            <div class="home-panel-body">
+                <!-- 사용자 추가 인라인 폼 -->
+                <div id="createUserForm" style="display:none; margin-bottom:16px; padding:16px; background:var(--bg-base); border:1px solid var(--border); border-radius:var(--radius-md);">
+                    <div style="display:grid; grid-template-columns:1fr 1fr 1fr 1fr auto; gap:10px; align-items:end;">
+                        <div>
+                            <label style="font-size:0.75rem; color:var(--text-secondary); display:block; margin-bottom:4px;">아이디</label>
+                            <input type="text" id="newUsername" placeholder="영문/숫자 3~30자" style="width:100%; padding:8px 10px; background:var(--bg-surface); border:1px solid var(--border); border-radius:var(--radius-sm); color:var(--text-primary); font-size:0.85rem;">
+                        </div>
+                        <div>
+                            <label style="font-size:0.75rem; color:var(--text-secondary); display:block; margin-bottom:4px;">비밀번호</label>
+                            <input type="password" id="newPassword" placeholder="4자 이상" style="width:100%; padding:8px 10px; background:var(--bg-surface); border:1px solid var(--border); border-radius:var(--radius-sm); color:var(--text-primary); font-size:0.85rem;">
+                        </div>
+                        <div>
+                            <label style="font-size:0.75rem; color:var(--text-secondary); display:block; margin-bottom:4px;">매장 코드</label>
+                            <input type="text" id="newStoreId" placeholder="5자리 숫자" maxlength="5" style="width:100%; padding:8px 10px; background:var(--bg-surface); border:1px solid var(--border); border-radius:var(--radius-sm); color:var(--text-primary); font-size:0.85rem;">
+                        </div>
+                        <div>
+                            <label style="font-size:0.75rem; color:var(--text-secondary); display:block; margin-bottom:4px;">역할</label>
+                            <select id="newRole" style="width:100%; padding:8px 10px; background:var(--bg-surface); border:1px solid var(--border); border-radius:var(--radius-sm); color:var(--text-primary); font-size:0.85rem;">
+                                <option value="viewer">viewer</option>
+                                <option value="admin">admin</option>
+                            </select>
+                        </div>
+                        <div style="display:flex; gap:6px;">
+                            <button class="btn-sm btn-approve" onclick="createUser()">생성</button>
+                            <button class="btn-sm btn-reject" onclick="hideCreateUserForm()">취소</button>
+                        </div>
+                    </div>
+                </div>
+
+                <input type="text" id="usersSearch" class="search-box" placeholder="아이디, 매장코드 검색..." style="margin-bottom:12px;">
+                <div class="report-table-wrapper">
+                    <table class="report-table" id="usersTable">
+                        <thead>
+                            <tr>
+                                <th data-sort="num">ID</th>
+                                <th data-sort="text">아이디</th>
+                                <th data-sort="text">매장</th>
+                                <th data-sort="text">역할</th>
+                                <th data-sort="text">이름</th>
+                                <th data-sort="text">핸드폰</th>
+                                <th data-sort="text">활성</th>
+                                <th data-sort="text">마지막 로그인</th>
+                                <th>관리</th>
+                            </tr>
+                        </thead>
+                        <tbody id="usersTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 예측 파라미터 관리 -->
+        <div class="home-panel" data-admin-only style="display:none">
+            <div class="home-panel-header">
+                <h3 class="home-panel-title">예측 파라미터</h3>
+                <button class="btn-sm btn-reject" onclick="resetAllEvalParams()" style="font-size:0.8rem;">전체 리셋</button>
+            </div>
+            <div class="home-panel-body">
+                <div id="evalParamsContainer" class="hint">로딩중...</div>
+            </div>
+        </div>
+
+        <!-- 기능 토글 -->
+        <div class="home-panel" data-admin-only style="display:none">
+            <div class="home-panel-header">
+                <h3 class="home-panel-title">기능 토글</h3>
+            </div>
+            <div class="home-panel-body">
+                <div id="featureFlagsContainer" class="hint">로딩중...</div>
+            </div>
+        </div>
+
+        <!-- 변경 이력 -->
+        <div class="home-panel">
+            <div class="home-panel-header">
+                <h3 class="home-panel-title">설정 변경 이력</h3>
+            </div>
+            <div class="home-panel-body">
+                <div class="report-table-wrapper">
+                    <table class="report-table" id="auditLogTable">
+                        <thead>
+                            <tr>
+                                <th>설정</th>
+                                <th>이전값</th>
+                                <th>변경값</th>
+                                <th>변경자</th>
+                                <th>시간</th>
+                                <th>분류</th>
+                            </tr>
+                        </thead>
+                        <tbody id="auditLogBody"></tbody>
+                    </table>
+                </div>
+                <div class="hint" id="auditLogEmpty">변경 이력이 없습니다.</div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- =============================== -->
+    <!-- 푸드 모니터 탭                      -->
+    <!-- =============================== -->
+    <main id="tab-food-monitor" class="tab-content" style="padding:24px;">
+        <div id="fmContent">
+            <div class="fm-loading"><div class="fm-spinner"></div><p>데이터를 불러오는 중...</p></div>
+        </div>
+    </main>
+
+    <!-- =============================== -->
+    <!-- 카테고리 탭 (디저트 + 음료)          -->
+    <!-- =============================== -->
+    <!-- =============================== -->
+    <!-- 연관분석 탭                         -->
+    <!-- =============================== -->
+    <main id="tab-association" class="tab-content" style="padding:24px;">
+        <div id="assocContent">
+            <div class="assoc-loading"><div class="fm-spinner"></div><p>데이터를 불러오는 중...</p></div>
+        </div>
+    </main>
+
+    <main id="tab-category" class="tab-content" style="padding:24px;">
+        <div id="categorySubTabs" class="cat-subtab-bar"></div>
+        <div id="dessertContent">
+            <div class="dessert-loading"><div class="dessert-spinner"></div><p>데이터를 불러오는 중...</p></div>
+        </div>
+        <div id="beverageContent" style="display:none;"></div>
+    </main>
+
+    <!-- =============================== -->
+    <!-- 모달                              -->
+    <!-- =============================== -->
+
+    <!-- 스케줄러 모달 -->
+    <div id="schedulerModal" class="modal" onclick="closeSchedulerModal(event)">
+        <div class="modal-content scheduler-modal" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h2 class="modal-title">시스템 상태</h2>
+                <button class="modal-close" onclick="closeSchedulerModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="scheduler-control-panel">
+                    <div class="scheduler-status-info">
+                        <span class="status-badge" id="schedulerStatusBadge">확인중</span>
+                        <span class="status-text" id="schedulerPidText"></span>
+                    </div>
+                    <div class="scheduler-buttons" data-admin-only style="display:none">
+                        <button id="btnSchedulerStart" class="btn-scheduler-start" onclick="schedulerStart()">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                                <path d="M8 5v14l11-7z" fill="currentColor"/>
+                            </svg>
+                            <span>시작</span>
+                        </button>
+                        <button id="btnSchedulerStop" class="btn-scheduler-stop" onclick="schedulerStop()" style="display:none">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                                <rect x="6" y="6" width="12" height="12" fill="currentColor"/>
+                            </svg>
+                            <span>정지</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="schedule-timeline" id="schedulerTimeline">
+                    <div class="hint">로딩중...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 폐기 위험 모달 -->
+    <div id="expiryModal" class="modal" onclick="closeExpiryModal(event)">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h2 class="modal-title">폐기 주의 상품</h2>
+                <button class="modal-close" onclick="closeExpiryModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="expiryModalBody">
+                <div class="hint">로딩중...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 발주 결과 모달 -->
+    <div id="orderResultModal" class="modal" onclick="closeOrderResultModal(event)">
+        <div class="modal-content modal-xl" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h2 class="modal-title" id="orderResultTitle">발주 예측 결과</h2>
+                <button class="modal-close" onclick="closeOrderResultModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="result-summary" id="orderResultSummary"></div>
+                <input type="text" id="orderSearch" class="search-box" placeholder="상품명, 카테고리 검색...">
+                <div class="result-table-wrapper">
+                    <table class="result-table" id="orderTable">
+                        <thead>
+                            <tr>
+                                <th>상품명</th>
+                                <th>카테고리</th>
+                                <th class="text-right">일평균</th>
+                                <th class="text-right">안전재고</th>
+                                <th class="text-right">현재고</th>
+                                <th class="text-right">발주량</th>
+                                <th class="text-center">신뢰도</th>
+                            </tr>
+                        </thead>
+                        <tbody id="orderTableBody"></tbody>
+                    </table>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn-export-excel" id="btnExportExcel" onclick="exportPreviewExcel()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;margin-right:6px;">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="7 10 12 15 17 10"/>
+                            <line x1="12" y1="15" x2="12" y2="3"/>
+                        </svg>
+                        엑셀 다운로드
+                    </button>
+                    <button class="btn-confirm-order" id="btnConfirmOrder" data-admin-only style="display:none">발주 확정</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast 컨테이너 -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- 스크립트 -->
+    <script src="{{ url_for('static', filename='js/app.js') }}?v=15"></script>
+    <script src="{{ url_for('static', filename='js/order.js') }}?v=14"></script>
+    <script src="{{ url_for('static', filename='js/report.js') }}?v=15"></script>
+    <script src="{{ url_for('static', filename='js/prediction.js') }}?v=5"></script>
+    <script src="{{ url_for('static', filename='js/waste.js') }}?v=1"></script>
+    <script src="{{ url_for('static', filename='js/inventory.js') }}?v=1"></script>
+    <script src="{{ url_for('static', filename='js/receiving.js') }}?v=1"></script>
+    <script src="{{ url_for('static', filename='js/settings.js') }}?v=1"></script>
+    <script src="{{ url_for('static', filename='js/food_monitor.js') }}?v=1"></script>
+    <script src="{{ url_for('static', filename='js/home.js') }}?v=15"></script>
+    <script src="{{ url_for('static', filename='js/users.js') }}?v=2"></script>
+    <script src="{{ url_for('static', filename='js/dessert.js') }}?v=1"></script>
+    <script src="{{ url_for('static', filename='js/beverage.js') }}?v=1"></script>
+    <script src="{{ url_for('static', filename='js/association.js') }}?v=1"></script>
+    <script src="{{ url_for('static', filename='js/category.js') }}?v=1"></script>
+</body>
+</html>

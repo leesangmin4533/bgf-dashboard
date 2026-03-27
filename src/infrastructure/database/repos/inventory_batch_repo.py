@@ -5,7 +5,7 @@ InventoryBatchRepository -- 재고 배치 추적 (FIFO 폐기 관리)
 """
 
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
 from pathlib import Path
 
@@ -38,7 +38,9 @@ class InventoryBatchRepository(BaseRepository):
         expiration_days: int,
         initial_qty: int,
         receiving_id: Optional[int] = None,
-        store_id: Optional[str] = None
+        store_id: Optional[str] = None,
+        delivery_type: Optional[str] = None,
+        expiry_datetime: Optional[str] = None,
     ) -> int:
         """입고 시 새 배치 생성
 
@@ -51,6 +53,8 @@ class InventoryBatchRepository(BaseRepository):
             initial_qty: 입고 수량
             receiving_id: receiving_history FK
             store_id: 매장 코드 (None이면 기본값 사용)
+            delivery_type: 배송차수 ('1차'/'2차'/None)
+            expiry_datetime: 정밀 폐기시간 ('YYYY-MM-DD HH:MM:SS', None이면 date 기반)
 
         Returns:
             생성된 배치 ID
@@ -60,12 +64,15 @@ class InventoryBatchRepository(BaseRepository):
             cursor = conn.cursor()
             now = self._now()
 
-            # 폐기 예정일 계산 (입고일 + 유통기한)
-            cursor.execute(
-                "SELECT date(?, '+' || ? || ' days')",
-                (receiving_date, expiration_days)
-            )
-            expiry_date = cursor.fetchone()[0]
+            # 폐기 예정일 계산: expiry_datetime 우선, 없으면 기존 date 기반
+            if expiry_datetime:
+                expiry_date = expiry_datetime
+            else:
+                cursor.execute(
+                    "SELECT date(?, '+' || ? || ' days')",
+                    (receiving_date, expiration_days)
+                )
+                expiry_date = cursor.fetchone()[0]
 
             if store_id:
                 cursor.execute(
@@ -73,12 +80,12 @@ class InventoryBatchRepository(BaseRepository):
                     INSERT INTO inventory_batches
                     (store_id, item_cd, item_nm, mid_cd, receiving_date, receiving_id,
                      expiration_days, expiry_date, initial_qty, remaining_qty,
-                     status, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     status, created_at, updated_at, delivery_type)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (store_id, item_cd, item_nm, mid_cd, receiving_date, receiving_id,
                      expiration_days, expiry_date, initial_qty, initial_qty,
-                     BATCH_STATUS_ACTIVE, now, now)
+                     BATCH_STATUS_ACTIVE, now, now, delivery_type)
                 )
             else:
                 cursor.execute(
@@ -86,19 +93,19 @@ class InventoryBatchRepository(BaseRepository):
                     INSERT INTO inventory_batches
                     (item_cd, item_nm, mid_cd, receiving_date, receiving_id,
                      expiration_days, expiry_date, initial_qty, remaining_qty,
-                     status, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     status, created_at, updated_at, delivery_type)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (item_cd, item_nm, mid_cd, receiving_date, receiving_id,
                      expiration_days, expiry_date, initial_qty, initial_qty,
-                     BATCH_STATUS_ACTIVE, now, now)
+                     BATCH_STATUS_ACTIVE, now, now, delivery_type)
                 )
 
             batch_id = cursor.lastrowid
             conn.commit()
             logger.info(f"배치 생성: {item_nm}({item_cd}) "
                         f"입고={receiving_date} 수량={initial_qty} "
-                        f"폐기예정={expiry_date}")
+                        f"폐기예정={expiry_date} 차수={delivery_type}")
             return batch_id
         finally:
             conn.close()
@@ -253,7 +260,8 @@ class InventoryBatchRepository(BaseRepository):
         """만료된 배치 상태 업데이트 + realtime_inventory 재고 차감
 
         expiry_date 도달 + remaining_qty > 0 -> status = BATCH_STATUS_EXPIRED
-        만료된 수량만큼 realtime_inventory.stock_qty도 차감하여 실제 재고 반영
+        만료 전 FIFO 소비 차감을 수행하여 remaining_qty가 실제 폐기량만 반영하도록 보정.
+        만료된 수량만큼 realtime_inventory.stock_qty도 차감하여 실제 재고 반영.
 
         Args:
             target_date: 기준 날짜 (기본: 오늘)
@@ -289,22 +297,48 @@ class InventoryBatchRepository(BaseRepository):
             )
             expired_batches = [dict(row) for row in cursor.fetchall()]
 
-            # 상태 업데이트 + realtime_inventory 재고 차감
             if expired_batches:
-                batch_ids = [b['id'] for b in expired_batches]
-                placeholders = ','.join('?' * len(batch_ids))
-                cursor.execute(
-                    f"""
-                    UPDATE inventory_batches
-                    SET status = ?, updated_at = ?
-                    WHERE id IN ({placeholders})
-                    """,
-                    [BATCH_STATUS_EXPIRED, now] + batch_ids
+                # ── FIFO 소비 차감: 만료 전 remaining_qty를 실제 재고 기준으로 보정 ──
+                # 만료되는 배치의 remaining_qty가 initial_qty 그대로인 경우가 많음 (FIFO sync 누락).
+                # daily_sales stock_qty 기준으로 해당 상품의 전체 active 배치 합계와 비교,
+                # 초과분을 FIFO(오래된 배치=만료 배치부터) 차감하여 실제 폐기량만 남김.
+                self._deduct_consumption_before_expiry(
+                    cursor, expired_batches, store_filter, store_params, now
                 )
 
+                # remaining_qty=0이 된 배치는 consumed 처리 (폐기 아닌 소비 완료)
+                consumed_batches = [b for b in expired_batches if b['remaining_qty'] <= 0]
+                actual_expired = [b for b in expired_batches if b['remaining_qty'] > 0]
+
+                # consumed 배치: status=consumed
+                if consumed_batches:
+                    consumed_ids = [b['id'] for b in consumed_batches]
+                    placeholders = ','.join('?' * len(consumed_ids))
+                    cursor.execute(
+                        f"""
+                        UPDATE inventory_batches
+                        SET status = ?, remaining_qty = 0, updated_at = ?
+                        WHERE id IN ({placeholders})
+                        """,
+                        [BATCH_STATUS_CONSUMED, now] + consumed_ids
+                    )
+
+                # expired 배치: status=expired (remaining_qty > 0 = 실제 폐기량)
+                if actual_expired:
+                    for b in actual_expired:
+                        cursor.execute(
+                            """
+                            UPDATE inventory_batches
+                            SET status = ?, remaining_qty = ?, updated_at = ?
+                            WHERE id = ?
+                            """,
+                            (BATCH_STATUS_EXPIRED, b['remaining_qty'], now, b['id'])
+                        )
+
                 # 상품별 만료 수량 합산 → realtime_inventory.stock_qty 차감
+                # (consumed 배치는 이미 판매된 것이므로 RI 차감 불필요, expired만 차감)
                 expired_by_item = {}  # {(store_id, item_cd): total_expired_qty}
-                for b in expired_batches:
+                for b in actual_expired:
                     key = (b.get('store_id', ''), b['item_cd'])
                     expired_by_item[key] = expired_by_item.get(key, 0) + b['remaining_qty']
 
@@ -326,11 +360,219 @@ class InventoryBatchRepository(BaseRepository):
 
                 conn.commit()
 
-                total_waste = sum(b['remaining_qty'] for b in expired_batches)
-                logger.info(f"폐기 확정: {len(expired_batches)}건, "
-                            f"총 {total_waste}개 ({target_date})")
+                total_waste = sum(b['remaining_qty'] for b in actual_expired)
+                total_consumed = len(consumed_batches)
+                logger.info(
+                    f"폐기 확정: {len(actual_expired)}건 ({total_waste}개), "
+                    f"소비 완료: {total_consumed}건 ({target_date})"
+                )
 
             return expired_batches
+        finally:
+            conn.close()
+
+    def _deduct_consumption_before_expiry(
+        self,
+        cursor: sqlite3.Cursor,
+        expiring_batches: List[Dict[str, Any]],
+        store_filter: str,
+        store_params: tuple,
+        now: str,
+    ) -> None:
+        """만료 직전 FIFO 소비 차감 -- remaining_qty를 실제 폐기량으로 보정
+
+        상품별로:
+        1. 전체 active 배치(만료 대상 포함) remaining_qty 합계
+        2. daily_sales 최신 stock_qty 조회
+        3. batch_total > stock_qty → 초과분을 FIFO 차감 (oldest first = 만료 배치 우선)
+        4. expiring_batches dict를 in-place 수정 (remaining_qty 갱신)
+        """
+        # 만료 대상 상품별 그룹화
+        items_by_store = {}  # {(store_id, item_cd): [batch_dicts]}
+        for b in expiring_batches:
+            key = (b.get('store_id', ''), b['item_cd'])
+            items_by_store.setdefault(key, []).append(b)
+
+        for (batch_store_id, item_cd), batches in items_by_store.items():
+            # 해당 상품의 전체 active 배치 합계 (만료 대상 포함)
+            cursor.execute(
+                """
+                SELECT COALESCE(SUM(remaining_qty), 0)
+                FROM inventory_batches
+                WHERE item_cd = ? AND store_id = ? AND status = ?
+                  AND remaining_qty > 0
+                """,
+                (item_cd, batch_store_id, BATCH_STATUS_ACTIVE),
+            )
+            batch_total = int(cursor.fetchone()[0] or 0)
+
+            # daily_sales 최신 stock_qty
+            cursor.execute(
+                """
+                SELECT ds.stock_qty
+                FROM daily_sales ds
+                INNER JOIN (
+                    SELECT MAX(sales_date) as max_date
+                    FROM daily_sales
+                    WHERE store_id = ? AND item_cd = ?
+                ) latest ON ds.sales_date = latest.max_date
+                WHERE ds.store_id = ? AND ds.item_cd = ?
+                """,
+                (batch_store_id, item_cd, batch_store_id, item_cd),
+            )
+            row = cursor.fetchone()
+            stock_qty = int(row[0] or 0) if row else 0
+
+            if batch_total <= stock_qty:
+                continue  # 배치 합계 <= 재고 → 소비 차감 불필요
+
+            # 초과분 = 소비된 수량 → FIFO 차감 (oldest first)
+            to_consume = batch_total - stock_qty
+
+            # 해당 상품의 전체 active 배치를 oldest-first로 조회
+            cursor.execute(
+                """
+                SELECT id, remaining_qty
+                FROM inventory_batches
+                WHERE item_cd = ? AND store_id = ? AND status = ?
+                  AND remaining_qty > 0
+                ORDER BY receiving_date ASC, id ASC
+                """,
+                (item_cd, batch_store_id, BATCH_STATUS_ACTIVE),
+            )
+            all_active = [dict(r) for r in cursor.fetchall()]
+
+            # 만료 배치 id → dict 매핑 (in-place 수정용)
+            expiring_id_map = {b['id']: b for b in batches}
+
+            remain = to_consume
+            for ab in all_active:
+                if remain <= 0:
+                    break
+                b_remaining = int(ab['remaining_qty'] or 0)
+                deduct = min(b_remaining, remain)
+                new_remaining = b_remaining - deduct
+                remain -= deduct
+
+                # 만료 대상 배치면 in-place 수정
+                if ab['id'] in expiring_id_map:
+                    expiring_id_map[ab['id']]['remaining_qty'] = new_remaining
+                else:
+                    # 비만료 active 배치도 DB 업데이트 (FIFO 정합성)
+                    new_status = (
+                        BATCH_STATUS_CONSUMED if new_remaining == 0
+                        else BATCH_STATUS_ACTIVE
+                    )
+                    cursor.execute(
+                        """
+                        UPDATE inventory_batches
+                        SET remaining_qty = ?, status = ?, updated_at = ?
+                        WHERE id = ?
+                        """,
+                        (new_remaining, new_status, now, ab['id']),
+                    )
+
+    def fix_expired_batch_remaining_qty(self, store_id: str, days: int = 28) -> Dict[str, Any]:
+        """기존 expired 배치의 remaining_qty를 소비량 기준으로 보정 (일회성 데이터 수정)
+
+        버그로 인해 remaining_qty=initial_qty인 expired 배치가 존재.
+        daily_sales 판매 데이터와 대조하여 실제 폐기량으로 remaining_qty를 보정.
+
+        로직: 만료일 전후 3일간 해당 상품 판매량(sale_qty)을 구해,
+        같은 기간 입고된 배치의 initial_qty에서 판매량을 FIFO 차감.
+
+        Args:
+            store_id: 매장 코드
+            days: 보정 대상 기간 (최근 N일, 기본 28일)
+
+        Returns:
+            {"total": 대상 배치수, "fixed": 보정된 배치수, "consumed": 소비완료 전환수}
+        """
+        conn = self._get_conn()
+        try:
+            cursor = conn.cursor()
+            now = self._now()
+            cutoff = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+
+            # remaining_qty = initial_qty인 expired 배치 (= 소비 차감 누락된 배치)
+            cursor.execute(
+                """
+                SELECT id, item_cd, item_nm, mid_cd, receiving_date,
+                       expiry_date, initial_qty, remaining_qty
+                FROM inventory_batches
+                WHERE store_id = ? AND status = ?
+                  AND expiry_date >= ?
+                  AND remaining_qty = initial_qty
+                  AND initial_qty > 0
+                ORDER BY item_cd, receiving_date ASC
+                """,
+                (store_id, BATCH_STATUS_EXPIRED, cutoff),
+            )
+            corrupted = [dict(row) for row in cursor.fetchall()]
+
+            if not corrupted:
+                logger.info(f"[{store_id}] expired 배치 remaining_qty 보정 대상 없음")
+                return {"total": 0, "fixed": 0, "consumed": 0}
+
+            # 상품별 그룹화
+            by_item = {}
+            for b in corrupted:
+                by_item.setdefault(b['item_cd'], []).append(b)
+
+            fixed = 0
+            consumed = 0
+
+            for item_cd, batches in by_item.items():
+                # 해당 기간 전체 판매량 조회
+                min_recv = min(b['receiving_date'] for b in batches)
+                max_expiry = max(b['expiry_date'] for b in batches)
+
+                cursor.execute(
+                    """
+                    SELECT COALESCE(SUM(sale_qty), 0) as total_sales
+                    FROM daily_sales
+                    WHERE store_id = ? AND item_cd = ?
+                      AND sales_date BETWEEN ? AND ?
+                    """,
+                    (store_id, item_cd, min_recv, max_expiry),
+                )
+                total_sales = int(cursor.fetchone()[0] or 0)
+
+                if total_sales <= 0:
+                    continue  # 판매 없으면 remaining=initial이 맞음
+
+                # FIFO 차감 (oldest batch부터)
+                remain_sales = total_sales
+                for b in sorted(batches, key=lambda x: (x['receiving_date'], x['id'])):
+                    if remain_sales <= 0:
+                        break
+                    deduct = min(b['initial_qty'], remain_sales)
+                    new_remaining = b['initial_qty'] - deduct
+                    remain_sales -= deduct
+
+                    if new_remaining != b['remaining_qty']:
+                        new_status = BATCH_STATUS_CONSUMED if new_remaining == 0 else BATCH_STATUS_EXPIRED
+                        cursor.execute(
+                            """
+                            UPDATE inventory_batches
+                            SET remaining_qty = ?, status = ?, updated_at = ?
+                            WHERE id = ?
+                            """,
+                            (new_remaining, new_status, now, b['id']),
+                        )
+                        fixed += 1
+                        if new_status == BATCH_STATUS_CONSUMED:
+                            consumed += 1
+
+            conn.commit()
+            logger.info(
+                f"[{store_id}] expired 배치 보정 완료: "
+                f"대상 {len(corrupted)}건, 보정 {fixed}건, consumed 전환 {consumed}건"
+            )
+            return {"total": len(corrupted), "fixed": fixed, "consumed": consumed}
+        except Exception as e:
+            logger.error(f"[{store_id}] expired 배치 보정 실패: {e}")
+            return {"total": 0, "fixed": 0, "consumed": 0}
         finally:
             conn.close()
 
@@ -662,6 +904,45 @@ class InventoryBatchRepository(BaseRepository):
         finally:
             conn.close()
 
+    def get_today_expiring_item_qty(
+        self,
+        target_date: Optional[str] = None,
+        store_id: Optional[str] = None
+    ) -> Dict[str, int]:
+        """오늘 만료되는 active 배치의 item_cd별 잔여수량 합계
+
+        Args:
+            target_date: 기준 날짜 (기본: 오늘, YYYY-MM-DD)
+            store_id: 매장 코드
+
+        Returns:
+            {item_cd: remaining_qty_sum} — 만료 배치가 있는 상품만 포함
+        """
+        conn = self._get_conn()
+        try:
+            cursor = conn.cursor()
+            if target_date is None:
+                target_date = datetime.now().strftime("%Y-%m-%d")
+
+            store_filter = "AND store_id = ?" if store_id else ""
+            store_params = (store_id,) if store_id else ()
+
+            cursor.execute(
+                f"""
+                SELECT item_cd, SUM(remaining_qty) as expiring_qty
+                FROM inventory_batches
+                WHERE status = ?
+                AND remaining_qty > 0
+                AND expiry_date <= ?
+                {store_filter}
+                GROUP BY item_cd
+                """,
+                (BATCH_STATUS_ACTIVE, target_date) + store_params
+            )
+            return {row["item_cd"]: row["expiring_qty"] for row in cursor.fetchall()}
+        finally:
+            conn.close()
+
     def get_waste_summary(self, days_back: int = 30,
                           store_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """폐기 통계 요약 (카테고리별)
@@ -867,13 +1148,245 @@ class InventoryBatchRepository(BaseRepository):
                     f"consumed {consumed_count}건"
                 )
 
+            # 4) 푸드 유령재고 정리: active 배치 없는데 RI > 0인 푸드 상품 → stock_qty = 0
+            # [원본 보존] 기존에는 active 배치 없는 상품을 의도적으로 skip했음 (비푸드 보호)
+            # 푸드 카테고리(001~005, 012)만 정리, 비푸드는 기존대로 건드리지 않음
+            # FIFO 보정 후 batch_totals 재계산 (보정 중 consumed된 배치 반영)
+            cursor.execute(
+                """
+                SELECT item_cd, SUM(remaining_qty) as batch_total
+                FROM inventory_batches
+                WHERE store_id = ? AND status = ? AND remaining_qty > 0
+                GROUP BY item_cd
+                """,
+                (store_id, BATCH_STATUS_ACTIVE),
+            )
+            batch_totals_after = {
+                row["item_cd"]: int(row["batch_total"] or 0)
+                for row in cursor.fetchall()
+            }
+            ghost_cleared = self._clear_ghost_stock(
+                cursor, store_id, batch_totals_after, now
+            )
+
+            # ── order_tracking 만료 레코드 remaining_qty 정리 ──
+            # [원본 보존] 기존: order_tracking의 expired/disposed 레코드는 remaining_qty를
+            # 그대로 유지 → _get_actual_expiry_time() 등에서 만료된 OT를 활성으로 오판
+            # 수정: 푸드 카테고리의 expired/disposed OT 레코드 remaining_qty → 0
+            FOOD_MID_CDS = ('001', '002', '003', '004', '005', '012', '014')
+            ot_cleared = self._clear_expired_order_tracking(
+                cursor, store_id, FOOD_MID_CDS, now
+            )
+            if ot_cleared > 0:
+                logger.info(
+                    f"[BatchSync] {store_id}: OT 만료 잔량 {ot_cleared}건 정리 "
+                    f"(expired/disposed remaining_qty → 0)"
+                )
+
+            if ghost_cleared > 0 or ot_cleared > 0:
+                conn.commit()
+
             return {
                 "checked": checked,
                 "adjusted": adjusted,
                 "consumed": consumed_count,
+                "ghost_cleared": ghost_cleared,
+                "ot_cleared": ot_cleared,
             }
         except Exception as e:
             logger.error(f"[BatchSync] FIFO 재동기화 오류: {e}")
-            return {"checked": 0, "adjusted": 0, "consumed": 0}
+            return {"checked": 0, "adjusted": 0, "consumed": 0, "ghost_cleared": 0}
         finally:
             conn.close()
+
+    def _clear_ghost_stock(
+        self, cursor: sqlite3.Cursor, store_id: str,
+        batch_totals: Dict[str, int], now: str
+    ) -> int:
+        """유령재고 정리 (전 카테고리)
+
+        active 배치가 없는데 realtime_inventory.stock_qty > 0인
+        상품의 stock_qty를 0으로 리셋.
+
+        # [원본 보존] 기존: 푸드 카테고리(001~005,012,014)만 대상
+        # FOOD_MID_CDS = ('001','002','003','004','005','012','014')
+        # → 비푸드 expired 배치 잔량이 RI에 유령으로 누적되는 문제로 전 카테고리 확장
+
+        Args:
+            cursor: DB 커서 (이미 열린 연결)
+            store_id: 매장 코드
+            batch_totals: 현재 active 배치가 있는 상품 목록 (제외용)
+            now: 현재 시각 문자열
+
+        Returns:
+            정리된 유령재고 상품 수
+        """
+        try:
+            # RI에서 stock > 0인 전체 상품
+            ri_rows = cursor.execute(
+                """
+                SELECT item_cd, stock_qty FROM realtime_inventory
+                WHERE store_id = ? AND stock_qty > 0
+                """,
+                (store_id,),
+            ).fetchall()
+
+            # active 배치가 있는 상품 제외
+            ghost_items = [
+                row["item_cd"] for row in ri_rows
+                if row["item_cd"] not in batch_totals
+            ]
+
+            if not ghost_items:
+                return 0
+
+            # 유령재고 stock_qty → 0
+            cleared = 0
+            for item_cd in ghost_items:
+                cursor.execute(
+                    """
+                    UPDATE realtime_inventory
+                    SET stock_qty = 0, queried_at = ?
+                    WHERE item_cd = ? AND store_id = ? AND stock_qty > 0
+                    """,
+                    (now, item_cd, store_id),
+                )
+                if cursor.rowcount > 0:
+                    cleared += 1
+
+            if cleared > 0:
+                logger.info(
+                    f"[BatchSync] {store_id}: 유령재고 {cleared}건 정리 "
+                    f"(active 배치 없는 상품 stock_qty → 0)"
+                )
+
+            return cleared
+
+        except Exception as e:
+            logger.warning(f"[BatchSync] 유령재고 정리 오류: {e}")
+            return 0
+
+    def _clear_expired_order_tracking(
+        self, cursor: sqlite3.Cursor, store_id: str,
+        food_mid_cds: tuple, now: str
+    ) -> int:
+        """만료/폐기된 order_tracking 레코드의 remaining_qty를 0으로 정리
+
+        두 가지 케이스를 처리:
+        A) status='expired' 또는 'disposed'인데 remaining_qty > 0 — 상태는 맞지만 잔량 미초기화
+        B) status='arrived'인데 expiry_time < now AND remaining_qty > 0 — 좀비 OT
+           (만료 시각 경과했는데 arrived 유지 → status도 expired로 전환)
+
+        푸드 카테고리만 대상.
+
+        Args:
+            cursor: DB 커서 (이미 열린 연결)
+            store_id: 매장 코드
+            food_mid_cds: 대상 중분류 코드 튜플
+            now: 현재 시각 문자열
+
+        Returns:
+            정리된 레코드 수
+        """
+        try:
+            from src.infrastructure.database.connection import DBRouter
+            common_conn = DBRouter.get_common_connection()
+            if not common_conn:
+                return 0
+
+            try:
+                # 1-A) 만료/폐기 상태인데 remaining_qty > 0인 OT 레코드
+                expired_rows = cursor.execute(
+                    """
+                    SELECT id, item_cd, remaining_qty, status
+                    FROM order_tracking
+                    WHERE store_id = ?
+                      AND status IN ('expired', 'disposed')
+                      AND remaining_qty > 0
+                    """,
+                    (store_id,),
+                ).fetchall()
+
+                # 1-B) 좀비 OT: arrived인데 expiry_time 경과 + remaining_qty > 0
+                zombie_rows = cursor.execute(
+                    """
+                    SELECT id, item_cd, remaining_qty, status
+                    FROM order_tracking
+                    WHERE store_id = ?
+                      AND status = 'arrived'
+                      AND remaining_qty > 0
+                      AND expiry_time < datetime('now')
+                    """,
+                    (store_id,),
+                ).fetchall()
+
+                all_rows = list(expired_rows) + list(zombie_rows)
+                zombie_ids = {row["id"] for row in zombie_rows}
+
+                if not all_rows:
+                    return 0
+
+                # 2) common.db에서 푸드 카테고리 필터링
+                item_cds = list({row["item_cd"] for row in all_rows})
+                placeholders = ",".join("?" * len(item_cds))
+                food_cds_ph = ",".join("?" * len(food_mid_cds))
+                common_cursor = common_conn.cursor()
+                food_rows = common_cursor.execute(
+                    f"""
+                    SELECT item_cd FROM products
+                    WHERE item_cd IN ({placeholders})
+                      AND mid_cd IN ({food_cds_ph})
+                    """,
+                    (*item_cds, *food_mid_cds),
+                ).fetchall()
+                food_item_set = {row[0] for row in food_rows}
+            finally:
+                common_conn.close()
+
+            if not food_item_set:
+                return 0
+
+            target_ids = [
+                row["id"] for row in all_rows
+                if row["item_cd"] in food_item_set
+            ]
+
+            if not target_ids:
+                return 0
+
+            # 3-A) 전체 대상 remaining_qty → 0
+            placeholders = ",".join("?" * len(target_ids))
+            cursor.execute(
+                f"""
+                UPDATE order_tracking
+                SET remaining_qty = 0
+                WHERE id IN ({placeholders})
+                """,
+                target_ids,
+            )
+            cleared = cursor.rowcount
+
+            # 3-B) 좀비 OT는 status도 'expired'로 전환
+            zombie_target_ids = [
+                tid for tid in target_ids if tid in zombie_ids
+            ]
+            if zombie_target_ids:
+                z_ph = ",".join("?" * len(zombie_target_ids))
+                cursor.execute(
+                    f"""
+                    UPDATE order_tracking
+                    SET status = 'expired'
+                    WHERE id IN ({z_ph})
+                    """,
+                    zombie_target_ids,
+                )
+                logger.info(
+                    f"[BatchSync] {store_id}: 좀비 OT {len(zombie_target_ids)}건 "
+                    f"arrived→expired 전환"
+                )
+
+            return cleared
+
+        except Exception as e:
+            logger.warning(f"[BatchSync] OT 만료 잔량 정리 오류: {e}")
+            return 0

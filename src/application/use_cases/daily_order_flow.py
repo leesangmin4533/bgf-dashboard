@@ -71,6 +71,7 @@ class DailyOrderFlow:
         max_pending_items: int = 200,
         collect_fail_reasons: bool = True,
         skip_exclusion_fetch: bool = False,
+        target_dates: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """AutoOrderSystem 경유 전체 파이프라인 실행
 
@@ -87,6 +88,7 @@ class DailyOrderFlow:
             max_pending_items: 미입고 조회 최대 상품 수
             collect_fail_reasons: True면 실패 건 발생 시 사유 수집
             skip_exclusion_fetch: True면 자동/스마트발주 목록 사이트 재조회 건너뜀
+            target_dates: 발주할 날짜 목록 (YYYY-MM-DD). None이면 전체 발주
 
         Returns:
             실행 결과 딕셔너리
@@ -106,6 +108,7 @@ class DailyOrderFlow:
                 prefetch_pending=prefetch_pending,
                 max_pending_items=max_pending_items,
                 skip_exclusion_fetch=skip_exclusion_fetch,
+                target_dates=target_dates,
             )
 
             # 실패 사유 수집
@@ -175,8 +178,11 @@ class DailyOrderFlow:
                 categories=categories,
             )
 
-            # Stage 3: 필터링
-            filtered = self._stage_filter(predictions)
+            # Stage 2.5: 사전평가 (FORCE_ORDER/URGENT 보호)
+            eval_results = self._stage_evaluate(predictions)
+
+            # Stage 3: 필터링 (평가 결과 전달)
+            filtered = self._stage_filter(predictions, eval_results=eval_results)
 
             # Stage 4: 실행
             if not dry_run and self.driver:
@@ -235,6 +241,7 @@ class DailyOrderFlow:
         prefetch_pending: bool = True,
         max_pending_items: int = 200,
         skip_exclusion_fetch: bool = False,
+        target_dates: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """AutoOrderSystem 경유 발주 실행
 
@@ -259,6 +266,7 @@ class DailyOrderFlow:
                 dry_run=dry_run,
                 prefetch_pending=prefetch_pending,
                 skip_exclusion_fetch=skip_exclusion_fetch,
+                target_dates=target_dates,
             )
 
             self._result["stages"]["auto_order"] = {
@@ -323,7 +331,9 @@ class DailyOrderFlow:
         return predictions
 
     def _stage_filter(
-        self, predictions: List[Dict[str, Any]]
+        self,
+        predictions: List[Dict[str, Any]],
+        eval_results: dict = None,
     ) -> List[Dict[str, Any]]:
         """Stage 3: 필터링"""
         logger.info("[Stage 3] 필터링 시작")
@@ -337,6 +347,7 @@ class DailyOrderFlow:
             predictions,
             unavailable_items=inv_service.get_unavailable_items(),
             cut_items=inv_service.get_cut_items(),
+            eval_results=eval_results or {},
         )
         self._result["stages"]["filter"] = {
             "success": True,
@@ -347,6 +358,37 @@ class DailyOrderFlow:
             f"[Stage 3] 필터링 완료: {len(predictions)} -> {len(filtered)}개"
         )
         return filtered
+
+    def _stage_evaluate(self, predictions: List[Dict[str, Any]]) -> dict:
+        """Stage 2.5: 사전평가 (FORCE_ORDER / URGENT_ORDER 판별)
+        run() 경량 경로에서도 품절 위험 상품이 보호받도록 한다.
+        run_auto_order()의 AutoOrderSystem과 동일한 평가 로직 사용.
+        """
+        logger.info("[Stage 2.5] 사전평가 시작")
+        try:
+            from src.prediction.pre_order_evaluator import PreOrderEvaluator
+            evaluator = PreOrderEvaluator(store_id=self.store_id)
+            item_cds = [p["item_cd"] for p in predictions if p.get("item_cd")]
+            eval_results = evaluator.evaluate_all(item_cds)
+            filtered_items = evaluator.get_filtered_items(eval_results)
+            force_count = sum(
+                1 for r in eval_results.values()
+                if hasattr(r, "decision") and r.decision.name in ("FORCE_ORDER", "URGENT_ORDER")
+            )
+            logger.info(
+                f"[Stage 2.5] 사전평가 완료: 전체={len(eval_results)}개, "
+                f"FORCE/URGENT={force_count}개"
+            )
+            self._result["stages"]["evaluate"] = {
+                "success": True,
+                "total": len(eval_results),
+                "force_count": force_count,
+            }
+            return eval_results
+        except Exception as e:
+            logger.warning(f"[Stage 2.5] 사전평가 실패 (계속 진행): {e}")
+            self._result["stages"]["evaluate"] = {"success": False, "error": str(e)}
+            return {}
 
     def _stage_execute(
         self,

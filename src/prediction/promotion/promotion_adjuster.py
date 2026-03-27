@@ -97,12 +97,28 @@ class PromotionAdjuster:
         reason = "조정 없음"
         factor = 1.0
 
-        # === 케이스 1: 행사 종료 임박 ===
-        if status.current_promo and status.days_until_end is not None:
-            if status.days_until_end <= 3:
-                # 다음 행사 없으면 발주 감소
-                if not status.next_promo:
-                    factor = self.END_ADJUSTMENT.get(status.days_until_end, 0.5)
+        # === 케이스 1: 행사 종료 임박 (D-3 이내, 다음 행사 없음) ===
+        if (status.current_promo
+                and status.days_until_end is not None
+                and status.days_until_end <= 3):
+            # 연장 감지: DB의 end_date가 status보다 뒤면 이미 연장됨 → 감소 스킵
+            if self._is_promo_extended(item_cd, status):
+                reason = f"행사 연장 감지 ({status.current_promo}), 감소 스킵"
+                return AdjustmentResult(
+                    item_cd=item_cd,
+                    original_qty=base_qty,
+                    adjusted_qty=base_qty,
+                    adjustment_reason=reason,
+                    adjustment_factor=1.0,
+                    promo_status=status
+                )
+
+            # 다음 행사 없으면 발주 감소
+            if not status.next_promo:
+                factor = self.END_ADJUSTMENT.get(status.days_until_end, 0.5)
+
+                # 행사 통계가 있으면 정밀 계산, 없으면 factor 기반 감소
+                if status.promo_avg > 0:
                     adjusted_qty = self._calculate_end_adjustment(
                         base_qty=base_qty,
                         current_stock=current_stock,
@@ -111,20 +127,25 @@ class PromotionAdjuster:
                         normal_avg=status.normal_avg,
                         promo_avg=status.promo_avg
                     )
-                    reason = f"행사 종료 D-{status.days_until_end}, 발주 {int(factor*100)}%"
-
-                # 다음 행사 있고 같은 유형이면 유지
-                elif status.next_promo == status.current_promo:
-                    reason = f"동일 행사 연속 ({status.current_promo})"
-
-                # 다음 행사 있지만 다른 유형이면 약간 감소
                 else:
-                    factor = 0.8
-                    adjusted_qty = int(base_qty * factor)
-                    reason = f"행사 변경 예정 ({status.current_promo}→{status.next_promo})"
+                    # promo_avg 미산출 → factor 기반 안전 감소
+                    adjusted_qty = max(0, int(base_qty * factor))
 
-        # === 케이스 2: 행사 시작 임박 ===
-        elif status.next_promo and status.next_start_date:
+                reason = f"행사 종료 D-{status.days_until_end}, 발주 {int(factor*100)}%"
+
+            # 다음 행사 있고 같은 유형이면 유지
+            elif status.next_promo == status.current_promo:
+                reason = f"동일 행사 연속 ({status.current_promo})"
+
+            # 다음 행사 있지만 다른 유형이면 약간 감소
+            else:
+                factor = 0.8
+                adjusted_qty = int(base_qty * factor)
+                reason = f"행사 변경 예정 ({status.current_promo}→{status.next_promo})"
+
+        # === 케이스 2: 행사 시작 임박 (D-3 이내) ===
+        elif (not status.current_promo
+              and status.next_promo and status.next_start_date):
             days_until_start = self._days_until(status.next_start_date)
 
             if days_until_start is not None and 0 <= days_until_start <= 3:
@@ -137,7 +158,7 @@ class PromotionAdjuster:
                 adjusted_qty = int(base_qty * factor)
                 reason = f"행사 시작 D-{days_until_start}, 발주 {int(factor*100)}%"
 
-        # === 케이스 3: 현재 행사 중 (변경 없음) ===
+        # === 케이스 3: 현재 행사 중 (종료 임박 아님) ===
         elif status.current_promo:
             # 행사 배율 적용
             factor = status.promo_multiplier
@@ -155,6 +176,41 @@ class PromotionAdjuster:
             adjustment_factor=factor,
             promo_status=status
         )
+
+    def _is_promo_extended(self, item_cd: str, status: PromotionStatus) -> bool:
+        """행사가 연장되었는지 확인
+
+        check_and_update_extensions()에 의해 DB end_date가 갱신된 경우,
+        status 객체의 end_date보다 DB end_date가 나중이면 연장된 것으로 판단.
+
+        Args:
+            item_cd: 상품코드
+            status: 현재 행사 상태 (캐시된 값)
+
+        Returns:
+            True면 연장됨 → END_ADJUSTMENT 스킵
+        """
+        if not status.current_end_date:
+            return False
+
+        try:
+            db_end = self.promo_manager.get_active_end_date(item_cd)
+            if not db_end:
+                return False
+
+            # DB end_date가 status end_date보다 뒤면 연장됨
+            if db_end > status.current_end_date:
+                from src.utils.logger import get_logger
+                logger = get_logger(__name__)
+                logger.info(
+                    f"[행사연장] {item_cd} 연장 감지: "
+                    f"status={status.current_end_date} < DB={db_end}"
+                )
+                return True
+        except Exception:
+            pass
+
+        return False
 
     def _calculate_end_adjustment(
         self,
@@ -176,10 +232,10 @@ class PromotionAdjuster:
         3. 필요 발주량 = 예상판매 + 목표재고 - 현재고 - 미입고
         """
         # 남은 기간 예상 판매량 (행사 판매량 기준)
-        expected_sales = promo_avg * days_remaining if promo_avg else base_qty * days_remaining
+        expected_sales = promo_avg * days_remaining
 
         # 행사 후 목표 재고 (평시 2일치)
-        target_stock_after = normal_avg * 2 if normal_avg else base_qty * 0.3 * 2
+        target_stock_after = normal_avg * 2 if normal_avg else 2
 
         # 필요 발주량
         needed = expected_sales + target_stock_after - current_stock - pending_qty

@@ -10,7 +10,8 @@ BGF 스토어 시스템 UI 설정
 
 # 화면별 프레임 ID
 FRAME_IDS = {
-    "SALES_HOURLY": "STAJ001_M0",       # 매출분석 > 시간대별 매출
+    "SALES_HOURLY": "STAJ001_M0",       # 매출분석 > 시간대별 매출 (레거시)
+    "SALES_HOURLY_DETAIL": "STMB010_M0",  # 매출분석 > 시간대별 매출 정보 (Direct API)
     "SINGLE_ORDER": "STBJ030_M0",       # 발주 > 단품별 발주
     "CATEGORY_ORDER": "STBJ010_M0",     # 발주 > 카테고리 발주
     "ORDER_STATUS": "STBJ070_M0",       # 발주 > 발주 현황 조회

@@ -367,6 +367,138 @@ class MLPredictor:
         confidence = min(1.0, data_days / 60.0)
         return confidence * pred_ind + (1.0 - confidence) * pred_grp
 
+    # =========================================================================
+    # 배치 예측 메서드 (ml-batch-predict)
+    # =========================================================================
+
+    def predict_batch_grouped(
+        self,
+        feature_items: List[tuple],
+    ) -> Dict[int, Optional[float]]:
+        """카테고리 그룹별로 모아서 배치 예측 (predict의 배치 버전)
+
+        같은 카테고리 그룹의 상품 features를 vstack하여
+        model.predict()를 그룹당 1회만 호출합니다.
+
+        Args:
+            feature_items: [(index, features, mid_cd), ...]
+
+        Returns:
+            {index: prediction} 매핑
+        """
+        if not self.models:
+            if not self.load_models():
+                return {}
+
+        # 카테고리 그룹별로 분류
+        groups: Dict[str, List[tuple]] = {}
+        for idx, features, mid_cd in feature_items:
+            group = get_category_group(mid_cd)
+            groups.setdefault(group, []).append((idx, features))
+
+        results: Dict[int, Optional[float]] = {}
+        for group_name, items in groups.items():
+            model = self.models.get(group_name)
+            if model is None:
+                continue
+            try:
+                X = np.vstack([f.reshape(1, -1) for _, f in items])
+                preds = model.predict(X)
+                for (idx, _), pred in zip(items, preds):
+                    results[idx] = max(0.0, float(pred))
+            except Exception as e:
+                logger.warning(f"배치 예측 실패 ({group_name}): {e}")
+
+        return results
+
+    def predict_group_batch_grouped(
+        self,
+        feature_items: List[tuple],
+    ) -> Dict[int, Optional[float]]:
+        """그룹 모델 배치 예측 (small_cd → mid_cd 폴백, 모델키별 배치)
+
+        같은 그룹 모델을 쓰는 상품끼리 vstack하여
+        model.predict()를 모델키당 1회만 호출합니다.
+
+        Args:
+            feature_items: [(index, features, small_cd), ...]
+
+        Returns:
+            {index: prediction} 매핑
+        """
+        if not self.group_models:
+            return {}
+
+        # 실제 모델키별로 분류
+        model_groups: Dict[str, List[tuple]] = {}
+        for idx, features, small_cd in feature_items:
+            if not small_cd:
+                continue
+            # small_cd 모델 우선, mid_cd 폴백
+            model_key = f"small_{small_cd}"
+            if model_key not in self.group_models:
+                mid_prefix = small_cd[:3] if len(small_cd) >= 3 else small_cd
+                model_key = f"mid_{mid_prefix}"
+            if model_key in self.group_models:
+                model_groups.setdefault(model_key, []).append((idx, features))
+
+        results: Dict[int, Optional[float]] = {}
+        for model_key, items in model_groups.items():
+            model = self.group_models[model_key]
+            try:
+                X = np.vstack([f.reshape(1, -1) for _, f in items])
+                preds = model.predict(X)
+                for (idx, _), pred in zip(items, preds):
+                    results[idx] = max(0.0, float(pred))
+            except Exception as e:
+                logger.debug(f"그룹 배치 예측 실패 ({model_key}): {e}")
+
+        return results
+
+    def predict_dual_batch(
+        self,
+        feature_items: List[tuple],
+    ) -> Dict[int, Optional[float]]:
+        """이중 모델 배치 블렌딩 예측 (predict_dual의 배치 버전)
+
+        개별 모델과 그룹 모델을 각각 배치 예측한 후
+        상품별 data_days 기반 confidence로 블렌딩합니다.
+
+        Args:
+            feature_items: [(index, features, mid_cd, small_cd, data_days), ...]
+
+        Returns:
+            {index: blended_prediction} 매핑
+        """
+        if not feature_items:
+            return {}
+
+        # 개별 모델 배치 예측
+        ind_items = [(idx, feat, mid_cd) for idx, feat, mid_cd, _, _ in feature_items]
+        ind_preds = self.predict_batch_grouped(ind_items)
+
+        # 그룹 모델 배치 예측
+        grp_items = [(idx, feat, small_cd) for idx, feat, _, small_cd, _ in feature_items]
+        grp_preds = self.predict_group_batch_grouped(grp_items)
+
+        # 상품별 블렌딩
+        results: Dict[int, Optional[float]] = {}
+        for idx, _, _, _, data_days in feature_items:
+            pred_ind = ind_preds.get(idx)
+            pred_grp = grp_preds.get(idx)
+
+            if pred_ind is None and pred_grp is None:
+                continue
+            if pred_ind is None:
+                results[idx] = pred_grp
+            elif pred_grp is None:
+                results[idx] = pred_ind
+            else:
+                confidence = min(1.0, data_days / 60.0)
+                results[idx] = confidence * pred_ind + (1.0 - confidence) * pred_grp
+
+        return results
+
     def has_group_model(self, small_cd: Optional[str]) -> bool:
         """그룹 모델 존재 여부 확인"""
         if not small_cd:

@@ -232,6 +232,8 @@ examples:
                    help="Include WARNING (with --errors)")
     p.add_argument("--search", "-q", type=str, default=None,
                    help="Keyword search")
+    p.add_argument("--session", "-S", type=str, default=None,
+                   help="Filter by session ID (8-char hex, e.g. a1b2c3d4)")
     p.add_argument("--regex", action="store_true",
                    help="Treat search keyword as regex")
     p.add_argument("--stats", action="store_true",
@@ -257,6 +259,10 @@ examples:
         args.date = datetime.now().strftime("%Y-%m-%d")
 
     parser = LogParser()
+
+    # --session 은 --search의 축약: session ID로 검색
+    if args.session and not args.search:
+        args.search = args.session
 
     # 명령 디스패치
     if args.stats:

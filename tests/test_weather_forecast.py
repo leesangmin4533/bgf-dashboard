@@ -25,7 +25,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 @pytest.fixture
 def weather_db(tmp_path):
-    """날씨 테스트용 DB (external_factors 테이블 포함)"""
+    """날씨 테스트용 DB (external_factors 테이블 포함, v57 store_id 컬럼)"""
     db_file = tmp_path / "test_weather.db"
     conn = sqlite3.connect(str(db_file))
     conn.row_factory = sqlite3.Row
@@ -37,8 +37,9 @@ def weather_db(tmp_path):
             factor_type TEXT NOT NULL,
             factor_key TEXT NOT NULL,
             factor_value TEXT,
+            store_id TEXT NOT NULL DEFAULT '',
             created_at TEXT NOT NULL,
-            UNIQUE(factor_date, factor_type, factor_key)
+            UNIQUE(factor_date, factor_type, factor_key, store_id)
         )
     """)
     conn.execute("CREATE INDEX idx_ef_date ON external_factors(factor_date)")
@@ -49,17 +50,17 @@ def weather_db(tmp_path):
     return str(db_file)
 
 
-def _insert_factor(db_path, factor_date, factor_type, factor_key, factor_value):
+def _insert_factor(db_path, factor_date, factor_type, factor_key, factor_value, store_id=""):
     """테스트 헬퍼: external_factors에 데이터 삽입"""
     conn = sqlite3.connect(db_path)
     conn.execute(
         """INSERT INTO external_factors
-           (factor_date, factor_type, factor_key, factor_value, created_at)
-           VALUES (?, ?, ?, ?, ?)
-           ON CONFLICT(factor_date, factor_type, factor_key) DO UPDATE SET
+           (factor_date, factor_type, factor_key, factor_value, store_id, created_at)
+           VALUES (?, ?, ?, ?, ?, ?)
+           ON CONFLICT(factor_date, factor_type, factor_key, store_id) DO UPDATE SET
              factor_value = excluded.factor_value""",
         (factor_date, factor_type, factor_key, str(factor_value),
-         datetime.now().isoformat())
+         store_id, datetime.now().isoformat())
     )
     conn.commit()
     conn.close()
@@ -88,6 +89,7 @@ class TestGetTemperatureForDate:
 
             from src.prediction.improved_predictor import ImprovedPredictor
             predictor = ImprovedPredictor.__new__(ImprovedPredictor)
+            predictor.store_id = ""
             result = predictor._get_temperature_for_date(tomorrow)
 
         assert result == 35.0
@@ -107,6 +109,7 @@ class TestGetTemperatureForDate:
 
             from src.prediction.improved_predictor import ImprovedPredictor
             predictor = ImprovedPredictor.__new__(ImprovedPredictor)
+            predictor.store_id = ""
             result = predictor._get_temperature_for_date(today)
 
         assert result == 25.0
@@ -123,6 +126,7 @@ class TestGetTemperatureForDate:
 
             from src.prediction.improved_predictor import ImprovedPredictor
             predictor = ImprovedPredictor.__new__(ImprovedPredictor)
+            predictor.store_id = ""
             result = predictor._get_temperature_for_date("2099-12-31")
 
         assert result is None
@@ -150,6 +154,7 @@ class TestWeatherCoefficientWithForecast:
 
             from src.prediction.improved_predictor import ImprovedPredictor
             predictor = ImprovedPredictor.__new__(ImprovedPredictor)
+            predictor.store_id = ""
             coef = predictor._get_weather_coefficient(tomorrow, "010")  # 음료
 
         assert coef == 1.15
@@ -169,6 +174,7 @@ class TestWeatherCoefficientWithForecast:
 
             from src.prediction.improved_predictor import ImprovedPredictor
             predictor = ImprovedPredictor.__new__(ImprovedPredictor)
+            predictor.store_id = ""
             coef = predictor._get_weather_coefficient(tomorrow, "006")  # 즉석식품
 
         assert coef == 1.10
@@ -188,6 +194,7 @@ class TestWeatherCoefficientWithForecast:
 
             from src.prediction.improved_predictor import ImprovedPredictor
             predictor = ImprovedPredictor.__new__(ImprovedPredictor)
+            predictor.store_id = ""
             coef = predictor._get_weather_coefficient(tomorrow, "010")
 
         assert coef == 1.0
@@ -204,6 +211,7 @@ class TestWeatherCoefficientWithForecast:
 
             from src.prediction.improved_predictor import ImprovedPredictor
             predictor = ImprovedPredictor.__new__(ImprovedPredictor)
+            predictor.store_id = ""
             coef = predictor._get_weather_coefficient("2099-12-31", "010")
 
         assert coef == 1.0
@@ -330,6 +338,7 @@ class TestSaveWeatherDataForecast:
         repo = MagicMock()
         from src.scheduler.daily_job import DailyCollectionJob
         job = DailyCollectionJob.__new__(DailyCollectionJob)
+        job.store_id = "46513"
         job.weather_repo = repo
 
         # logger mock
@@ -356,6 +365,7 @@ class TestSaveWeatherDataForecast:
         repo = MagicMock()
         from src.scheduler.daily_job import DailyCollectionJob
         job = DailyCollectionJob.__new__(DailyCollectionJob)
+        job.store_id = "46513"
         job.weather_repo = repo
 
         with patch("src.scheduler.daily_job.logger"):
@@ -439,6 +449,7 @@ class TestGetTemperatureDelta:
         ):
             from src.prediction.improved_predictor import ImprovedPredictor
             predictor = ImprovedPredictor.__new__(ImprovedPredictor)
+            predictor.store_id = ""
             delta = predictor._get_temperature_delta(tomorrow)
 
         assert delta == 10.0
@@ -462,6 +473,7 @@ class TestGetTemperatureDelta:
         ):
             from src.prediction.improved_predictor import ImprovedPredictor
             predictor = ImprovedPredictor.__new__(ImprovedPredictor)
+            predictor.store_id = ""
             delta = predictor._get_temperature_delta(tomorrow)
 
         assert delta == -15.0
@@ -481,6 +493,7 @@ class TestGetTemperatureDelta:
 
             from src.prediction.improved_predictor import ImprovedPredictor
             predictor = ImprovedPredictor.__new__(ImprovedPredictor)
+            predictor.store_id = ""
             delta = predictor._get_temperature_delta(tomorrow)
 
         assert delta is None
@@ -497,6 +510,7 @@ class TestGetTemperatureDelta:
 
             from src.prediction.improved_predictor import ImprovedPredictor
             predictor = ImprovedPredictor.__new__(ImprovedPredictor)
+            predictor.store_id = ""
             delta = predictor._get_temperature_delta("2099-12-31")
 
         assert delta is None
@@ -528,6 +542,7 @@ class TestWeatherDeltaCoefficient:
         ):
             from src.prediction.improved_predictor import ImprovedPredictor
             predictor = ImprovedPredictor.__new__(ImprovedPredictor)
+            predictor.store_id = ""
             coef = predictor._get_weather_coefficient(tomorrow, "006")
 
         # 절대 기온 5도 → cold_boost 1.10 * 급변 sudden_cold 1.10 = 1.21
@@ -552,6 +567,7 @@ class TestWeatherDeltaCoefficient:
         ):
             from src.prediction.improved_predictor import ImprovedPredictor
             predictor = ImprovedPredictor.__new__(ImprovedPredictor)
+            predictor.store_id = ""
             coef = predictor._get_weather_coefficient(tomorrow, "010")
 
         # 절대 기온 10도 → 임계값 미충족 (30도↑ 아님) → 1.0
@@ -577,6 +593,7 @@ class TestWeatherDeltaCoefficient:
         ):
             from src.prediction.improved_predictor import ImprovedPredictor
             predictor = ImprovedPredictor.__new__(ImprovedPredictor)
+            predictor.store_id = ""
             coef = predictor._get_weather_coefficient(tomorrow, "010")
 
         # 절대 기온 30도 → hot_boost 1.15 * 급변 sudden_hot 1.10 = 1.265
@@ -599,6 +616,7 @@ class TestWeatherDeltaCoefficient:
         ):
             from src.prediction.improved_predictor import ImprovedPredictor
             predictor = ImprovedPredictor.__new__(ImprovedPredictor)
+            predictor.store_id = ""
             coef = predictor._get_weather_coefficient(tomorrow, "010")
 
         # 절대 기온 35도 → hot_boost 1.15만 (급변 데이터 없으므로 delta 미적용)
@@ -623,6 +641,7 @@ class TestWeatherDeltaCoefficient:
         ):
             from src.prediction.improved_predictor import ImprovedPredictor
             predictor = ImprovedPredictor.__new__(ImprovedPredictor)
+            predictor.store_id = ""
             coef = predictor._get_weather_coefficient(tomorrow, "010")
 
         # 15도 → 절대 임계값 미충족, delta -5 → 급변 미충족 → 1.0

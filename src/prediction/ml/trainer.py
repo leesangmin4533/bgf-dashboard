@@ -14,6 +14,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 
 from src.utils.logger import get_logger
+from src.prediction.prediction_config import PREDICTION_PARAMS
 from .data_pipeline import MLDataPipeline
 from .feature_builder import MLFeatureBuilder, get_category_group, CATEGORY_GROUPS
 from .model import MLPredictor
@@ -89,6 +90,11 @@ class MLTrainer:
             group: [] for group in CATEGORY_GROUPS
         }
 
+        # ML 품절일 imputation 설정
+        _ml_so_cfg = PREDICTION_PARAMS.get("ml_stockout_filter", {})
+        ml_stockout_enabled = _ml_so_cfg.get("enabled", False)
+        ml_stockout_min_days = _ml_so_cfg.get("min_available_days", 3)
+
         # 행사 데이터 일괄 캐시 {item_cd: [(start_date, end_date), ...]}
         promo_cache: Dict[str, List[Tuple[str, str]]] = {}
         try:
@@ -130,6 +136,9 @@ class MLTrainer:
         except Exception as e:
             logger.debug(f"[학습] 입고패턴 캐시 로드 실패 (무시): {e}")
 
+        # 시간대 Feature 캐시 (item_cd별 1회 조회)
+        _hourly_cache: Dict[str, dict] = {}
+
         for item_info in active_items:
             item_cd = item_info["item_cd"]
             mid_cd = item_info["mid_cd"]
@@ -140,8 +149,36 @@ class MLTrainer:
             if len(daily_sales) < 14:
                 continue
 
+            # 시간대 Feature 조회 (캐시: item_cd별 1회)
+            if item_cd not in _hourly_cache:
+                _hourly_cache[item_cd] = MLFeatureBuilder.calc_hourly_ratios(
+                    store_id=self.store_id or "",
+                    item_cd=item_cd,
+                    base_date=daily_sales[-1]["sales_date"],
+                    days=14,
+                )
+
             # 상품 메타정보
             meta = item_meta.get(item_cd, {})
+
+            # A0: 품절일 imputation용 비품절 평균 (최근 14일 → 30일 폴백)
+            _non_stockout_avg = None
+            if ml_stockout_enabled:
+                _avail_14 = [
+                    (d.get("sale_qty", 0) or 0)
+                    for d in daily_sales[-14:]
+                    if d.get("stock_qty") is not None and d.get("stock_qty", 0) > 0
+                ]
+                if len(_avail_14) >= ml_stockout_min_days:
+                    _non_stockout_avg = sum(_avail_14) / len(_avail_14)
+                else:
+                    _avail_30 = [
+                        (d.get("sale_qty", 0) or 0)
+                        for d in daily_sales[-30:]
+                        if d.get("stock_qty") is not None and d.get("stock_qty", 0) > 0
+                    ]
+                    if len(_avail_30) >= ml_stockout_min_days:
+                        _non_stockout_avg = sum(_avail_30) / len(_avail_30)
 
             # 학습 샘플 생성: 7일 이전까지의 각 날짜를 target으로
             # (최소 7일의 이전 데이터를 feature로 사용)
@@ -190,19 +227,42 @@ class MLTrainer:
                 wow_val = None
                 try:
                     target_dt = datetime.strptime(target_date_str, "%Y-%m-%d")
-                    # lag_7: 7일 전 판매량
+                    # lag_7: 7일 전 판매량 (A2: 품절일 imputation)
                     lag7_date = (target_dt - timedelta(days=7)).strftime("%Y-%m-%d")
                     if lag7_date in date_to_idx:
-                        lag_7_val = daily_sales[date_to_idx[lag7_date]].get("sale_qty", 0) or 0
-                    # lag_28: 28일 전 판매량
+                        _lag7_row = daily_sales[date_to_idx[lag7_date]]
+                        _lag7_sale = _lag7_row.get("sale_qty", 0) or 0
+                        _lag7_stock = _lag7_row.get("stock_qty")
+                        if (_non_stockout_avg is not None
+                                and _lag7_stock is not None and _lag7_stock == 0
+                                and _lag7_sale == 0):
+                            lag_7_val = _non_stockout_avg
+                        else:
+                            lag_7_val = _lag7_sale
+                    # lag_28: 28일 전 판매량 (A2: 품절일 imputation)
                     lag28_date = (target_dt - timedelta(days=28)).strftime("%Y-%m-%d")
                     if lag28_date in date_to_idx:
-                        lag_28_val = daily_sales[date_to_idx[lag28_date]].get("sale_qty", 0) or 0
-                    # week_over_week: (7일전 - 14일전) / 14일전
+                        _lag28_row = daily_sales[date_to_idx[lag28_date]]
+                        _lag28_sale = _lag28_row.get("sale_qty", 0) or 0
+                        _lag28_stock = _lag28_row.get("stock_qty")
+                        if (_non_stockout_avg is not None
+                                and _lag28_stock is not None and _lag28_stock == 0
+                                and _lag28_sale == 0):
+                            lag_28_val = _non_stockout_avg
+                        else:
+                            lag_28_val = _lag28_sale
+                    # week_over_week: (7일전 - 14일전) / 14일전 (A2: 품절일 imputation)
                     lag14_date = (target_dt - timedelta(days=14)).strftime("%Y-%m-%d")
                     if lag7_date in date_to_idx and lag14_date in date_to_idx:
-                        qty_7 = daily_sales[date_to_idx[lag7_date]].get("sale_qty", 0) or 0
-                        qty_14 = daily_sales[date_to_idx[lag14_date]].get("sale_qty", 0) or 0
+                        _r7 = daily_sales[date_to_idx[lag7_date]]
+                        _r14 = daily_sales[date_to_idx[lag14_date]]
+                        qty_7 = _r7.get("sale_qty", 0) or 0
+                        qty_14 = _r14.get("sale_qty", 0) or 0
+                        if _non_stockout_avg is not None:
+                            if (_r7.get("stock_qty") is not None and _r7["stock_qty"] == 0 and qty_7 == 0):
+                                qty_7 = _non_stockout_avg
+                            if (_r14.get("stock_qty") is not None and _r14["stock_qty"] == 0 and qty_14 == 0):
+                                qty_14 = _non_stockout_avg
                         if qty_14 > 0:
                             wow_val = round((qty_7 - qty_14) / qty_14, 3)
                         elif qty_7 > 0:
@@ -212,12 +272,33 @@ class MLTrainer:
                 except (ValueError, KeyError):
                     pass
 
+                # A1: Y값 품절일 imputation
+                _target_sale_qty = target_row.get("sale_qty", 0) or 0
+                _target_stock = target_row.get("stock_qty")
+                if (_non_stockout_avg is not None
+                        and _target_stock is not None and _target_stock == 0
+                        and _target_sale_qty == 0):
+                    _target_sale_qty = _non_stockout_avg
+
+                # 외부 환경 피처 (35→39 확장)
+                _rain_qty_train = 0.0
+                _sky_nm_train = ""
+                _pm25_train = 0.0
+                try:
+                    _rain_qty_train = float(day_factors.get("rain_qty", 0) or 0)
+                    _sky_nm_train = str(day_factors.get("weather_cd_nm", "") or "")
+                    _pm25_train = float(day_factors.get("pm25", 0) or 0)
+                except (ValueError, TypeError):
+                    pass
+                _target_dt_day = datetime.strptime(target_date_str, "%Y-%m-%d").day
+                _is_payday_train = 1 if _target_dt_day in (10, 11, 12, 25, 26, 27) else 0
+
                 sample = {
                     "item_cd": item_cd,
                     "daily_sales": history,
                     "target_date": target_date_str,
                     "mid_cd": mid_cd,
-                    "actual_sale_qty": target_row.get("sale_qty", 0) or 0,
+                    "actual_sale_qty": _target_sale_qty,
                     "stock_qty": daily_sales[i - 1].get("stock_qty", 0) or 0,  # 전일 마감 재고 (leakage 제거)
                     "pending_qty": 0,
                     "promo_active": any(
@@ -237,6 +318,11 @@ class MLTrainer:
                     "is_post_holiday": post_holiday,
                     "receiving_stats": receiving_stats_cache.get(item_cd),
                     "large_cd": meta.get("large_cd"),
+                    "rain_qty": _rain_qty_train,
+                    "sky_nm": _sky_nm_train,
+                    "is_payday": _is_payday_train,
+                    "pm25": _pm25_train,
+                    "hourly_ratios": _hourly_cache.get(item_cd, {}),
                 }
 
                 group_data[group].append(sample)
@@ -378,6 +464,11 @@ class MLTrainer:
                     is_post_holiday=s.get("is_post_holiday", False),
                     receiving_stats=s.get("receiving_stats"),
                     large_cd=s.get("large_cd"),
+                    rain_qty=s.get("rain_qty", 0.0),
+                    sky_nm=s.get("sky_nm", ""),
+                    is_payday=s.get("is_payday", 0),
+                    pm25=s.get("pm25", 0.0),
+                    hourly_ratios=s.get("hourly_ratios"),
                 )
                 if feat is not None:
                     X_list.append(feat)
@@ -589,6 +680,8 @@ class MLTrainer:
 
         # small_cd별로 학습 데이터 그룹화
         smallcd_data: Dict[str, List[Dict]] = {}
+        # 시간대 Feature 캐시 (그룹 모델용)
+        _grp_hourly_cache: Dict[str, dict] = {}
 
         for item_info in food_items:
             item_cd = item_info["item_cd"]
@@ -601,10 +694,40 @@ class MLTrainer:
             if len(daily_sales) < 3:
                 continue
 
+            # 시간대 Feature 조회 (캐시: item_cd별 1회)
+            if item_cd not in _grp_hourly_cache:
+                _grp_hourly_cache[item_cd] = MLFeatureBuilder.calc_hourly_ratios(
+                    store_id=self.store_id or "",
+                    item_cd=item_cd,
+                    base_date=daily_sales[-1]["sales_date"],
+                    days=14,
+                )
+
             meta = item_meta.get(item_cd, {})
             _peer_avg = peer_avgs.get(item_smallcd.get(item_cd, ""), 0.0)
             _lifecycle = lifecycle_stages.get(item_cd, 1.0)
             _data_days = item_info.get("data_days", len(daily_sales))
+
+            # A3: 품절일 imputation용 비품절 평균 (최근 14일 → 30일 폴백)
+            _grp_non_stockout_avg = None
+            _grp_ml_so_cfg = PREDICTION_PARAMS.get("ml_stockout_filter", {})
+            if _grp_ml_so_cfg.get("enabled", False):
+                _grp_min_days = _grp_ml_so_cfg.get("min_available_days", 3)
+                _grp_avail_14 = [
+                    (d.get("sale_qty", 0) or 0)
+                    for d in daily_sales[-14:]
+                    if d.get("stock_qty") is not None and d.get("stock_qty", 0) > 0
+                ]
+                if len(_grp_avail_14) >= _grp_min_days:
+                    _grp_non_stockout_avg = sum(_grp_avail_14) / len(_grp_avail_14)
+                else:
+                    _grp_avail_30 = [
+                        (d.get("sale_qty", 0) or 0)
+                        for d in daily_sales[-30:]
+                        if d.get("stock_qty") is not None and d.get("stock_qty", 0) > 0
+                    ]
+                    if len(_grp_avail_30) >= _grp_min_days:
+                        _grp_non_stockout_avg = sum(_grp_avail_30) / len(_grp_avail_30)
 
             for i in range(min(7, len(daily_sales)), len(daily_sales)):
                 target_row = daily_sales[i]
@@ -622,12 +745,33 @@ class MLTrainer:
 
                 is_holiday = day_factors.get("is_holiday", "false").lower() in ("true", "1")
 
+                # A3: Y값 품절일 imputation
+                _grp_target_sale = target_row.get("sale_qty", 0) or 0
+                _grp_target_stock = target_row.get("stock_qty")
+                if (_grp_non_stockout_avg is not None
+                        and _grp_target_stock is not None and _grp_target_stock == 0
+                        and _grp_target_sale == 0):
+                    _grp_target_sale = _grp_non_stockout_avg
+
+                # 외부 환경 피처 (35→39 확장)
+                _grp_rain_qty = 0.0
+                _grp_sky_nm = ""
+                _grp_pm25 = 0.0
+                try:
+                    _grp_rain_qty = float(day_factors.get("rain_qty", 0) or 0)
+                    _grp_sky_nm = str(day_factors.get("weather_cd_nm", "") or "")
+                    _grp_pm25 = float(day_factors.get("pm25", 0) or 0)
+                except (ValueError, TypeError):
+                    pass
+                _grp_target_day = datetime.strptime(target_date_str, "%Y-%m-%d").day
+                _grp_is_payday = 1 if _grp_target_day in (10, 11, 12, 25, 26, 27) else 0
+
                 sample = {
                     "item_cd": item_cd,
                     "daily_sales": history,
                     "target_date": target_date_str,
                     "mid_cd": mid_cd,
-                    "actual_sale_qty": target_row.get("sale_qty", 0) or 0,
+                    "actual_sale_qty": _grp_target_sale,
                     "stock_qty": daily_sales[i - 1].get("stock_qty", 0) or 0,
                     "pending_qty": 0,
                     "promo_active": False,
@@ -641,6 +785,11 @@ class MLTrainer:
                     "data_days": _data_days,
                     "smallcd_peer_avg": _peer_avg,
                     "lifecycle_stage": _lifecycle,
+                    "rain_qty": _grp_rain_qty,
+                    "sky_nm": _grp_sky_nm,
+                    "is_payday": _grp_is_payday,
+                    "pm25": _grp_pm25,
+                    "hourly_ratios": _grp_hourly_cache.get(item_cd, {}),
                 }
                 smallcd_data.setdefault(small_cd, []).append(sample)
 
@@ -686,6 +835,11 @@ class MLTrainer:
                     data_days=s.get("data_days", 0),
                     smallcd_peer_avg=s.get("smallcd_peer_avg", 0.0),
                     lifecycle_stage=s.get("lifecycle_stage", 1.0),
+                    rain_qty=s.get("rain_qty", 0.0),
+                    sky_nm=s.get("sky_nm", ""),
+                    is_payday=s.get("is_payday", 0),
+                    pm25=s.get("pm25", 0.0),
+                    hourly_ratios=s.get("hourly_ratios"),
                 )
                 if feat is not None:
                     X_list.append(feat)

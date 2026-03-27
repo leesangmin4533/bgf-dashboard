@@ -18,6 +18,7 @@ from src.settings.constants import (
     DIFF_FEEDBACK_LOOKBACK_DAYS,
     DIFF_FEEDBACK_REMOVAL_THRESHOLDS,
     DIFF_FEEDBACK_ADDITION_MIN_COUNT,
+    DIFF_FEEDBACK_STOCKOUT_EXCLUSION_DAYS,
 )
 from src.utils.logger import get_logger
 
@@ -67,12 +68,32 @@ class DiffFeedbackAdjuster:
             removal_stats = repo.get_item_removal_stats(
                 self.store_id, days=self._lookback_days
             )
+
+            # 품절 후 제거 건 제외: 제거 order_date 이후 7일 내 품절이면 정당한 제거
+            removal_dates = repo.get_removal_order_dates(
+                self.store_id, days=self._lookback_days
+            )
+            stockout_dates = self._get_stockout_justified_dates(
+                removal_dates
+            )
+
             for row in removal_stats:
                 ic = row["item_cd"]
+                raw_count = row["removal_count"]
+                # 품절 정당 제거 건수 차감
+                justified = len(stockout_dates.get(ic, set()))
+                adjusted_count = max(0, raw_count - justified)
+                if justified > 0:
+                    logger.info(
+                        f"[Diff피드백] {ic}: 제거 {raw_count}→{adjusted_count} "
+                        f"(품절정당 {justified}건 제외)"
+                    )
+                if adjusted_count <= 0:
+                    continue
                 self._removal_cache[ic] = {
                     "item_nm": row.get("item_nm", ""),
                     "mid_cd": row.get("mid_cd", ""),
-                    "removal_count": row["removal_count"],
+                    "removal_count": adjusted_count,
                     "total_appearances": row["total_appearances"],
                 }
 
@@ -101,7 +122,73 @@ class DiffFeedbackAdjuster:
             logger.warning(f"[Diff피드백] 로드 실패 (비활성): {e}")
             self._cache_loaded = True  # 재시도 방지
 
-    def get_removal_penalty(self, item_cd: str) -> float:
+    def _get_stockout_justified_dates(
+        self, removal_dates: Dict[str, List[str]]
+    ) -> Dict[str, set]:
+        """제거 후 7일 내 품절된 order_date 집합 반환
+
+        제거가 정당했음을 의미: 점주가 삭제했지만
+        그 이후 실제로 품절이 발생하여 삭제가 합리적이었던 경우.
+
+        Args:
+            removal_dates: {item_cd: [order_date, ...]}
+
+        Returns:
+            {item_cd: {order_date, ...}} — 품절 정당 제거 날짜
+        """
+        if not removal_dates:
+            return {}
+
+        result: Dict[str, set] = {}
+        try:
+            from src.infrastructure.database.connection import DBRouter
+
+            conn = DBRouter.get_store_connection(self.store_id)
+            try:
+                all_items = list(removal_dates.keys())
+                # 배치 조회: 해당 상품들의 최근 daily_sales에서 stock=0 날짜
+                placeholders = ",".join("?" * len(all_items))
+                cursor = conn.execute(
+                    f"""SELECT item_cd, sales_date
+                    FROM daily_sales
+                    WHERE item_cd IN ({placeholders})
+                        AND stock_qty = 0
+                        AND sales_date >= date('now', ?)
+                    ORDER BY item_cd, sales_date""",
+                    (*all_items, f"-{self._lookback_days + DIFF_FEEDBACK_STOCKOUT_EXCLUSION_DAYS} days"),
+                )
+                # item_cd → {stockout_date, ...}
+                stockout_map: Dict[str, set] = {}
+                for row in cursor.fetchall():
+                    ic = row["item_cd"]
+                    if ic not in stockout_map:
+                        stockout_map[ic] = set()
+                    stockout_map[ic].add(row["sales_date"])
+
+                # 각 제거 order_date에 대해 이후 7일 내 품절 여부 확인
+                from datetime import datetime, timedelta
+                for ic, dates in removal_dates.items():
+                    so_dates = stockout_map.get(ic, set())
+                    if not so_dates:
+                        continue
+                    for od_str in dates:
+                        od = datetime.strptime(od_str, "%Y-%m-%d").date()
+                        # order_date 이후 1~7일 사이에 품절 발생했는지
+                        for delta in range(1, DIFF_FEEDBACK_STOCKOUT_EXCLUSION_DAYS + 1):
+                            check_date = (od + timedelta(days=delta)).strftime("%Y-%m-%d")
+                            if check_date in so_dates:
+                                if ic not in result:
+                                    result[ic] = set()
+                                result[ic].add(od_str)
+                                break
+            finally:
+                conn.close()
+        except Exception as e:
+            logger.debug(f"[Diff피드백] 품절 필터 조회 실패 (무시): {e}")
+
+        return result
+
+    def get_removal_penalty(self, item_cd: str, mid_cd: str = None) -> float:
         """제거 페널티 계수 반환 (0.3~1.0, 1.0=페널티 없음)
 
         수량 감소 방식: order_qty × penalty (목록에서 제외하지 않음)
@@ -109,10 +196,15 @@ class DiffFeedbackAdjuster:
 
         Args:
             item_cd: 상품 코드
+            mid_cd: 중분류 코드 (특정 카테고리 면제용)
 
         Returns:
             페널티 계수 (0.3 ~ 1.0)
         """
+        # mid_cd=022(마른안주류): 품절 반복 특성상 penalty 적용 제외
+        if mid_cd == "022":
+            return 1.0
+
         if not self._cache_loaded:
             self.load_feedback()
 

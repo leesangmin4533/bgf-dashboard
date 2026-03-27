@@ -3,966 +3,2013 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BGF 발주 시스템</title>
+    <title>오더핏AI</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='icon_32x32.png') }}">
+    <link rel="apple-touch-icon" sizes="128x128" href="{{ url_for('static', filename='icon_128x128.png') }}">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}?v=16">
-    <script>
-        /* FOUC 방지: 페이지 로드 전 저장된 테마 즉시 적용 */
-        (function() {
-            var saved = localStorage.getItem('bgf-theme');
-            if (saved) document.documentElement.setAttribute('data-theme', saved);
-            else document.documentElement.setAttribute('data-theme', 'dark');
-        })();
-    </script>
+    <style>
+        /* ── CSS Variables ────────────────────────────────── */
+        :root {
+            --background: #FFFBEB;
+            --card: #FFFFFF;
+            --secondary: #FEF9C3;
+            --foreground: #1C1208;
+            --muted-foreground: #78503A;
+            --border: #FDE68A;
+            --green: #16a34a;
+            --blue: #3B82F6;
+            --red: #EA580C;
+            --orange: #F59E0B;
+            --purple: #D97706;
+            --font: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+
+        /* ── Reset ────────────────────────────────────────── */
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: var(--font);
+            background: var(--background);
+            color: var(--foreground);
+            min-height: 100vh;
+            -webkit-font-smoothing: antialiased;
+        }
+        a { color: inherit; text-decoration: none; }
+
+        /* ── Header ───────────────────────────────────────── */
+        .top-header {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: rgba(255, 251, 235, 0.85);
+            -webkit-backdrop-filter: blur(12px);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border);
+        }
+        .header-inner {
+            max-width: 960px;
+            margin: 0 auto;
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-shrink: 0;
+        }
+        .brand-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            overflow: hidden;
+            flex-shrink: 0;
+        }
+        .brand-icon img { width: 100%; height: 100%; object-fit: cover; }
+        .brand-name {
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--foreground);
+            letter-spacing: -0.02em;
+        }
+
+        /* ── Nav Tabs (pill style) ────────────────────────── */
+        .nav-tabs-wrap {
+            background: var(--secondary);
+            padding: 4px;
+            border-radius: 10px;
+            display: flex;
+            gap: 2px;
+        }
+        .nav-tab {
+            padding: 6px 12px;
+            border-radius: 7px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: var(--muted-foreground);
+            transition: all 0.2s;
+            border: none;
+            background: transparent;
+            cursor: pointer;
+            font-family: var(--font);
+            white-space: nowrap;
+        }
+        .nav-tab:hover {
+            color: var(--foreground);
+        }
+        .nav-tab.active {
+            background: var(--foreground);
+            color: var(--background);
+            box-shadow: 0 1px 3px rgba(45,27,20,0.15);
+        }
+
+        .header-right {
+            margin-left: auto;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-shrink: 0;
+        }
+        .store-name {
+            font-size: 0.8rem;
+            color: var(--muted-foreground);
+        }
+        .user-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--secondary);
+            border: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+        .user-avatar svg { width: 16px; height: 16px; color: var(--muted-foreground); }
+
+        /* ── Main Content ─────────────────────────────────── */
+        .main-content {
+            max-width: 960px;
+            margin: 0 auto;
+            padding: 24px 20px 80px;
+        }
+        .tab-panel { display: none; }
+        .tab-panel.active { display: block; }
+
+        /* ── Section spacing ──────────────────────────────── */
+        .section-gap { margin-bottom: 20px; }
+
+        /* ── Order Status Card ────────────────────────────── */
+        .order-status-card {
+            position: relative;
+            overflow: hidden;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            background: var(--card);
+            padding: 24px;
+        }
+        .order-status-card::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background-image:
+                linear-gradient(to right, #EA580C10 1px, transparent 1px),
+                linear-gradient(to bottom, #EA580C10 1px, transparent 1px);
+            background-size: 24px 24px;
+            pointer-events: none;
+        }
+        .order-status-inner {
+            position: relative;
+            z-index: 1;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        .status-icon-wrap {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        .status-icon-wrap svg { width: 24px; height: 24px; }
+        .status-icon-wrap.completed {
+            background: rgba(62,207,142,0.1);
+            border: 1px solid rgba(62,207,142,0.2);
+        }
+        .status-icon-wrap.completed svg { color: var(--green); }
+        .status-icon-wrap.pending {
+            background: rgba(245,166,35,0.1);
+            border: 1px solid rgba(245,166,35,0.2);
+        }
+        .status-icon-wrap.pending svg { color: var(--orange); }
+        .status-icon-wrap.failed {
+            background: rgba(255,99,105,0.1);
+            border: 1px solid rgba(255,99,105,0.2);
+        }
+        .status-icon-wrap.failed svg { color: var(--red); }
+        .status-text h3 {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 2px;
+        }
+        .status-text p {
+            font-size: 0.8rem;
+            color: var(--muted-foreground);
+        }
+
+        /* ── Metric Cards ─────────────────────────────────── */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 12px;
+        }
+        .metric-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            transition: border-color 0.2s;
+        }
+        .metric-card:hover {
+            border-color: #FBBF24;
+        }
+        /* 폐기위험 카드 hover 효과 */
+        .metric-card[onclick]:hover {
+            box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+            border: 1px solid var(--red);
+            transform: translateY(-2px);
+            transition: all 0.15s ease;
+        }
+        .metric-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+        .metric-label {
+            font-size: 0.8rem;
+            color: var(--muted-foreground);
+            font-weight: 500;
+        }
+        .metric-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 8px;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        .metric-badge.positive {
+            background: rgba(62,207,142,0.1);
+            color: var(--green);
+        }
+        .metric-badge.negative {
+            background: rgba(255,99,105,0.1);
+            color: var(--red);
+        }
+        .metric-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+        }
+        .metric-value .unit {
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: var(--muted-foreground);
+            margin-left: 2px;
+        }
+        .metric-icon {
+            width: 20px;
+            height: 20px;
+        }
+
+        /* ── Panel ────────────────────────────────────────── */
+        .panel {
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            overflow: hidden;
+            background: var(--card);
+        }
+        .panel-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+        .badge {
+            background: var(--secondary);
+            color: var(--muted-foreground);
+            padding: 2px 10px;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+        .panel-rows {
+            max-height: 320px;
+            overflow-y: auto;
+        }
+        .panel-row {
+            padding: 14px 20px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .panel-row:last-child { border-bottom: none; }
+        .panel-row-name {
+            font-size: 0.875rem;
+            font-weight: 500;
+            margin-bottom: 2px;
+        }
+        .panel-row-sub {
+            font-size: 0.75rem;
+            color: var(--red);
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .panel-row-qty {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--muted-foreground);
+            white-space: nowrap;
+        }
+        .panel-empty {
+            padding: 40px 20px;
+            text-align: center;
+            color: var(--muted-foreground);
+            font-size: 0.85rem;
+        }
+
+        /* ── Chart container ──────────────────────────────── */
+        .chart-wrap {
+            padding: 20px;
+        }
+        .chart-wrap canvas {
+            width: 100% !important;
+            height: 200px !important;
+        }
+
+        /* ── Progress bar ─────────────────────────────────── */
+        .progress-bar {
+            height: 6px;
+            background: var(--secondary);
+            border-radius: 9999px;
+            overflow: hidden;
+            margin-top: 12px;
+        }
+        .progress-fill {
+            height: 100%;
+            background: var(--blue);
+            border-radius: 9999px;
+            transition: width 0.6s ease;
+        }
+
+        /* ── Summary grid ─────────────────────────────────── */
+        .summary-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+        }
+        .summary-cell {
+            padding: 20px;
+        }
+        .summary-cell:nth-child(odd) { border-right: 1px solid var(--border); }
+        .summary-cell:nth-child(1),
+        .summary-cell:nth-child(2) { border-bottom: 1px solid var(--border); }
+        .summary-cell .label {
+            font-size: 0.75rem;
+            color: var(--muted-foreground);
+            margin-bottom: 6px;
+        }
+        .summary-cell .value {
+            font-size: 1.125rem;
+            font-weight: 700;
+        }
+        .summary-cell .value .unit {
+            font-size: 0.75rem;
+            font-weight: 400;
+            color: var(--muted-foreground);
+            margin-left: 2px;
+        }
+
+        /* ── Settings sections ────────────────────────────── */
+        .settings-section {
+            margin-bottom: 16px;
+        }
+        .settings-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 20px;
+            border-bottom: 1px solid var(--border);
+        }
+        .settings-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .settings-icon svg { width: 18px; height: 18px; }
+        .settings-icon.blue { background: rgba(59,130,246,0.15); }
+        .settings-icon.blue svg { color: var(--blue); }
+        .settings-icon.orange { background: rgba(245,166,35,0.15); }
+        .settings-icon.orange svg { color: var(--orange); }
+        .settings-icon.purple { background: rgba(167,139,250,0.15); }
+        .settings-icon.purple svg { color: var(--purple); }
+        .settings-title {
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+        .settings-desc {
+            font-size: 0.75rem;
+            color: var(--muted-foreground);
+        }
+        .settings-body {
+            padding: 20px;
+        }
+
+        /* ── Time input ───────────────────────────────────── */
+        .time-input {
+            width: 100%;
+            max-width: 200px;
+            padding: 10px 14px;
+            background: var(--secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--foreground);
+            font-size: 0.9rem;
+            font-family: var(--font);
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .time-input:focus { border-color: var(--blue); }
+
+        /* ── Toggle switch ────────────────────────────────── */
+        .toggle-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 0;
+            border-bottom: 1px solid var(--border);
+        }
+        .toggle-row:last-child { border-bottom: none; }
+        .toggle-label {
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+        .toggle {
+            position: relative;
+            width: 44px;
+            height: 24px;
+            border-radius: 12px;
+            background: var(--secondary);
+            border: 1px solid var(--border);
+            cursor: pointer;
+            transition: all 0.2s;
+            flex-shrink: 0;
+        }
+        .toggle.on {
+            background: var(--blue);
+            border-color: var(--blue);
+        }
+        .toggle-knob {
+            position: absolute;
+            top: 1px;
+            left: 1px;
+            width: 20px;
+            height: 20px;
+            background: var(--foreground);
+            border-radius: 50%;
+            transition: transform 0.2s;
+        }
+        .toggle.on .toggle-knob {
+            transform: translateX(20px);
+        }
+
+        /* ── Category buttons ─────────────────────────────── */
+        .cat-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+        .cat-btn {
+            position: relative;
+            padding: 14px 12px;
+            background: var(--secondary);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            color: var(--muted-foreground);
+            font-size: 0.85rem;
+            font-weight: 500;
+            font-family: var(--font);
+            cursor: pointer;
+            text-align: center;
+            transition: all 0.2s;
+        }
+        .cat-btn:hover {
+            border-color: #FBBF24;
+        }
+        .cat-btn.selected {
+            background: var(--foreground);
+            color: var(--background);
+            border-color: var(--foreground);
+        }
+        .cat-check {
+            position: absolute;
+            top: 6px;
+            right: 6px;
+            width: 16px;
+            height: 16px;
+            display: none;
+        }
+        .cat-btn.selected .cat-check { display: block; }
+
+        .cat-grid.disabled {
+            pointer-events: none;
+            opacity: 0.4;
+        }
+        .cat-grid-overlay {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255,255,255,0.7);
+            border-radius: 8px;
+            font-size: 13px;
+            color: #555;
+            font-weight: 500;
+            pointer-events: none;
+        }
+
+        /* ── Order mode radio ────────────────────────────── */
+        .order-mode-radios {
+            display: flex;
+            gap: 12px;
+            padding: 8px 0 12px;
+        }
+        .order-mode-radios label {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            color: var(--foreground);
+        }
+        .order-mode-radios input[type="radio"] {
+            accent-color: var(--foreground);
+            width: 16px;
+            height: 16px;
+        }
+
+        /* ── Link list ────────────────────────────────────── */
+        .link-list-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border);
+            cursor: pointer;
+            transition: background 0.15s;
+            font-size: 0.875rem;
+        }
+        .link-list-item:last-child { border-bottom: none; }
+        .link-list-item:hover { background: rgba(244,63,94,0.04); }
+        .link-chevron {
+            color: var(--muted-foreground);
+            font-size: 0.8rem;
+        }
+
+        /* ── Version ──────────────────────────────────────── */
+        .version-footer {
+            text-align: center;
+            padding: 16px;
+        }
+        .version-footer p {
+            font-size: 0.75rem;
+            color: var(--muted-foreground);
+        }
+
+        /* ── Logout menu ──────────────────────────────────── */
+        .user-menu {
+            position: absolute;
+            top: 100%;
+            right: 0;
+            margin-top: 8px;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 4px;
+            min-width: 140px;
+            box-shadow: 0 8px 24px rgba(45,27,20,0.12);
+            display: none;
+            z-index: 200;
+        }
+        .user-menu.visible { display: block; }
+        .user-menu-item {
+            display: block;
+            width: 100%;
+            padding: 10px 14px;
+            font-size: 0.85rem;
+            color: var(--foreground);
+            background: none;
+            border: none;
+            border-radius: 7px;
+            cursor: pointer;
+            text-align: left;
+            font-family: var(--font);
+        }
+        .user-menu-item:hover { background: var(--secondary); }
+
+        /* ── Loading skeleton ─────────────────────────────── */
+        .skeleton {
+            background: var(--secondary);
+            border-radius: 6px;
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* ── Responsive ───────────────────────────────────── */
+        @media (min-width: 640px) {
+            .metrics-grid {
+                grid-template-columns: 1fr 1fr 1fr;
+            }
+            .cat-grid {
+                grid-template-columns: 1fr 1fr 1fr;
+            }
+        }
+
+        @media (max-width: 639px) {
+            .header-inner {
+                flex-wrap: wrap;
+                gap: 10px;
+            }
+            .nav-tabs-wrap {
+                order: 3;
+                width: 100%;
+            }
+            .brand-name { display: none; }
+            .store-name { display: none; }
+            .main-content {
+                padding: 16px 12px 80px;
+            }
+        }
+
+        /* ── Scrollbar ────────────────────────────────────── */
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+        /* ── Bottom Sheet Modal ──────────────────────────── */
+        .sheet-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.4);
+            z-index: 500;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.25s;
+        }
+        .sheet-overlay.open { opacity: 1; pointer-events: auto; }
+        .sheet-panel {
+            position: fixed;
+            left: 0; right: 0; bottom: 0;
+            max-height: 75vh;
+            background: var(--card);
+            border-radius: 16px 16px 0 0;
+            z-index: 501;
+            transform: translateY(100%);
+            transition: transform 0.3s cubic-bezier(0.32,0.72,0,1);
+            display: flex;
+            flex-direction: column;
+        }
+        .sheet-overlay.open + .sheet-panel,
+        .sheet-panel.open { transform: translateY(0); }
+        .sheet-handle {
+            width: 36px; height: 4px;
+            background: var(--border);
+            border-radius: 2px;
+            margin: 10px auto 0;
+            flex-shrink: 0;
+        }
+        .sheet-header {
+            padding: 12px 20px 8px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-shrink: 0;
+        }
+        .sheet-header h3 {
+            font-size: 1rem;
+            font-weight: 700;
+        }
+        .sheet-header .sheet-total {
+            font-size: 0.85rem;
+            color: var(--green);
+            font-weight: 600;
+        }
+        .sheet-body {
+            overflow-y: auto;
+            padding: 0 20px 20px;
+            flex: 1;
+        }
+        .profit-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 0;
+            border-bottom: 1px solid var(--border);
+        }
+        .profit-row:last-child { border-bottom: none; }
+        .profit-rank {
+            width: 24px; height: 24px;
+            border-radius: 6px;
+            background: var(--secondary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: var(--muted-foreground);
+            flex-shrink: 0;
+        }
+        .profit-rank.top { background: #FDE68A; color: #92400E; }
+        .profit-info { flex: 1; min-width: 0; }
+        .profit-name {
+            font-size: 0.875rem;
+            font-weight: 600;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .profit-bar-wrap {
+            margin-top: 4px;
+            height: 6px;
+            background: var(--secondary);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        .profit-bar {
+            height: 100%;
+            background: var(--green);
+            border-radius: 3px;
+            transition: width 0.4s ease;
+        }
+        .profit-values {
+            text-align: right;
+            flex-shrink: 0;
+        }
+        .profit-amt {
+            font-size: 0.875rem;
+            font-weight: 700;
+            color: var(--foreground);
+        }
+        .profit-pct {
+            font-size: 0.75rem;
+            color: var(--muted-foreground);
+            margin-top: 1px;
+        }
+        .metric-card.clickable { cursor: pointer; }
+    </style>
 </head>
 <body>
-    <!-- 상단 네비게이션 -->
-    <nav class="top-nav">
-        <div class="nav-brand">BGF 발주 시스템</div>
-        <div class="nav-tabs">
-            <a href="#" class="nav-tab active" data-tab="home">오늘 요약</a>
-            <a href="#" class="nav-tab" data-tab="analytics">매출/분석</a>
-            <a href="#" class="nav-tab" data-tab="order">발주 관리</a>
-            <a href="#" class="nav-tab" data-tab="settings" id="navTabSettings" style="display:none">설정</a>
-        </div>
-        <div class="nav-right">
-            <!-- 사용자 정보 -->
-            <div class="nav-user-info" id="navUserInfo" style="display:none;">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                    <circle cx="12" cy="7" r="4"/>
-                </svg>
-                <span id="navUsername" style="font-size:0.85rem;font-weight:500;"></span>
-                <span id="navStoreBadge" style="font-size:0.7rem;background:rgba(99,102,241,0.2);color:#a5b4fc;padding:2px 8px;border-radius:6px;margin-left:4px;"></span>
-            </div>
-            <!-- 매장 선택 (admin만) -->
-            <div class="nav-store-picker" id="navStorePicker">
-                <svg class="nav-store-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
-                    <polyline points="9 22 9 12 15 12 15 22"/>
-                </svg>
-                <select id="globalStoreSelect" class="nav-store-select">
-                    <option value="">로딩중...</option>
-                </select>
-            </div>
-            <div class="nav-status" id="serverStatus">● 연결됨</div>
-            <button class="theme-toggle" id="themeToggle" title="테마 전환" aria-label="테마 전환">
-                <div class="theme-toggle-knob">
-                    <svg id="themeIcon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M21 12.79A9 9 0 1 1 11.21 3a7 7 0 0 0 9.79 9.79z"/>
-                    </svg>
+    <!-- ═══ Header ═══ -->
+    <header class="top-header">
+        <div class="header-inner">
+            <div class="brand">
+                <div class="brand-icon">
+                    <img src="{{ url_for('static', filename='icon_32x32.png') }}" alt="오더핏AI">
                 </div>
-            </button>
-            <!-- 로그아웃 -->
-            <button class="theme-toggle" id="btnLogout" title="로그아웃" aria-label="로그아웃" style="margin-left:4px;">
-                <div class="theme-toggle-knob">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-                        <polyline points="16 17 21 12 16 7"/>
-                        <line x1="21" y1="12" x2="9" y2="12"/>
-                    </svg>
-                </div>
-            </button>
-        </div>
-    </nav>
-
-    <!-- =============================== -->
-    <!-- 오늘 요약 탭                       -->
-    <!-- =============================== -->
-    <main id="tab-home" class="tab-content active">
-
-        <!-- 4개 메트릭 카드 -->
-        <div class="home-bento">
-            <!-- 오늘 발주 카드 -->
-            <div class="metric-card metric-success" id="homeCardOrder">
-                <div class="metric-icon">
-                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none">
-                        <path d="M9 11l3 3L22 4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                        <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" stroke="currentColor" stroke-width="2"/>
-                    </svg>
-                </div>
-                <div class="metric-body">
-                    <div class="metric-label" id="homeOrderLabel">오늘 발주</div>
-                    <div class="metric-value" id="homeOrderValue">-</div>
-                    <div class="metric-sub" id="homeOrderSub"></div>
-                    <div class="metric-spark" id="homeOrderSpark"></div>
-                </div>
+                <span class="brand-name"><span style="color:#EA580C">오더</span><span style="color:#D97706">핏</span><span style="color:#3B82F6">AI</span></span>
             </div>
 
-            <!-- 폐기 주의 카드 -->
-            <div class="metric-card metric-danger" id="homeCardExpiry" onclick="openExpiryModal()">
-                <div class="metric-icon">
-                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none">
-                        <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" stroke="currentColor" stroke-width="2"/>
-                        <line x1="12" y1="9" x2="12" y2="13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                        <line x1="12" y1="17" x2="12.01" y2="17" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                    </svg>
-                </div>
-                <div class="metric-body">
-                    <div class="metric-label">폐기 주의</div>
-                    <div class="metric-value" id="homeExpiryValue">0</div>
-                    <div class="metric-sub" id="homeExpirySub">위험 상품</div>
-                </div>
+            <div class="nav-tabs-wrap">
+                <button class="nav-tab active" data-tab="home" type="button">홈</button>
+                <button class="nav-tab" data-tab="weekly" type="button">이번주 현황</button>
+                <button class="nav-tab" data-tab="settings" type="button">설정</button>
             </div>
 
-            <!-- 오늘 매출 카드 -->
-            <div class="metric-card metric-info" id="homeCardSales">
-                <div class="metric-icon">
-                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none">
-                        <line x1="12" y1="1" x2="12" y2="23" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                        <path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                    </svg>
-                </div>
-                <div class="metric-body">
-                    <div class="metric-label">오늘 매출</div>
-                    <div class="metric-value" id="homeSalesValue">-</div>
-                    <div class="metric-sub" id="homeSalesSub"></div>
-                </div>
-            </div>
-
-            <!-- 시스템 상태 카드 -->
-            <div class="metric-card metric-primary" id="homeCardScheduler" onclick="openSchedulerModal()">
-                <div class="metric-icon">
-                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none">
-                        <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
-                        <path d="M12 6v6l4 2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                    </svg>
-                </div>
-                <div class="metric-body">
-                    <div class="metric-label">시스템 상태</div>
-                    <div class="metric-value" id="homeSchedulerValue">확인중</div>
-                    <div class="metric-sub" id="homeSchedulerSub"></div>
-                </div>
-            </div>
-        </div>
-
-        <!-- 7일 스파크라인 추이 -->
-        <div class="home-sparkline-row">
-            <div class="sparkline-card">
-                <div class="sparkline-header">
-                    <span class="sparkline-title">발주량 추이 (7일)</span>
-                    <span class="sparkline-value" id="sparkOrderValue">-</span>
-                </div>
-                <canvas id="sparkOrderChart" height="50"></canvas>
-            </div>
-            <div class="sparkline-card">
-                <div class="sparkline-header">
-                    <span class="sparkline-title">매출 추이 (7일)</span>
-                    <span class="sparkline-value" id="sparkSalesValue">-</span>
-                </div>
-                <canvas id="sparkSalesChart" height="50"></canvas>
-            </div>
-            <div class="sparkline-card">
-                <div class="sparkline-header">
-                    <span class="sparkline-title">폐기 추이 (7일)</span>
-                    <span class="sparkline-value" id="sparkWasteValue">-</span>
-                </div>
-                <canvas id="sparkWasteChart" height="50"></canvas>
-            </div>
-        </div>
-
-        <!-- 폐기 주의 상품 인라인 리스트 -->
-        <div class="home-panel" id="homeExpiryInline">
-            <div class="home-panel-header">
-                <h3 class="home-panel-title">폐기 주의 상품 (상위 5개)</h3>
-                <button class="btn btn-sm" onclick="openExpiryModal()">더 보기</button>
-            </div>
-            <div class="home-panel-body" id="homeExpiryListBody">
-                <div class="hint">로딩중...</div>
-            </div>
-        </div>
-
-        <!-- 발주 실패 사유 -->
-        <div class="home-panel" id="homeFailPanel" style="display:none">
-            <div class="home-panel-header">
-                <h3 class="home-panel-title">오늘 발주 실패 사유</h3>
-                <span class="home-panel-badge" id="homeFailCount">0</span>
-            </div>
-            <div class="home-panel-body">
-                <div class="report-table-wrapper">
-                    <table class="report-table" id="homeFailTable">
-                        <thead>
-                            <tr>
-                                <th data-sort="text">상품명</th>
-                                <th data-sort="text">카테고리</th>
-                                <th data-sort="text">사유</th>
-                                <th data-sort="text">상태</th>
-                            </tr>
-                        </thead>
-                        <tbody id="homeFailTableBody"></tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-
-        <!-- 작업 진행 상황 (admin only) -->
-        <div class="home-panel" id="homePipelinePanel" data-admin-only style="display:none">
-            <div class="home-panel-header">
-                <h3 class="home-panel-title">작업 진행 상황</h3>
-            </div>
-            <div class="home-panel-body" id="homePipelineBody">
-                <div class="pipeline-steps">
-                    <div class="pipeline-step" id="pipeCollect">
-                        <div class="pipeline-dot"></div>
-                        <div class="pipeline-info">
-                            <div class="pipeline-name">데이터 수집</div>
-                            <div class="pipeline-time" id="pipeCollectTime">-</div>
-                        </div>
-                    </div>
-                    <div class="pipeline-connector"></div>
-                    <div class="pipeline-step" id="pipePrediction">
-                        <div class="pipeline-dot"></div>
-                        <div class="pipeline-info">
-                            <div class="pipeline-name">예측</div>
-                            <div class="pipeline-time" id="pipePredictionTime">-</div>
-                        </div>
-                    </div>
-                    <div class="pipeline-connector"></div>
-                    <div class="pipeline-step" id="pipeOrder">
-                        <div class="pipeline-dot"></div>
-                        <div class="pipeline-info">
-                            <div class="pipeline-name">발주</div>
-                            <div class="pipeline-time" id="pipeOrderTime">-</div>
-                        </div>
-                    </div>
-                    <div class="pipeline-connector"></div>
-                    <div class="pipeline-step" id="pipeEval">
-                        <div class="pipeline-dot"></div>
-                        <div class="pipeline-info">
-                            <div class="pipeline-name">평가</div>
-                            <div class="pipeline-time" id="pipeEvalTime">-</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- 가입 요청 (admin only) -->
-        <div class="home-panel" id="homeSignupPanel" data-admin-only style="display:none">
-            <div class="home-panel-header">
-                <h3 class="home-panel-title">가입 요청</h3>
-                <span class="home-panel-badge" id="homeSignupCount">0</span>
-            </div>
-            <div class="home-panel-body">
-                <div class="report-table-wrapper">
-                    <table class="report-table" id="homeSignupTable">
-                        <thead>
-                            <tr>
-                                <th data-sort="text">매장 코드</th>
-                                <th data-sort="text">핸드폰</th>
-                                <th data-sort="text">요청일</th>
-                                <th>처리</th>
-                            </tr>
-                        </thead>
-                        <tbody id="homeSignupTableBody"></tbody>
-                    </table>
-                </div>
-                <div class="hint" id="homeSignupEmpty" style="display:none">대기 중인 가입 요청이 없습니다.</div>
-            </div>
-        </div>
-
-    </main>
-
-    <!-- =============================== -->
-    <!-- 매출/분석 탭                       -->
-    <!-- =============================== -->
-    <main id="tab-analytics" class="tab-content">
-
-        <!-- 서브탭 선택기 (pill style) -->
-        <div class="analytics-tab-selector">
-            <button class="analytics-tab-btn active" data-analytics="daily">일일 현황</button>
-            <button class="analytics-tab-btn" data-analytics="weekly">주간 추이</button>
-            <button class="analytics-tab-btn" data-analytics="category">카테고리</button>
-            <button class="analytics-tab-btn" data-analytics="accuracy" data-admin-only style="display:none">예측 정확도</button>
-        </div>
-
-        <!-- 서브뷰 1: 일일 현황 (기존 report-daily) -->
-        <div id="analytics-daily" class="analytics-view active">
-            <div class="report-summary-cards" id="dailySummaryCards"></div>
-
-            <div class="report-charts-grid">
-                <div class="report-chart-card">
-                    <div class="chart-card-header">
-                        <h3 class="chart-title">카테고리별 발주량</h3>
-                    </div>
-                    <div class="chart-card-body">
-                        <canvas id="dailyCategoryChart"></canvas>
-                    </div>
-                </div>
-
-                <div class="report-chart-card">
-                    <div class="chart-card-header">
-                        <h3 class="chart-title">발주량 분포</h3>
-                    </div>
-                    <div class="chart-card-body">
-                        <canvas id="dailySafetyHist" height="200"></canvas>
-                    </div>
-                </div>
-            </div>
-
-            <div class="report-table-card" id="dailyTablePanel">
-                <div class="table-card-header">
-                    <h3 class="chart-title">상품별 상세</h3>
-                    <input type="text" id="dailySearch" class="report-search" placeholder="상품명, 카테고리 검색...">
-                </div>
-                <div class="table-card-body">
-                    <div class="report-table-wrapper">
-                        <table id="dailyTable" class="report-table">
-                            <thead>
-                                <tr>
-                                    <th data-sort="text">상품명</th>
-                                    <th data-sort="text">카테고리</th>
-                                    <th data-sort="num" class="text-right">일평균</th>
-                                    <th data-sort="num" class="text-right">안전재고</th>
-                                    <th data-sort="num" class="text-right">현재고</th>
-                                    <th data-sort="num" class="text-right">발주량</th>
-                                    <th data-sort="text" class="text-center">신뢰도</th>
-                                </tr>
-                            </thead>
-                            <tbody id="dailyTableBody"></tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- 서브뷰 2: 주간 추이 (기존 report-weekly) -->
-        <div id="analytics-weekly" class="analytics-view">
-            <div class="report-summary-cards" id="weeklySummaryCards"></div>
-
-            <div class="report-chart-card full-width">
-                <div class="chart-card-header">
-                    <h3 class="chart-title">카테고리별 판매 추이</h3>
-                </div>
-                <div class="chart-card-body">
-                    <canvas id="weeklyTrendChart" height="300"></canvas>
-                </div>
-            </div>
-
-            <div class="report-charts-grid">
-                <div class="report-chart-card">
-                    <div class="chart-card-header">
-                        <h3 class="chart-title">예측 정확도</h3>
-                    </div>
-                    <div class="chart-card-body">
-                        <canvas id="weeklyAccuracyChart" height="250"></canvas>
-                    </div>
-                </div>
-
-                <div class="report-chart-card">
-                    <div class="chart-card-header">
-                        <h3 class="chart-title">요일별 판매 패턴</h3>
-                    </div>
-                    <div class="chart-card-body">
-                        <div id="weeklyHeatmap"></div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="report-table-card">
-                <div class="table-card-header">
-                    <h3 class="chart-title">판매 상위 TOP 10</h3>
-                </div>
-                <div class="table-card-body">
-                    <div id="weeklyTopItems"></div>
-                </div>
-            </div>
-        </div>
-
-        <!-- 서브뷰 3: 카테고리 분석 (기존 report-category) -->
-        <div id="analytics-category" class="analytics-view">
-            <div class="category-selector-card">
-                <label class="category-label">카테고리 선택</label>
-                <div class="category-selector-controls">
-                    <select id="categorySelect" class="category-select"></select>
-                    <button id="btnLoadCategory" class="btn-analyze">분석 시작</button>
-                </div>
-            </div>
-
-            <div id="categoryContent" style="display:none">
-                <div class="report-summary-cards" id="catSummaryCards"></div>
-
-                <div class="report-chart-card full-width">
-                    <div class="chart-card-header">
-                        <h3 class="chart-title">요일별 판매 패턴</h3>
-                    </div>
-                    <div class="chart-card-body">
-                        <canvas id="catRadarChart" height="280"></canvas>
-                    </div>
-                </div>
-
-                <div class="report-charts-grid">
-                    <div class="report-chart-card">
-                        <div class="chart-card-header">
-                            <h3 class="chart-title">상품 회전 현황</h3>
-                        </div>
-                        <div class="chart-card-body">
-                            <canvas id="catDoughnutChart"></canvas>
-                        </div>
-                    </div>
-
-                    <div class="report-chart-card">
-                        <div class="chart-card-header">
-                            <h3 class="chart-title">안전재고 설정</h3>
-                        </div>
-                        <div class="chart-card-body">
-                            <div id="catSafetyTable"></div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="report-table-card">
-                    <div class="table-card-header">
-                        <h3 class="chart-title">상품별 7일 추이</h3>
-                    </div>
-                    <div class="table-card-body">
-                        <div id="catSparklines"></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- 서브뷰 4: 예측 정확도 (admin only, 기존 prediction accuracy) -->
-        <div id="analytics-accuracy" class="analytics-view">
-            <!-- 요약 카드 -->
-            <div class="pred-summary-grid">
-                <div class="pred-summary-card pred-card-info" id="predHitRate">
-                    <div class="pred-card-icon">
-                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
-                            <path d="M22 12h-4l-3 9L9 3l-3 9H2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <div class="header-right">
+                <span class="store-name" id="headerStoreName"></span>
+                <div style="position:relative;">
+                    <div class="user-avatar" id="userAvatarBtn">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                            <circle cx="12" cy="7" r="4"/>
                         </svg>
                     </div>
-                    <div class="pred-card-body">
-                        <div class="pred-card-label">예측 맞힌 비율</div>
-                        <div class="pred-card-value" id="predHitRateValue">-</div>
-                        <div class="pred-card-sub" id="predHitRateSub"></div>
+                    <div class="user-menu" id="userMenu">
+                        <button class="user-menu-item" id="btnLogout" type="button">로그아웃</button>
                     </div>
                 </div>
+            </div>
+        </div>
+    </header>
 
-                <div class="pred-summary-card pred-card-success" id="predQtyAccuracy">
-                    <div class="pred-card-icon">
-                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
-                            <path d="M9 11l3 3L22 4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                            <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" stroke="currentColor" stroke-width="2"/>
+    <!-- ═══ Main Content ═══ -->
+    <main class="main-content">
+
+        <!-- ═══ Tab 1: Home ═══ -->
+        <div id="panel-home" class="tab-panel active">
+
+            <!-- 발주 상태 카드 -->
+            <div class="order-status-card section-gap" id="orderStatusCard">
+                <div class="order-status-inner">
+                    <div class="status-icon-wrap completed" id="statusIconWrap">
+                        <svg id="statusIconSvg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                            <polyline points="22 4 12 14.01 9 11.01"/>
                         </svg>
                     </div>
-                    <div class="pred-card-body">
-                        <div class="pred-card-label">수량 정확도</div>
-                        <div class="pred-card-value" id="predQtyAccuracyValue">-</div>
-                        <div class="pred-card-sub" id="predQtyAccuracySub"></div>
-                    </div>
-                </div>
-
-                <div class="pred-summary-card pred-card-accent" id="predMLStatus">
-                    <div class="pred-card-icon">
-                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
-                            <rect x="2" y="3" width="20" height="14" rx="2" stroke="currentColor" stroke-width="2"/>
-                            <path d="M8 21h8M12 17v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                        </svg>
-                    </div>
-                    <div class="pred-card-body">
-                        <div class="pred-card-label">ML 모델</div>
-                        <div class="pred-card-value" id="predMLStatusValue">-</div>
-                        <div class="pred-card-sub" id="predMLStatusSub"></div>
-                    </div>
-                </div>
-
-                <div class="pred-summary-card pred-card-warning" id="predModelMix">
-                    <div class="pred-card-icon">
-                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
-                            <path d="M18 20V10M12 20V4M6 20v-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                        </svg>
-                    </div>
-                    <div class="pred-card-body">
-                        <div class="pred-card-label">예측 방식 비율</div>
-                        <div class="pred-card-value" id="predModelMixValue">-</div>
-                        <div class="pred-card-sub" id="predModelMixSub"></div>
+                    <div class="status-text">
+                        <h3 id="statusTitle">발주 상태 확인 중...</h3>
+                        <p id="statusDesc">데이터를 불러오는 중입니다</p>
                     </div>
                 </div>
             </div>
 
-            <div class="report-chart-card full-width">
-                <div class="chart-card-header">
-                    <h3 class="chart-title">예측 오차 추이 (14일)</h3>
+            <!-- 3개 지표 카드 -->
+            <div class="metrics-grid section-gap" id="homeMetrics">
+                <!-- 오늘 매출 -->
+                <div class="metric-card">
+                    <div class="metric-header">
+                        <span class="metric-label">오늘 매출</span>
+                        <span class="metric-badge positive" id="salesDiffBadge">+0%</span>
+                    </div>
+                    <div class="metric-value" id="todaySalesValue">
+                        0<span class="unit">원</span>
+                    </div>
                 </div>
-                <div class="chart-card-body">
-                    <canvas id="predMapeChart" height="250"></canvas>
+                <!-- 폐기 위험 -->
+                <div class="metric-card" style="cursor:pointer;" onclick="openWasteSheet()">
+                    <div class="metric-header">
+                        <span class="metric-label">폐기 위험</span>
+                        <svg class="metric-icon" viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                            <line x1="12" y1="9" x2="12" y2="13"/>
+                            <line x1="12" y1="17" x2="12.01" y2="17"/>
+                        </svg>
+                    </div>
+                    <div class="metric-value" style="color:var(--red)" id="wasteRiskValue">
+                        0<span class="unit">개</span>
+                    </div>
+                </div>
+                <!-- 이번달 누적 이익 -->
+                <div class="metric-card clickable" id="profitCard" onclick="openProfitSheet()">
+                    <div class="metric-header">
+                        <span class="metric-label">이번달 순수익</span>
+                        <svg class="metric-icon" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/>
+                            <polyline points="17 6 23 6 23 12"/>
+                        </svg>
+                    </div>
+                    <div class="metric-value" style="color:var(--green)" id="weeklyProfitValue">
+                        0<span class="unit">원</span>
+                    </div>
                 </div>
             </div>
 
-            <div class="report-charts-grid">
-                <div class="report-table-card">
-                    <div class="table-card-header">
-                        <h3 class="chart-title">카테고리별 정확도</h3>
+        </div>
+
+        <!-- ═══ Tab 2: Weekly ═══ -->
+        <div id="panel-weekly" class="tab-panel">
+
+            <!-- 7일 매출 차트 -->
+            <div class="panel section-gap">
+                <div class="panel-header">
+                    <span>7일 매출</span>
+                    <span class="badge" id="weeklyDateRange"></span>
+                </div>
+                <div class="chart-wrap">
+                    <canvas id="weeklyChart"></canvas>
+                </div>
+            </div>
+
+            <!-- 2개 지표 카드 -->
+            <div class="metrics-grid section-gap" style="grid-template-columns:1fr 1fr;">
+                <!-- 발주 적중률 -->
+                <div class="metric-card">
+                    <div class="metric-header">
+                        <span class="metric-label">발주 적중률</span>
                     </div>
-                    <div class="table-card-body">
-                        <div class="report-table-wrapper">
-                            <table class="report-table" id="predCategoryTable">
-                                <thead>
-                                    <tr>
-                                        <th data-sort="text">카테고리</th>
-                                        <th data-sort="num" class="text-right">오차율</th>
-                                        <th data-sort="num" class="text-right">MAE</th>
-                                        <th data-sort="num" class="text-right">+-2 적중</th>
-                                        <th data-sort="num" class="text-right">건수</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="predCategoryTableBody"></tbody>
-                            </table>
-                        </div>
+                    <div class="metric-value" style="color:var(--blue)" id="orderAccuracyValue">0<span class="unit">%</span></div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="accuracyBar" style="width:0%"></div>
                     </div>
                 </div>
-
-                <div class="report-table-card">
-                    <div class="table-card-header">
-                        <h3 class="chart-title">잘 맞는 / 못 맞는 상품</h3>
+                <!-- 절감 폐기 -->
+                <div class="metric-card">
+                    <div class="metric-header">
+                        <span class="metric-label">폐기 수량</span>
+                        <span class="metric-badge positive" id="wasteSavedBadge">0개</span>
                     </div>
-                    <div class="table-card-body" id="predBestWorstBody">
-                        <div class="hint">데이터 로딩중...</div>
+                    <div class="metric-value" id="wasteSavedValue">0<span class="unit">건</span></div>
+                </div>
+            </div>
+
+            <!-- 시간대별 매출 -->
+            <div class="panel section-gap">
+                <div class="panel-header">
+                    <span>시간대별 매출</span>
+                    <span class="badge" id="hourlyDateLabel">오늘</span>
+                </div>
+                <div class="chart-wrap">
+                    <canvas id="hourlyChart"></canvas>
+                </div>
+                <div class="metrics-grid" style="grid-template-columns:1fr 1fr; margin-top:12px;">
+                    <div class="summary-cell" style="text-align:center;">
+                        <p class="label">23시 매출</p>
+                        <p class="value" id="hourly23Value" style="font-size:1.3rem;">0<span class="unit">원</span></p>
+                    </div>
+                    <div class="summary-cell" style="text-align:center;">
+                        <p class="label">피크 시간</p>
+                        <p class="value" id="hourlyPeakValue" style="font-size:1.3rem;">-<span class="unit">시</span></p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 이번주 요약 그리드 -->
+            <div class="panel">
+                <div class="panel-header">
+                    <span>이번주 요약</span>
+                </div>
+                <div class="summary-grid">
+                    <div class="summary-cell">
+                        <p class="label">총 매출</p>
+                        <p class="value" id="summaryTotalSales">0<span class="unit">원</span></p>
+                    </div>
+                    <div class="summary-cell">
+                        <p class="label">일평균 매출</p>
+                        <p class="value" id="summaryAvgSales">0<span class="unit">원</span></p>
+                    </div>
+                    <div class="summary-cell">
+                        <p class="label">발주 건수</p>
+                        <p class="value" id="summaryOrderCount">0<span class="unit">건</span></p>
+                    </div>
+                    <div class="summary-cell">
+                        <p class="label">폐기 건수</p>
+                        <p class="value" id="summaryWasteCount">0<span class="unit">건</span></p>
                     </div>
                 </div>
             </div>
         </div>
 
-    </main>
+        <!-- ═══ Tab 3: Settings ═══ -->
+        <div id="panel-settings" class="tab-panel">
 
-    <!-- =============================== -->
-    <!-- 발주 관리 탭                       -->
-    <!-- =============================== -->
-    <main id="tab-order" class="tab-content">
-
-        <div class="order-container">
-            <!-- 발주 모드 선택 -->
-            <div class="order-mode-selector">
-                <button class="order-mode-btn active" data-mode="partial" id="btnModePartial">
-                    <svg class="mode-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <rect x="3" y="5" width="18" height="4" rx="1"/>
-                        <rect x="3" y="10" width="18" height="4" rx="1"/>
-                        <rect x="3" y="15" width="18" height="4" rx="1"/>
-                    </svg>
-                    <span class="mode-label">카테고리 선택</span>
-                    <span class="mode-desc">원하는 카테고리만 발주</span>
-                </button>
-                <button class="order-mode-btn" data-mode="full" id="btnModeFull">
-                    <svg class="mode-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <rect x="3" y="3" width="18" height="18" rx="2"/>
-                        <polyline points="9 11 12 14 16 10"/>
-                    </svg>
-                    <span class="mode-label">전체 상품</span>
-                    <span class="mode-desc">모든 상품 한번에 발주</span>
-                </button>
-            </div>
-
-            <!-- 카테고리 선택 발주 -->
-            <div class="order-section" id="sectionPartial" style="display:block">
-                <div class="order-section-header">
-                    <div>
-                        <h2 class="section-title">카테고리 선택</h2>
-                        <p class="section-desc">발주할 카테고리를 선택하세요</p>
-                    </div>
-                    <label class="select-all-label">
-                        <input type="checkbox" id="partialSelectAll" checked>
-                        <span>전체 선택</span>
-                    </label>
-                </div>
-
-                <div class="category-grid" id="partialCategoryGrid">
-                    <div class="hint">카테고리 로딩중...</div>
-                </div>
-
-                <div class="order-summary-card" id="partialSummary">
-                    <div class="summary-stat">
-                        <div class="summary-label">선택 카테고리</div>
-                        <div class="summary-value"><span id="partialCatCount">0</span>개</div>
-                    </div>
-                    <div class="summary-stat">
-                        <div class="summary-label">예상 상품수</div>
-                        <div class="summary-value" id="partialItemCount">-</div>
-                    </div>
-                    <div class="summary-stat">
-                        <div class="summary-label">예상 발주량</div>
-                        <div class="summary-value" id="partialQtyTotal">-</div>
-                    </div>
-                </div>
-
-                <div id="partialStatus" class="status-text order-status-bar"></div>
-
-                <div class="order-action-buttons">
-                    <button class="btn-order btn-order-preview" id="btnPartialPreview">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                            <circle cx="12" cy="12" r="3"/>
-                        </svg>
-                        <span>미리보기</span>
-                    </button>
-                    <button class="btn-order btn-order-excel" id="btnPartialExcel" onclick="exportPreviewExcel()" style="display:none">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                            <polyline points="7 10 12 15 17 10"/>
-                            <line x1="12" y1="15" x2="12" y2="3"/>
-                        </svg>
-                        <span>엑셀 다운로드</span>
-                    </button>
-                    <button class="btn-order btn-order-execute" id="btnPartialExecute" data-admin-only style="display:none">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="9 11 12 14 22 4"/>
-                            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
-                        </svg>
-                        <span>발주 실행</span>
-                    </button>
-                </div>
-            </div>
-
-            <!-- 전체 상품 발주 -->
-            <div class="order-section" id="sectionFull" style="display:none">
-                <div class="order-section-header">
-                    <div>
-                        <h2 class="section-title">전체 상품 발주</h2>
-                        <p class="section-desc">모든 카테고리의 상품을 한 번에 발주합니다</p>
-                    </div>
-                </div>
-
-                <div class="full-order-info">
-                    <div class="info-card">
-                        <svg class="info-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <circle cx="12" cy="12" r="10"/>
-                            <path d="M12 16v-4m0-4h.01"/>
-                        </svg>
-                        <div class="info-content">
-                            <div class="info-title">전체 발주 안내</div>
-                            <ul class="info-list">
-                                <li>모든 카테고리의 상품이 대상입니다</li>
-                                <li>안전재고 기반으로 자동 계산됩니다</li>
-                                <li>발주 안 하는 상품은 자동으로 제외됩니다</li>
-                            </ul>
+            <!-- 발주 시간 -->
+            <div class="settings-section">
+                <div class="panel">
+                    <div class="settings-header">
+                        <div class="settings-icon blue">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="12" r="10"/>
+                                <polyline points="12 6 12 12 16 14"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <div class="settings-title">발주 시간</div>
+                            <div class="settings-desc">자동 발주가 실행되는 시간을 설정합니다</div>
                         </div>
                     </div>
+                    <div class="settings-body">
+                        <input type="time" class="time-input" id="orderTimeInput" value="07:00">
+                    </div>
                 </div>
+            </div>
 
-                <details class="exclude-panel" id="excludePanel">
-                    <summary class="exclude-panel-summary">
-                        발주 안 하는 상품 (<span id="excludeTotalCount">0</span>건)
-                        <span class="exclude-store-badge">점포: <span id="excludeStoreId">-</span></span>
-                    </summary>
-                    <div class="exclude-panel-body">
-                        <div class="exclude-group">
-                            <div class="exclude-group-header">
-                                <label class="exclude-toggle">
-                                    <input type="checkbox" id="chkAutoOrder" checked>
-                                    <span>자동발주 제외</span>
-                                </label>
-                                <span class="exclude-count" id="autoOrderCount">0건</span>
-                                <span class="exclude-updated" id="autoOrderInfo">-</span>
+            <!-- 알림 설정 -->
+            <div class="settings-section">
+                <div class="panel">
+                    <div class="settings-header">
+                        <div class="settings-icon orange">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+                                <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <div class="settings-title">알림 설정</div>
+                            <div class="settings-desc">카카오톡 알림 수신을 설정합니다</div>
+                        </div>
+                    </div>
+                    <div class="settings-body">
+                        <div class="toggle-row">
+                            <span class="toggle-label">발주 완료 알림</span>
+                            <div class="toggle on" id="toggleOrderComplete">
+                                <div class="toggle-knob"></div>
                             </div>
-                            <div class="exclude-items" id="autoOrderItems"></div>
                         </div>
-                        <div class="exclude-group">
-                            <div class="exclude-group-header">
-                                <label class="exclude-toggle">
-                                    <input type="checkbox" id="chkSmartOrder" checked>
-                                    <span>스마트발주 제외</span>
-                                </label>
-                                <span class="exclude-count" id="smartOrderCount">0건</span>
-                                <span class="exclude-updated" id="smartOrderInfo">-</span>
+                        <div class="toggle-row">
+                            <span class="toggle-label">폐기 위험 알림</span>
+                            <div class="toggle on" id="toggleWasteAlert">
+                                <div class="toggle-knob"></div>
                             </div>
-                            <div class="exclude-items" id="smartOrderItems"></div>
+                        </div>
+                        <div class="toggle-row">
+                            <span class="toggle-label">매출 리포트</span>
+                            <div class="toggle" id="toggleSalesReport">
+                                <div class="toggle-knob"></div>
+                            </div>
                         </div>
                     </div>
-                </details>
-
-                <div class="order-action-buttons">
-                    <button class="btn-order btn-order-preview" id="btnFullPreview">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                            <circle cx="12" cy="12" r="3"/>
-                        </svg>
-                        <span>미리보기</span>
-                    </button>
-                    <button class="btn-order btn-order-excel" id="btnFullExcel" onclick="exportPreviewExcel()" style="display:none">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                            <polyline points="7 10 12 15 17 10"/>
-                            <line x1="12" y1="15" x2="12" y2="3"/>
-                        </svg>
-                        <span>엑셀 다운로드</span>
-                    </button>
-                    <button class="btn-order btn-order-execute" id="btnFullExecute" data-admin-only style="display:none">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="9 11 12 14 22 4"/>
-                            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
-                        </svg>
-                        <span>발주 실행</span>
-                    </button>
                 </div>
             </div>
 
-            <!-- 상세 설정 (admin만) -->
-            <details class="order-log-section" data-admin-only style="display:none">
-                <summary style="cursor:pointer; font-size:0.9rem; color:var(--text-secondary); padding:8px 0;">상세 설정 및 실행 로그</summary>
-                <div class="order-settings">
-                    <div class="order-settings-row">
-                        <div class="order-setting-field">
-                            <label class="order-setting-label">최대 상품수</label>
-                            <input type="number" id="testMaxItems" value="10" min="0" class="order-setting-input">
+            <!-- 카테고리 관리 -->
+            <div class="settings-section">
+                <div class="panel">
+                    <div class="settings-header">
+                        <div class="settings-icon purple">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="3" y="3" width="7" height="7"/>
+                                <rect x="14" y="3" width="7" height="7"/>
+                                <rect x="14" y="14" width="7" height="7"/>
+                                <rect x="3" y="14" width="7" height="7"/>
+                            </svg>
                         </div>
-                        <div class="order-setting-field">
-                            <label class="order-setting-label">최소 발주량</label>
-                            <input type="number" id="testMinQty" value="0" min="0" class="order-setting-input">
+                        <div>
+                            <div class="settings-title">카테고리 관리</div>
+                            <div class="settings-desc">발주 대상 카테고리를 선택합니다</div>
                         </div>
-                        <div class="order-setting-actions">
-                            <button id="btnStopScript" class="btn btn-danger" disabled>
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="btn-icon-sm">
-                                    <rect x="6" y="6" width="12" height="12"/>
-                                </svg>
-                                <span>중지</span>
-                            </button>
+                    </div>
+                    <div class="settings-body">
+                        <div class="order-mode-radios">
+                            <label>
+                                <input type="radio" name="orderMode" value="all" id="radioOrderAll">
+                                전체발주
+                            </label>
+                            <label>
+                                <input type="radio" name="orderMode" value="selected" id="radioOrderSelected" checked>
+                                카테고리선택
+                            </label>
+                        </div>
+                        <div class="cat-grid-wrapper" style="position:relative;">
+                            <div class="cat-grid" id="categoryGrid">
+                                <!-- JS에서 렌더링 -->
+                            </div>
+                            <div class="cat-grid-overlay" id="catGridOverlay" style="display:none;">
+                                <span>전체발주 모드에서는 모든 카테고리가 자동 적용됩니다</span>
+                            </div>
                         </div>
                     </div>
                 </div>
+            </div>
 
-                <div class="order-log-container">
-                    <div class="order-log-header">
-                        <h3 class="order-log-title">실행 로그</h3>
-                        <div class="order-log-controls">
-                            <span id="scriptElapsed" class="order-log-elapsed"></span>
-                            <button onclick="document.getElementById('scriptLog').textContent = ''; document.getElementById('scriptElapsed').textContent = '';" class="btn btn-sm">
-                                로그 지우기
-                            </button>
-                        </div>
+            <!-- 추가 링크 -->
+            <div class="settings-section">
+                <div class="panel">
+                    <div class="link-list-item" onclick="openStoreSheet()">
+                        <span>매장 정보 수정</span>
+                        <span class="link-chevron">&#x203A;</span>
                     </div>
-                    <pre id="scriptLog" class="order-log-output"></pre>
                 </div>
-            </details>
+            </div>
+
+            <!-- 상권 분석 결과 -->
+            <div class="settings-section" id="analysisSection" style="display:none;">
+                <div class="panel" style="padding:16px;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+                        <h4 style="margin:0;font-size:15px;font-weight:700;color:var(--foreground);">상권 분석 결과</h4>
+                        <button onclick="reanalyzeStore()" id="btnReanalyze"
+                                style="background:none;border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:12px;color:var(--muted-foreground);cursor:pointer;">
+                            재분석
+                        </button>
+                    </div>
+                    <div id="analysisContent">
+                        <div style="text-align:center;padding:12px;color:var(--muted-foreground);font-size:13px;">불러오는 중...</div>
+                    </div>
+                </div>
+            </div>
+            <div class="settings-section" id="analysisNoData" style="display:none;">
+                <div class="panel" style="padding:16px;text-align:center;color:var(--muted-foreground);font-size:13px;">
+                    주소 등록 후 상권 분석을 이용할 수 있습니다.
+                </div>
+            </div>
+
+            <!-- 추가 링크 -->
+            <div class="settings-section">
+                <div class="panel">
+                    <div class="link-list-item" onclick="void(0)">
+                        <span>고객센터</span>
+                        <span class="link-chevron">&#x203A;</span>
+                    </div>
+                    <div class="link-list-item" onclick="void(0)">
+                        <span>이용약관</span>
+                        <span class="link-chevron">&#x203A;</span>
+                    </div>
+                    <div class="link-list-item" onclick="void(0)">
+                        <span>개인정보 처리방침</span>
+                        <span class="link-chevron">&#x203A;</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 버전 표시 -->
+            <div class="version-footer">
+                <p>오더핏AI v1.0.0</p>
+            </div>
         </div>
-
     </main>
 
-    <!-- =============================== -->
-    <!-- 설정 탭 (admin 전용)               -->
-    <!-- =============================== -->
-    <main id="tab-settings" class="tab-content">
+    <!-- ═══ JavaScript (ES5 Only) ═══ -->
+    <script>
+    (function() {
+        "use strict";
 
-        <!-- 스케줄러 관리 -->
-        <div class="home-panel">
-            <div class="home-panel-header">
-                <h3 class="home-panel-title">스케줄러 관리</h3>
-            </div>
-            <div class="home-panel-body">
-                <div class="scheduler-control-panel">
-                    <div class="scheduler-status-info">
-                        <span class="status-badge" id="settingsSchedulerBadge">확인중</span>
-                        <span class="status-text" id="settingsSchedulerPid"></span>
-                    </div>
-                    <div class="scheduler-buttons">
-                        <button id="btnSettingsSchedulerStart" class="btn-scheduler-start" onclick="schedulerStart()">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                                <path d="M8 5v14l11-7z" fill="currentColor"/>
-                            </svg>
-                            <span>시작</span>
-                        </button>
-                        <button id="btnSettingsSchedulerStop" class="btn-scheduler-stop" onclick="schedulerStop()" style="display:none">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                                <rect x="6" y="6" width="12" height="12" fill="currentColor"/>
-                            </svg>
-                            <span>정지</span>
-                        </button>
-                    </div>
-                </div>
-                <div class="schedule-timeline" id="settingsTimeline">
-                    <div class="hint">로딩중...</div>
-                </div>
-            </div>
+        var currentTab = "home";
+        var weeklyChart = null;
+        var hourlyChart = null;
+
+        /* ── 카테고리 정의 ──────────────────────────── */
+        var CATEGORIES = [
+            { code: "001", name: "도시락" },
+            { code: "002", name: "주먹밥" },
+            { code: "003", name: "김밥" },
+            { code: "004", name: "샌드위치" },
+            { code: "005", name: "햄버거" },
+            { code: "012", name: "빵" },
+            { code: "013", name: "유제품" },
+            { code: "049", name: "맥주" },
+            { code: "050", name: "소주" },
+            { code: "006", name: "조리면" },
+            { code: "010", name: "음료" },
+            { code: "072", name: "담배" }
+        ];
+        var selectedCategories = ["001", "002", "003", "004", "005", "012"];
+        var orderMode = "selected";
+
+        /* ── 유틸 ──────────────────────────────────── */
+        function formatWon(num) {
+            if (num >= 10000) {
+                return Math.floor(num / 10000).toLocaleString() + "만";
+            }
+            return num.toLocaleString();
+        }
+
+        function formatNumber(num) {
+            return (num || 0).toLocaleString();
+        }
+
+        /* ── 초기화 ────────────────────────────────── */
+        function init() {
+            loadUserInfo();
+            bindTabs();
+            bindUserMenu();
+            bindOrderModeRadios();
+            switchTab("home");
+        }
+
+        function bindOrderModeRadios() {
+            var radios = document.querySelectorAll('input[name="orderMode"]');
+            for (var i = 0; i < radios.length; i++) {
+                radios[i].addEventListener("change", function() {
+                    saveOrderMode(this.value);
+                });
+            }
+        }
+
+        /* ── 유저 정보 ─────────────────────────────── */
+        function loadUserInfo() {
+            fetch("/api/auth/session")
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    var user = data.user || {};
+                    var el = document.getElementById("headerStoreName");
+                    if (el) el.textContent = user.store_name || user.store_id || "";
+                })
+                .catch(function() {});
+        }
+
+        /* ── 유저 메뉴 ─────────────────────────────── */
+        function bindUserMenu() {
+            var avatarBtn = document.getElementById("userAvatarBtn");
+            var menu = document.getElementById("userMenu");
+            var logoutBtn = document.getElementById("btnLogout");
+
+            avatarBtn.addEventListener("click", function(e) {
+                e.stopPropagation();
+                menu.classList.toggle("visible");
+            });
+
+            document.addEventListener("click", function() {
+                menu.classList.remove("visible");
+            });
+
+            logoutBtn.addEventListener("click", function() {
+                fetch("/api/auth/logout", { method: "POST" })
+                    .then(function() { window.location.href = "/login"; })
+                    .catch(function() { window.location.href = "/login"; });
+            });
+        }
+
+        /* ── 탭 전환 ──────────────────────────────── */
+        function bindTabs() {
+            var tabs = document.querySelectorAll(".nav-tab");
+            for (var i = 0; i < tabs.length; i++) {
+                tabs[i].addEventListener("click", function() {
+                    var tab = this.getAttribute("data-tab");
+                    switchTab(tab);
+                });
+            }
+        }
+
+        function switchTab(tab) {
+            var panels = document.querySelectorAll(".tab-panel");
+            for (var i = 0; i < panels.length; i++) {
+                panels[i].classList.remove("active");
+            }
+            var target = document.getElementById("panel-" + tab);
+            if (target) target.classList.add("active");
+
+            var tabs = document.querySelectorAll(".nav-tab");
+            for (var j = 0; j < tabs.length; j++) {
+                tabs[j].classList.remove("active");
+            }
+            var activeTab = document.querySelector('[data-tab="' + tab + '"]');
+            if (activeTab) activeTab.classList.add("active");
+
+            currentTab = tab;
+            if (tab === "home") loadHomeData();
+            if (tab === "weekly") loadWeeklyData();
+            if (tab === "settings") loadSettingsData();
+        }
+
+        /* ══════════════════════════════════════════════ */
+        /* ══  홈 탭  ═══════════════════════════════════ */
+        /* ══════════════════════════════════════════════ */
+
+        function loadHomeData() {
+            fetch("/api/home/summary")
+                .then(function(r) {
+                    if (!r.ok) throw new Error("HTTP " + r.status);
+                    return r.json();
+                })
+                .then(renderHome)
+                .catch(function(err) {
+                    console.log("홈 데이터 로드 실패:", err);
+                    document.getElementById("statusTitle").textContent = "데이터 로드 실패";
+                    document.getElementById("statusDesc").textContent = "잠시 후 다시 시도해주세요";
+                });
+
+        }
+
+        function renderHome(data) {
+            /* 발주 상태 카드 */
+            var iconWrap = document.getElementById("statusIconWrap");
+            var statusTitle = document.getElementById("statusTitle");
+            var statusDesc = document.getElementById("statusDesc");
+            var svgEl = document.getElementById("statusIconSvg");
+
+            iconWrap.className = "status-icon-wrap";
+
+            if (data.order_status === "completed") {
+                iconWrap.classList.add("completed");
+                svgEl.innerHTML = '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>';
+                statusTitle.textContent = "오늘 발주 완료";
+                statusDesc.textContent = data.order_time
+                    ? (data.order_time + " 발주 완료 | " + (data.order_success || 0) + "개 상품")
+                    : ((data.order_success || 0) + "개 상품 발주 완료");
+            } else if (data.order_status === "failed") {
+                iconWrap.classList.add("failed");
+                svgEl.innerHTML = '<circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>';
+                statusTitle.textContent = "발주 일부 실패";
+                var successCount = data.order_success || 0;
+                var failCount = data.order_fail || 0;
+                statusDesc.textContent = successCount + "개 성공, " + failCount + "개 실패";
+            } else {
+                iconWrap.classList.add("pending");
+                svgEl.innerHTML = '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>';
+                statusTitle.textContent = "발주 대기 중";
+                statusDesc.textContent = "자동 발주가 실행될 예정입니다";
+            }
+
+            /* 오늘 매출 */
+            var todaySalesEl = document.getElementById("todaySalesValue");
+            todaySalesEl.innerHTML = formatWon(data.today_sales || 0) + '<span class="unit">원</span>';
+
+            var diffBadge = document.getElementById("salesDiffBadge");
+            var diff = data.today_sales_diff || 0;
+            if (diff >= 0) {
+                diffBadge.className = "metric-badge positive";
+                diffBadge.textContent = "+" + diff + "%";
+            } else {
+                diffBadge.className = "metric-badge negative";
+                diffBadge.textContent = diff + "%";
+            }
+
+            /* 폐기 위험 */
+            var wasteRiskEl = document.getElementById("wasteRiskValue");
+            wasteRiskEl.innerHTML = (data.waste_risk_count || 0) + '<span class="unit">개</span>';
+
+            /* 이번달 누적 이익 */
+            var profitEl = document.getElementById("weeklyProfitValue");
+            profitEl.innerHTML = formatWon(data.monthly_profit || 0) + '<span class="unit">원</span>';
+        }
+
+        function renderWasteList(items) {
+            var container = document.getElementById("wasteListRows");
+            var badge = document.getElementById("wasteListBadge");
+
+            if (!items || !Array.isArray(items)) {
+                if (container) container.innerHTML = '<div class="panel-empty">폐기 위험 상품이 없습니다</div>';
+                if (badge) badge.textContent = "0개";
+                return;
+            }
+
+            if (items.length === 0) {
+                container.innerHTML = '<div class="panel-empty">폐기 위험 상품이 없습니다</div>';
+                badge.textContent = "0개";
+                return;
+            }
+
+            badge.textContent = items.length + "개";
+            var html = "";
+            for (var i = 0; i < items.length; i++) {
+                var item = items[i];
+                html += '<div class="panel-row">';
+                html += '<div>';
+                html += '<p class="panel-row-name">' + escapeHtml(item.name) + '</p>';
+                html += '<span class="panel-row-sub">';
+                html += '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>';
+                html += escapeHtml(item.expires_at);
+                html += '</span>';
+                html += '</div>';
+                html += '<span class="panel-row-qty">' + (item.quantity || 0) + '개</span>';
+                html += '</div>';
+            }
+            container.innerHTML = html;
+        }
+
+        function escapeHtml(str) {
+            if (!str) return "";
+            var div = document.createElement("div");
+            div.appendChild(document.createTextNode(str));
+            return div.innerHTML;
+        }
+
+        /* ══════════════════════════════════════════════ */
+        /* ══  이번주 현황 탭  ═══════════════════════════ */
+        /* ══════════════════════════════════════════════ */
+
+        function loadWeeklyData() {
+            fetch("/api/home/analytics/weekly")
+                .then(function(r) {
+                    if (!r.ok) throw new Error("HTTP " + r.status);
+                    return r.json();
+                })
+                .then(renderWeekly)
+                .catch(function(err) {
+                    console.log("주간 데이터 로드 실패:", err);
+                    var rangeEl = document.getElementById("weeklyDateRange");
+                    if (rangeEl) rangeEl.textContent = "로드 실패";
+                });
+        }
+
+        function renderWeekly(data) {
+            /* 날짜 범위 */
+            var rangeEl = document.getElementById("weeklyDateRange");
+            rangeEl.textContent = data.date_range || "";
+
+            /* Chart.js 바 차트 */
+            var ctx = document.getElementById("weeklyChart").getContext("2d");
+
+            if (weeklyChart) {
+                weeklyChart.destroy();
+            }
+
+            var salesData = data.daily_sales || [];
+            var dayLabels = data.days || [];
+
+            weeklyChart = new Chart(ctx, {
+                type: "bar",
+                data: {
+                    labels: dayLabels,
+                    datasets: [{
+                        data: salesData,
+                        backgroundColor: function(context) {
+                            var index = context.dataIndex;
+                            var total = context.dataset.data.length;
+                            return index === total - 1
+                                ? "#3b82f6"
+                                : "rgba(59,130,246,0.35)";
+                        },
+                        borderRadius: 6,
+                        borderSkipped: false
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function(ctx) {
+                                    return Math.floor(ctx.raw / 10000) + "만원";
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { display: false },
+                            ticks: { color: "#78503A" },
+                            border: { display: false }
+                        },
+                        y: {
+                            display: false,
+                            grid: { display: false }
+                        }
+                    }
+                }
+            });
+
+            /* 발주 적중률 */
+            var accuracyEl = document.getElementById("orderAccuracyValue");
+            var accuracy = data.order_accuracy || 0;
+            accuracyEl.innerHTML = accuracy + '<span class="unit">%</span>';
+            document.getElementById("accuracyBar").style.width = accuracy + "%";
+
+            /* 폐기 수량 */
+            var wasteSavedEl = document.getElementById("wasteSavedValue");
+            wasteSavedEl.innerHTML = (data.waste_count || 0) + '<span class="unit">건</span>';
+
+            var wasteBadge = document.getElementById("wasteSavedBadge");
+            wasteBadge.textContent = (data.waste_saved || 0) + "개";
+
+            /* 요약 그리드 */
+            document.getElementById("summaryTotalSales").innerHTML =
+                formatWon(data.total_sales || 0) + '<span class="unit">원</span>';
+            document.getElementById("summaryAvgSales").innerHTML =
+                formatWon(data.avg_daily_sales || 0) + '<span class="unit">원</span>';
+            document.getElementById("summaryOrderCount").innerHTML =
+                (data.order_count || 0) + '<span class="unit">건</span>';
+            document.getElementById("summaryWasteCount").innerHTML =
+                (data.waste_count || 0) + '<span class="unit">건</span>';
+
+            /* 시간대별 매출 차트 */
+            var hourlyData = data.hourly_sales || [];
+            if (hourlyData.length === 24) {
+                var hCtx = document.getElementById("hourlyChart").getContext("2d");
+                if (hourlyChart) hourlyChart.destroy();
+
+                var hLabels = [];
+                for (var h = 0; h < 24; h++) hLabels.push(h + "시");
+
+                hourlyChart = new Chart(hCtx, {
+                    type: "bar",
+                    data: {
+                        labels: hLabels,
+                        datasets: [{
+                            data: hourlyData,
+                            backgroundColor: function(context) {
+                                return context.dataIndex === 23
+                                    ? "#EA580C"
+                                    : "rgba(234,88,12,0.3)";
+                            },
+                            borderRadius: 4,
+                            borderSkipped: false
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(ctx) {
+                                        return Math.floor(ctx.raw / 10000) + "만원";
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                grid: { display: false },
+                                ticks: {
+                                    color: "#78503A",
+                                    maxRotation: 0,
+                                    callback: function(val, idx) {
+                                        return idx % 3 === 0 ? idx + "시" : "";
+                                    }
+                                },
+                                border: { display: false }
+                            },
+                            y: { display: false, grid: { display: false } }
+                        }
+                    }
+                });
+
+                /* 23시 매출 */
+                var h23 = hourlyData[23] || 0;
+                document.getElementById("hourly23Value").innerHTML =
+                    formatWon(h23) + '<span class="unit">원</span>';
+
+                /* 피크 시간 */
+                var peakHour = 0, peakVal = 0;
+                for (var i = 0; i < 24; i++) {
+                    if (hourlyData[i] > peakVal) {
+                        peakVal = hourlyData[i];
+                        peakHour = i;
+                    }
+                }
+                document.getElementById("hourlyPeakValue").innerHTML =
+                    peakHour + '<span class="unit">시</span>';
+            }
+        }
+
+        /* ══════════════════════════════════════════════ */
+        /* ══  설정 탭  ═════════════════════════════════ */
+        /* ══════════════════════════════════════════════ */
+
+        function loadSettingsData() {
+            fetch("/api/settings/user")
+                .then(function(r) {
+                    if (!r.ok) throw new Error("HTTP " + r.status);
+                    return r.json();
+                })
+                .then(renderSettings)
+                .catch(function(err) {
+                    console.log("설정 로드 실패:", err);
+                });
+            loadStoreAnalysis();
+        }
+
+        function renderSettings(data) {
+            /* 발주 시간 */
+            var timeInput = document.getElementById("orderTimeInput");
+            timeInput.value = data.order_time || "07:00";
+
+            timeInput.addEventListener("change", function() {
+                var val = this.value;
+                fetch("/api/settings/order-time", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ time: val })
+                });
+            });
+
+            /* 알림 토글 */
+            var notif = data.notifications || {};
+            initToggle("toggleOrderComplete", notif.order_complete !== false, function(on) {
+                saveNotifications();
+            });
+            initToggle("toggleWasteAlert", notif.waste_alert !== false, function(on) {
+                saveNotifications();
+            });
+            initToggle("toggleSalesReport", !!notif.sales_report, function(on) {
+                saveNotifications();
+            });
+
+            /* 발주 모드 */
+            orderMode = data.order_mode || "selected";
+            applyOrderMode(orderMode);
+
+            /* 카테고리 */
+            var cats = data.categories;
+            selectedCategories = (cats && cats.length > 0) ? cats : ["001", "002", "003", "004", "005", "012"];
+            renderCategoryGrid();
+        }
+
+        function saveNotifications() {
+            var payload = {
+                order_complete: document.getElementById("toggleOrderComplete").classList.contains("on"),
+                waste_alert: document.getElementById("toggleWasteAlert").classList.contains("on"),
+                sales_report: document.getElementById("toggleSalesReport").classList.contains("on")
+            };
+            fetch("/api/settings/notifications", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
+        }
+
+        function initToggle(id, initialState, onChangeFn) {
+            var el = document.getElementById(id);
+            if (!el) return;
+
+            /* 기존 리스너 방지: 이미 초기화된 경우 스킵 */
+            if (el.getAttribute("data-init") === "1") return;
+            el.setAttribute("data-init", "1");
+
+            if (initialState) {
+                el.classList.add("on");
+            } else {
+                el.classList.remove("on");
+            }
+
+            el.addEventListener("click", function() {
+                el.classList.toggle("on");
+                if (onChangeFn) onChangeFn(el.classList.contains("on"));
+            });
+        }
+
+        function renderCategoryGrid() {
+            var grid = document.getElementById("categoryGrid");
+            var html = "";
+
+            for (var i = 0; i < CATEGORIES.length; i++) {
+                var cat = CATEGORIES[i];
+                var isSelected = selectedCategories.indexOf(cat.code) !== -1;
+                html += '<button class="cat-btn' + (isSelected ? ' selected' : '') + '" data-code="' + cat.code + '" type="button">';
+                html += escapeHtml(cat.name);
+                html += '<svg class="cat-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+                html += '</button>';
+            }
+
+            grid.innerHTML = html;
+
+            /* 클릭 바인딩 */
+            var btns = grid.querySelectorAll(".cat-btn");
+            for (var j = 0; j < btns.length; j++) {
+                btns[j].addEventListener("click", function() {
+                    var code = this.getAttribute("data-code");
+                    var idx = selectedCategories.indexOf(code);
+                    if (idx !== -1) {
+                        selectedCategories.splice(idx, 1);
+                        this.classList.remove("selected");
+                    } else {
+                        selectedCategories.push(code);
+                        this.classList.add("selected");
+                    }
+                    saveCategories();
+                });
+            }
+        }
+
+        function saveCategories() {
+            fetch("/api/settings/categories", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ codes: selectedCategories })
+            });
+        }
+
+        function applyOrderMode(mode) {
+            orderMode = (mode === "all") ? "all" : "selected";
+            var radioAll = document.getElementById("radioOrderAll");
+            var radioSelected = document.getElementById("radioOrderSelected");
+            if (radioAll) radioAll.checked = (mode === "all");
+            if (radioSelected) radioSelected.checked = (mode === "selected");
+
+            var grid = document.getElementById("categoryGrid");
+            if (grid) {
+                if (mode === "all") {
+                    grid.classList.add("disabled");
+                } else {
+                    grid.classList.remove("disabled");
+                }
+            }
+            var overlay = document.getElementById("catGridOverlay");
+            if (overlay) {
+                overlay.style.display = (mode === "all") ? "flex" : "none";
+            }
+        }
+
+        function saveOrderMode(mode) {
+            applyOrderMode(mode);
+            fetch("/api/settings/order-mode", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ mode: mode })
+            });
+        }
+
+        function getEffectiveCategories() {
+            if (orderMode === "all") {
+                var codes = [];
+                for (var i = 0; i < CATEGORIES.length; i++) {
+                    codes.push(CATEGORIES[i].code);
+                }
+                return codes;
+            }
+            return selectedCategories;
+        }
+
+        /* ── Bottom Sheet: 순수익 비중 ─────────────── */
+        function formatWonSheet(v) {
+            if (v >= 1000000) return (v / 10000).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ",") + "만";
+            return v.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+        }
+        function openProfitSheet() {
+            document.getElementById("profitSheetOverlay").classList.add("open");
+            document.getElementById("profitSheetPanel").classList.add("open");
+            document.body.style.overflow = "hidden";
+            fetch("/api/home/profit-breakdown")
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    var body = document.getElementById("profitSheetBody");
+                    var totalEl = document.getElementById("sheetTotalProfit");
+                    totalEl.textContent = formatWonSheet(data.total_profit || 0) + "원";
+                    if (!data.items || data.items.length === 0) {
+                        body.innerHTML = '<div style="text-align:center;padding:24px;color:var(--muted-foreground);">데이터가 없습니다</div>';
+                        return;
+                    }
+                    var maxPct = data.items[0].pct || 1;
+                    var html = "";
+                    for (var i = 0; i < data.items.length; i++) {
+                        var it = data.items[i];
+                        var rankCls = i < 3 ? "profit-rank top" : "profit-rank";
+                        var barW = Math.max(2, (it.pct / maxPct) * 100);
+                        html += '<div class="profit-row">';
+                        html += '<div class="' + rankCls + '">' + (i + 1) + '</div>';
+                        html += '<div class="profit-info">';
+                        html += '<div class="profit-name">' + it.name + '</div>';
+                        html += '<div class="profit-bar-wrap"><div class="profit-bar" style="width:' + barW + '%"></div></div>';
+                        html += '</div>';
+                        html += '<div class="profit-values">';
+                        html += '<div class="profit-amt">' + formatWonSheet(it.profit) + '원</div>';
+                        html += '<div class="profit-pct">' + it.pct + '%</div>';
+                        html += '</div>';
+                        html += '</div>';
+                    }
+                    body.innerHTML = html;
+                })
+                .catch(function() {
+                    document.getElementById("profitSheetBody").innerHTML = '<div style="text-align:center;padding:24px;color:var(--red);">로딩 실패</div>';
+                });
+        }
+        function closeProfitSheet() {
+            document.getElementById("profitSheetOverlay").classList.remove("open");
+            document.getElementById("profitSheetPanel").classList.remove("open");
+            document.body.style.overflow = "";
+        }
+
+        /* ── Bottom Sheet: 폐기 위험 상품 ──────────── */
+        function openWasteSheet() {
+            document.getElementById("wasteSheetOverlay").classList.add("open");
+            document.getElementById("wasteSheetPanel").classList.add("open");
+            document.body.style.overflow = "hidden";
+            fetch("/api/home/waste-risk-products")
+                .then(function(r) { return r.json(); })
+                .then(function(items) { renderWasteList(items); })
+                .catch(function(err) {
+                    console.error("wasteSheet 로딩 실패:", err);
+                    var container = document.getElementById("wasteListRows");
+                    if (container) container.innerHTML = '<div class="panel-empty" style="color:var(--red);">로딩 실패</div>';
+                });
+        }
+        function closeWasteSheet() {
+            document.getElementById("wasteSheetOverlay").classList.remove("open");
+            document.getElementById("wasteSheetPanel").classList.remove("open");
+            document.body.style.overflow = "";
+        }
+
+        /* ── DOM Ready ─────────────────────────────── */
+        document.addEventListener("DOMContentLoaded", init);
+
+        /* ── Toast 알림 ──────────────────────────── */
+        function showToast(message, type, duration) {
+            type = type || "info";
+            duration = duration || 3000;
+            var container = document.getElementById("toastContainer");
+            if (!container) {
+                container = document.createElement("div");
+                container.id = "toastContainer";
+                container.style.cssText = "position:fixed;top:80px;right:20px;z-index:10000;display:flex;flex-direction:column;gap:8px;pointer-events:none;";
+                document.body.appendChild(container);
+            }
+            var colors = {success:"#22c55e",error:"#ef4444",warning:"#f59e0b",info:"#3b82f6"};
+            var toast = document.createElement("div");
+            toast.textContent = message;
+            toast.style.cssText = "padding:12px 20px;border-radius:8px;font-size:14px;font-weight:500;background:#fff;border:1px solid #e5e7eb;box-shadow:0 4px 12px rgba(0,0,0,0.15);pointer-events:auto;opacity:0;transform:translateX(100%);transition:all 0.3s ease;max-width:360px;border-left:3px solid "+(colors[type]||colors.info)+";";
+            container.appendChild(toast);
+            requestAnimationFrame(function(){
+                toast.style.opacity = "1";
+                toast.style.transform = "translateX(0)";
+            });
+            setTimeout(function(){
+                toast.style.opacity = "0";
+                toast.style.transform = "translateX(100%)";
+                setTimeout(function(){ if (toast.parentNode) toast.parentNode.removeChild(toast); }, 300);
+            }, duration);
+        }
+
+        /* ── 전역 노출 (onclick에서 호출되는 함수) ──
+           새 sheet 추가 시 여기에 함께 등록할 것       */
+        /* ── Bottom Sheet: 매장 정보 수정 ─────────── */
+        function openStoreSheet() {
+            document.getElementById("storeSheetOverlay").classList.add("open");
+            document.getElementById("storeSheetPanel").classList.add("open");
+            document.body.style.overflow = "hidden";
+            fetch("/api/settings/store-info")
+                .then(function(r){ return r.json(); })
+                .then(function(data){
+                    document.getElementById("storeNameInput").value = data.store_name || "";
+                    document.getElementById("storeLocationInput").value = data.location || "";
+                });
+        }
+        function closeStoreSheet() {
+            document.getElementById("storeSheetOverlay").classList.remove("open");
+            document.getElementById("storeSheetPanel").classList.remove("open");
+            document.body.style.overflow = "";
+        }
+        function saveStoreInfo() {
+            var store_name = document.getElementById("storeNameInput").value.trim();
+            var location = document.getElementById("storeLocationInput").value.trim();
+            if (!store_name) {
+                showToast("매장명을 입력해주세요.", "warning");
+                return;
+            }
+            fetch("/api/settings/store-info", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ store_name: store_name, location: location })
+            })
+            .then(function(r){ return r.json(); })
+            .then(function(data){
+                if (data.ok) {
+                    closeStoreSheet();
+                    loadSettingsData();
+                    showToast("매장 정보가 저장됐습니다.", "success");
+                } else {
+                    showToast(data.error || "저장에 실패했습니다.", "error");
+                }
+            })
+            .catch(function(){
+                showToast("네트워크 오류가 발생했습니다.", "error");
+            });
+        }
+
+        /* ── 상권 분석 ──────────────────────────── */
+        function renderAreaTypeBadges(areaType) {
+            if (!areaType || areaType === "-") return "-";
+            var colorMap = {
+                "역세권":   "var(--blue)",
+                "학원가":   "var(--purple)",
+                "상업지구": "var(--orange)",
+                "직장형":   "var(--green)",
+                "주거형":   "var(--muted-foreground)",
+                "경쟁과열": "var(--red)",
+                "경쟁":     "var(--red)",
+                "역근처":   "var(--blue)",
+                "카페거리": "var(--orange)",
+                "학교근처": "var(--purple)",
+                "아파트상권": "var(--green)",
+            };
+            var tags = areaType.split("\u00b7");
+            var html = '<div style="display:flex;gap:4px;justify-content:center;flex-wrap:wrap;">';
+            for (var i = 0; i < tags.length; i++) {
+                var tag = tags[i].trim();
+                var color = colorMap[tag] || "var(--foreground)";
+                html += '<span style="'
+                    + 'display:inline-block;'
+                    + 'padding:2px 8px;'
+                    + 'border-radius:12px;'
+                    + 'font-size:12px;'
+                    + 'font-weight:700;'
+                    + 'color:' + color + ';'
+                    + 'border:1.5px solid ' + color + ';'
+                    + 'background:transparent;'
+                    + '">' + tag + '</span>';
+            }
+            html += '</div>';
+            return html;
+        }
+        function loadStoreAnalysis() {
+            fetch("/api/settings/store-analysis")
+                .then(function(r){ return r.json(); })
+                .then(function(data){
+                    var section = document.getElementById("analysisSection");
+                    var noData = document.getElementById("analysisNoData");
+                    if (!data || !data.store_id) {
+                        section.style.display = "none";
+                        noData.style.display = "block";
+                        return;
+                    }
+                    section.style.display = "block";
+                    noData.style.display = "none";
+                    var html = '<div style="display:flex;gap:12px;margin-bottom:12px;">'
+                        + '<div style="flex:1;background:var(--secondary);border-radius:8px;padding:10px;text-align:center;">'
+                        + '<div style="font-size:11px;color:var(--muted-foreground);">유형</div>'
+                        + '<div style="margin-top:4px;">' + renderAreaTypeBadges(data.area_type) + '</div></div>'
+                        + '<div style="flex:1;background:var(--secondary);border-radius:8px;padding:10px;text-align:center;">'
+                        + '<div style="font-size:11px;color:var(--muted-foreground);">유동인구</div>'
+                        + '<div style="font-size:15px;font-weight:700;color:var(--blue);margin-top:2px;">' + (data.traffic_score || 0) + '<span style="font-size:11px;font-weight:400;color:var(--muted-foreground);"> /100</span></div></div>'
+                        + '<div style="flex:1;background:var(--secondary);border-radius:8px;padding:10px;text-align:center;">'
+                        + '<div style="font-size:11px;color:var(--muted-foreground);">경쟁</div>'
+                        + '<div style="font-size:15px;font-weight:700;color:var(--orange);margin-top:2px;">' + (data.competitor_count || 0) + '<span style="font-size:11px;font-weight:400;color:var(--muted-foreground);">개</span></div></div>'
+                        + '</div>';
+                    html += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:13px;">';
+                    var items = [
+                        {icon: "\uD83C\uDFEB", label: "학교", val: data.school_count || 0},
+                        {icon: "\uD83C\uDFE5", label: "병원", val: data.hospital_count || 0},
+                        {icon: "\uD83C\uDF5D", label: "음식점", val: data.restaurant_count || 0},
+                        {icon: "\u2615", label: "카페", val: data.cafe_count || 0},
+                        {icon: "\uD83D\uDE87", label: "지하철", val: data.subway_count || 0},
+                        {icon: "\uD83C\uDFE2", label: "오피스", val: data.office_count || 0},
+                        {icon: "\uD83D\uDC76", label: "어린이집", val: data.daycare_count || 0}
+                    ];
+                    for (var i = 0; i < items.length; i++) {
+                        html += '<div style="display:flex;align-items:center;gap:4px;color:var(--foreground);">'
+                            + '<span>' + items[i].icon + '</span>'
+                            + '<span style="color:var(--muted-foreground);">' + items[i].label + '</span>'
+                            + '<span style="font-weight:600;margin-left:auto;">' + items[i].val + '</span></div>';
+                    }
+                    html += '</div>';
+                    if (data.analyzed_at) {
+                        html += '<div style="margin-top:10px;font-size:11px;color:var(--muted-foreground);text-align:right;">분석일: ' + data.analyzed_at.substring(0, 10) + '</div>';
+                    }
+                    document.getElementById("analysisContent").innerHTML = html;
+                })
+                .catch(function(){
+                    document.getElementById("analysisSection").style.display = "none";
+                    document.getElementById("analysisNoData").style.display = "block";
+                });
+        }
+
+        function reanalyzeStore() {
+            var btn = document.getElementById("btnReanalyze");
+            btn.disabled = true;
+            btn.textContent = "분석 중...";
+            fetch("/api/settings/reanalyze", { method: "POST" })
+                .then(function(r){ return r.json(); })
+                .then(function(data){
+                    if (data.ok) {
+                        showToast("상권 분석이 시작되었습니다. 잠시 후 새로고침하세요.", "success");
+                        setTimeout(function(){ loadStoreAnalysis(); btn.disabled = false; btn.textContent = "재분석"; }, 5000);
+                    } else {
+                        showToast(data.error || "분석 시작에 실패했습니다.", "error");
+                        btn.disabled = false; btn.textContent = "재분석";
+                    }
+                })
+                .catch(function(){
+                    showToast("네트워크 오류가 발생했습니다.", "error");
+                    btn.disabled = false; btn.textContent = "재분석";
+                });
+        }
+
+        window.openProfitSheet  = openProfitSheet;
+        window.closeProfitSheet = closeProfitSheet;
+        window.openWasteSheet   = openWasteSheet;
+        window.closeWasteSheet  = closeWasteSheet;
+        window.openStoreSheet   = openStoreSheet;
+        window.closeStoreSheet  = closeStoreSheet;
+        window.saveStoreInfo    = saveStoreInfo;
+        window.reanalyzeStore   = reanalyzeStore;
+    })();
+    </script>
+
+    <!-- ═══ 순수익 비중 Bottom Sheet ═══ -->
+    <div class="sheet-overlay" id="profitSheetOverlay" onclick="closeProfitSheet()"></div>
+    <div class="sheet-panel" id="profitSheetPanel">
+        <div class="sheet-handle"></div>
+        <div class="sheet-header">
+            <h3>이번달 순수익 비중</h3>
+            <span class="sheet-total" id="sheetTotalProfit">0원</span>
         </div>
-
-        <!-- 가입 요청 -->
-        <div class="home-panel" id="settingsSignupPanel">
-            <div class="home-panel-header">
-                <h3 class="home-panel-title">가입 요청 대기</h3>
-                <span class="home-panel-badge" id="settingsSignupCount">0</span>
-            </div>
-            <div class="home-panel-body">
-                <div class="report-table-wrapper">
-                    <table class="report-table" id="settingsSignupTable" style="display:none">
-                        <thead>
-                            <tr>
-                                <th data-sort="text">매장 코드</th>
-                                <th data-sort="text">핸드폰</th>
-                                <th data-sort="text">요청일</th>
-                                <th>처리</th>
-                            </tr>
-                        </thead>
-                        <tbody id="settingsSignupTableBody"></tbody>
-                    </table>
-                </div>
-                <div class="hint" id="settingsSignupEmpty">대기 중인 가입 요청이 없습니다.</div>
-            </div>
-        </div>
-
-        <!-- 사용자 목록 -->
-        <div class="home-panel">
-            <div class="home-panel-header">
-                <h3 class="home-panel-title">등록된 사용자</h3>
-                <button class="btn-sm btn-approve" onclick="showCreateUserForm()" style="font-size:0.8rem;">+ 사용자 추가</button>
-            </div>
-            <div class="home-panel-body">
-                <!-- 사용자 추가 인라인 폼 -->
-                <div id="createUserForm" style="display:none; margin-bottom:16px; padding:16px; background:var(--bg-base); border:1px solid var(--border); border-radius:var(--radius-md);">
-                    <div style="display:grid; grid-template-columns:1fr 1fr 1fr 1fr auto; gap:10px; align-items:end;">
-                        <div>
-                            <label style="font-size:0.75rem; color:var(--text-secondary); display:block; margin-bottom:4px;">아이디</label>
-                            <input type="text" id="newUsername" placeholder="영문/숫자 3~30자" style="width:100%; padding:8px 10px; background:var(--bg-surface); border:1px solid var(--border); border-radius:var(--radius-sm); color:var(--text-primary); font-size:0.85rem;">
-                        </div>
-                        <div>
-                            <label style="font-size:0.75rem; color:var(--text-secondary); display:block; margin-bottom:4px;">비밀번호</label>
-                            <input type="password" id="newPassword" placeholder="4자 이상" style="width:100%; padding:8px 10px; background:var(--bg-surface); border:1px solid var(--border); border-radius:var(--radius-sm); color:var(--text-primary); font-size:0.85rem;">
-                        </div>
-                        <div>
-                            <label style="font-size:0.75rem; color:var(--text-secondary); display:block; margin-bottom:4px;">매장 코드</label>
-                            <input type="text" id="newStoreId" placeholder="5자리 숫자" maxlength="5" style="width:100%; padding:8px 10px; background:var(--bg-surface); border:1px solid var(--border); border-radius:var(--radius-sm); color:var(--text-primary); font-size:0.85rem;">
-                        </div>
-                        <div>
-                            <label style="font-size:0.75rem; color:var(--text-secondary); display:block; margin-bottom:4px;">역할</label>
-                            <select id="newRole" style="width:100%; padding:8px 10px; background:var(--bg-surface); border:1px solid var(--border); border-radius:var(--radius-sm); color:var(--text-primary); font-size:0.85rem;">
-                                <option value="viewer">viewer</option>
-                                <option value="admin">admin</option>
-                            </select>
-                        </div>
-                        <div style="display:flex; gap:6px;">
-                            <button class="btn-sm btn-approve" onclick="createUser()">생성</button>
-                            <button class="btn-sm btn-reject" onclick="hideCreateUserForm()">취소</button>
-                        </div>
-                    </div>
-                </div>
-
-                <input type="text" id="usersSearch" class="search-box" placeholder="아이디, 매장코드 검색..." style="margin-bottom:12px;">
-                <div class="report-table-wrapper">
-                    <table class="report-table" id="usersTable">
-                        <thead>
-                            <tr>
-                                <th data-sort="num">ID</th>
-                                <th data-sort="text">아이디</th>
-                                <th data-sort="text">매장</th>
-                                <th data-sort="text">역할</th>
-                                <th data-sort="text">이름</th>
-                                <th data-sort="text">핸드폰</th>
-                                <th data-sort="text">활성</th>
-                                <th data-sort="text">마지막 로그인</th>
-                                <th>관리</th>
-                            </tr>
-                        </thead>
-                        <tbody id="usersTableBody"></tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-
-    </main>
-
-    <!-- =============================== -->
-    <!-- 모달                              -->
-    <!-- =============================== -->
-
-    <!-- 스케줄러 모달 -->
-    <div id="schedulerModal" class="modal" onclick="closeSchedulerModal(event)">
-        <div class="modal-content scheduler-modal" onclick="event.stopPropagation()">
-            <div class="modal-header">
-                <h2 class="modal-title">시스템 상태</h2>
-                <button class="modal-close" onclick="closeSchedulerModal()">&times;</button>
-            </div>
-            <div class="modal-body">
-                <div class="scheduler-control-panel">
-                    <div class="scheduler-status-info">
-                        <span class="status-badge" id="schedulerStatusBadge">확인중</span>
-                        <span class="status-text" id="schedulerPidText"></span>
-                    </div>
-                    <div class="scheduler-buttons" data-admin-only style="display:none">
-                        <button id="btnSchedulerStart" class="btn-scheduler-start" onclick="schedulerStart()">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                                <path d="M8 5v14l11-7z" fill="currentColor"/>
-                            </svg>
-                            <span>시작</span>
-                        </button>
-                        <button id="btnSchedulerStop" class="btn-scheduler-stop" onclick="schedulerStop()" style="display:none">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                                <rect x="6" y="6" width="12" height="12" fill="currentColor"/>
-                            </svg>
-                            <span>정지</span>
-                        </button>
-                    </div>
-                </div>
-                <div class="schedule-timeline" id="schedulerTimeline">
-                    <div class="hint">로딩중...</div>
-                </div>
-            </div>
+        <div class="sheet-body" id="profitSheetBody">
+            <div style="text-align:center; padding:24px; color:var(--muted-foreground);">불러오는 중...</div>
         </div>
     </div>
 
-    <!-- 폐기 위험 모달 -->
-    <div id="expiryModal" class="modal" onclick="closeExpiryModal(event)">
-        <div class="modal-content" onclick="event.stopPropagation()">
-            <div class="modal-header">
-                <h2 class="modal-title">폐기 주의 상품</h2>
-                <button class="modal-close" onclick="closeExpiryModal()">&times;</button>
+    <!-- ═══ 매장 정보 수정 Bottom Sheet ═══ -->
+    <div class="sheet-overlay" id="storeSheetOverlay" onclick="closeStoreSheet()"></div>
+    <div class="sheet-panel" id="storeSheetPanel">
+        <div class="sheet-handle"></div>
+        <div class="sheet-header" style="display:flex;align-items:center;justify-content:space-between;">
+            <h3 style="margin:0;">매장 정보 수정</h3>
+            <button onclick="closeStoreSheet()" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--muted-foreground);padding:4px 8px;">&#10005;</button>
+        </div>
+        <div class="sheet-body" style="padding:16px;">
+            <div class="form-group" style="margin-bottom:16px;">
+                <label style="font-size:13px;color:var(--muted-foreground);">매장명</label>
+                <input id="storeNameInput" type="text"
+                       style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:15px;margin-top:6px;box-sizing:border-box;">
             </div>
-            <div class="modal-body" id="expiryModalBody">
-                <div class="hint">로딩중...</div>
+            <div class="form-group" style="margin-bottom:0;">
+                <label style="font-size:13px;color:var(--muted-foreground);">주소</label>
+                <input id="storeLocationInput" type="text"
+                       style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:15px;margin-top:6px;box-sizing:border-box;">
             </div>
+        </div>
+        <div style="padding:12px 20px 20px;display:flex;gap:10px;flex-shrink:0;border-top:1px solid var(--border);">
+            <button onclick="closeStoreSheet()"
+                    style="flex:1;padding:14px;background:var(--card);color:var(--muted-foreground);border:1px solid var(--border);border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;">
+                취소
+            </button>
+            <button onclick="saveStoreInfo()"
+                    style="flex:1;padding:14px;background:var(--orange);color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;">
+                저장
+            </button>
         </div>
     </div>
 
-    <!-- 발주 결과 모달 -->
-    <div id="orderResultModal" class="modal" onclick="closeOrderResultModal(event)">
-        <div class="modal-content modal-xl" onclick="event.stopPropagation()">
-            <div class="modal-header">
-                <h2 class="modal-title" id="orderResultTitle">발주 예측 결과</h2>
-                <button class="modal-close" onclick="closeOrderResultModal()">&times;</button>
+    <!-- ═══ 폐기 위험 상품 Bottom Sheet ═══ -->
+    <div class="sheet-overlay" id="wasteSheetOverlay" onclick="closeWasteSheet()"></div>
+    <div class="sheet-panel" id="wasteSheetPanel">
+        <div class="sheet-handle"></div>
+        <div class="sheet-header" style="display:flex;align-items:center;justify-content:space-between;">
+            <div style="display:flex;align-items:center;gap:8px;">
+                <h3 style="margin:0;">폐기 위험 상품</h3>
+                <span class="badge" id="wasteListBadge">0개</span>
             </div>
-            <div class="modal-body">
-                <div class="result-summary" id="orderResultSummary"></div>
-                <input type="text" id="orderSearch" class="search-box" placeholder="상품명, 카테고리 검색...">
-                <div class="result-table-wrapper">
-                    <table class="result-table" id="orderTable">
-                        <thead>
-                            <tr>
-                                <th>상품명</th>
-                                <th>카테고리</th>
-                                <th class="text-right">일평균</th>
-                                <th class="text-right">안전재고</th>
-                                <th class="text-right">현재고</th>
-                                <th class="text-right">발주량</th>
-                                <th class="text-center">신뢰도</th>
-                            </tr>
-                        </thead>
-                        <tbody id="orderTableBody"></tbody>
-                    </table>
-                </div>
-                <div class="modal-footer">
-                    <button class="btn-export-excel" id="btnExportExcel" onclick="exportPreviewExcel()">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;margin-right:6px;">
-                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                            <polyline points="7 10 12 15 17 10"/>
-                            <line x1="12" y1="15" x2="12" y2="3"/>
-                        </svg>
-                        엑셀 다운로드
-                    </button>
-                    <button class="btn-confirm-order" id="btnConfirmOrder" data-admin-only style="display:none">발주 확정</button>
-                </div>
+            <button onclick="closeWasteSheet()" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--muted-foreground);padding:4px 8px;">&#10005;</button>
+        </div>
+        <div class="sheet-body" style="overflow-y:auto;">
+            <div class="panel-rows" id="wasteListRows">
+                <div class="panel-empty">불러오는 중...</div>
             </div>
         </div>
     </div>
-
-    <!-- Toast 컨테이너 -->
-    <div class="toast-container" id="toastContainer"></div>
-
-    <!-- 스크립트 -->
-    <script src="{{ url_for('static', filename='js/app.js') }}?v=15"></script>
-    <script src="{{ url_for('static', filename='js/order.js') }}?v=14"></script>
-    <script src="{{ url_for('static', filename='js/report.js') }}?v=15"></script>
-    <script src="{{ url_for('static', filename='js/prediction.js') }}?v=5"></script>
-    <script src="{{ url_for('static', filename='js/home.js') }}?v=15"></script>
-    <script src="{{ url_for('static', filename='js/users.js') }}?v=2"></script>
 </body>
 </html>

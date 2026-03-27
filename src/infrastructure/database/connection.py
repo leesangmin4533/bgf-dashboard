@@ -52,6 +52,8 @@ STORE_TABLES = frozenset({
     'new_product_items',
     'new_product_monthly',
     'app_settings',
+    'dessert_decisions',
+    'user_order_tendency',
 })
 
 
@@ -84,7 +86,7 @@ class DBRouter:
 
     @staticmethod
     def get_legacy_db_path() -> Path:
-        """기존 단일 DB 경로 (마이그레이션 전 호환용)"""
+        """기존 단일 DB 경로 (deprecated, 최종 폴백용)"""
         return DATA_DIR / "bgf_sales.db"
 
     @staticmethod
@@ -164,6 +166,36 @@ class DBRouter:
         if not store_dir.exists():
             return []
         return sorted(store_dir.glob("*.db"))
+
+
+def resolve_db_path(
+    db_path: Optional[str] = None,
+    store_id: Optional[str] = None,
+) -> str:
+    """DB 경로 결정 (통합 헬퍼)
+
+    우선순위:
+        1. db_path 명시 → 그대로 사용
+        2. store_id → DBRouter로 매장 DB 경로
+        3. 폴백 → bgf_sales.db (존재 시) 또는 common.db
+
+    Args:
+        db_path: 명시적 DB 경로 (테스트/오버라이드)
+        store_id: 매장 코드
+
+    Returns:
+        DB 파일 경로 문자열
+    """
+    if db_path:
+        return str(db_path)
+    if store_id:
+        store_path = DBRouter.get_store_db_path(store_id)
+        if store_path.exists():
+            return str(store_path)
+    legacy = DBRouter.get_legacy_db_path()
+    if legacy.exists():
+        return str(legacy)
+    return str(DBRouter.get_common_db_path())
 
 
 # ── 공통 DB ATTACH 헬퍼 ──

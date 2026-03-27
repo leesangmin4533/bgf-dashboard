@@ -144,13 +144,10 @@ def _calculate_order_interval(orderable_day: str) -> int:
     return max(gaps)
 
 
-def _get_db_path() -> str:
-    """DB 경로 반환
-
-    Returns:
-        bgf_sales.db 절대 경로 문자열
-    """
-    return str(Path(__file__).parent.parent.parent.parent / "data" / "bgf_sales.db")
+def _get_db_path(store_id: str = None) -> str:
+    """DB 경로 반환"""
+    from src.infrastructure.database.connection import resolve_db_path
+    return resolve_db_path(store_id=store_id)
 
 
 def _learn_weekday_pattern(mid_cd: str, db_path: str = None, min_data_days: int = 14,
@@ -170,7 +167,7 @@ def _learn_weekday_pattern(mid_cd: str, db_path: str = None, min_data_days: int 
         {0: coef, 1: coef, ..., 6: coef} (Python weekday: 월=0, 일=6)
     """
     if db_path is None:
-        db_path = _get_db_path()
+        db_path = _get_db_path(store_id)
     try:
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
@@ -271,7 +268,7 @@ def analyze_snack_confection_pattern(
     config = SNACK_CONFECTION_DYNAMIC_SAFETY_CONFIG
 
     if db_path is None:
-        db_path = _get_db_path()
+        db_path = _get_db_path(store_id)
 
     # 발주가능요일 결정 (DB값 우선, 없으면 스낵 기본값)
     effective_orderable_day = orderable_day or SNACK_DEFAULT_ORDERABLE_DAYS
@@ -316,9 +313,12 @@ def analyze_snack_confection_pattern(
     data_days = row[0] or 0
     total_sales = row[1] or 0
     has_enough_data = data_days >= config["min_data_days"]
+    analysis_days = config["analysis_days"]  # 30
 
-    # 일평균 계산
-    daily_avg = (total_sales / data_days) if data_days > 0 else 0.0
+    # 일평균 계산: 전체 분석 기간(30일)으로 나눔
+    # 기존: total_sales / data_days → 판매일만 세서 과대평가 (2일/7개=3.5)
+    # 수정: total_sales / analysis_days → 실제 일평균 (30일/7개=0.23)
+    daily_avg = (total_sales / analysis_days) if total_sales > 0 else 0.0
 
     # 회전율 레벨 (참고용 유지)
     if has_enough_data:
@@ -339,13 +339,8 @@ def analyze_snack_confection_pattern(
     skip_order = False
     skip_reason = ""
 
-    # 비발주일이면 스킵 (최우선)
-    if not today_orderable:
-        skip_order = True
-        skip_reason = f"비발주일 (orderable_day={effective_orderable_day})"
-
     # 상한선 초과 스킵
-    elif config["max_stock_enabled"] and max_stock > 0:
+    if config["max_stock_enabled"] and max_stock > 0:
         if current_stock + pending_qty >= max_stock:
             skip_order = True
             skip_reason = f"상한선 초과 ({current_stock}+{pending_qty} >= {max_stock:.0f})"

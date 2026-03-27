@@ -177,9 +177,10 @@ class DashboardService:
                        'batch' AS source
                 FROM inventory_batches
                 WHERE status = 'active'
-                  AND expiry_date >= date('now')
-                  AND expiry_date <= datetime('now', '+7 days')
+                  AND expiry_date >= datetime('now')
+                  AND expiry_date <= datetime('now', '+2 hours')
                   AND remaining_qty > 0
+                  AND mid_cd IN ('001','002','003','004','005','012')
                   {self._sf()}
                 ORDER BY expiry_date ASC
                 LIMIT 200
@@ -191,9 +192,9 @@ class DashboardService:
                        COALESCE(mid_cd, '') AS mid_cd,
                        'food' AS source
                 FROM order_tracking
-                WHERE status IN ('ordered', 'arrived', 'selling')
-                  AND datetime(expiry_time) >= datetime('now', 'start of day')
-                  AND datetime(expiry_time) <= datetime('now', '+7 days')
+                WHERE status IN ('ordered', 'arrived')
+                  AND datetime(expiry_time) >= datetime('now')
+                  AND datetime(expiry_time) <= datetime('now', '+2 hours')
                   AND remaining_qty > 0
                   {self._sf()}
                 ORDER BY expiry_time ASC
@@ -262,8 +263,8 @@ class DashboardService:
         except Exception:
             pass
 
-        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-        max_future = now + timedelta(days=7)
+        today_start = now
+        max_future = now + timedelta(hours=2)
 
         for r in daily_food_rows:
             item_cd = r[0]

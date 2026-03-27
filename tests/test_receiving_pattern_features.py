@@ -326,10 +326,10 @@ class TestFeatureBuilderReceiving:
             for i in range(days)
         ]
 
-    def test_feature_count_36(self):
-        """FEATURE_NAMES가 36개인지 확인"""
+    def test_feature_count_35(self):
+        """FEATURE_NAMES가 35개 (food-ml-dual-model: +4)"""
         from src.prediction.ml.feature_builder import MLFeatureBuilder
-        assert len(MLFeatureBuilder.FEATURE_NAMES) == 36
+        assert len(MLFeatureBuilder.FEATURE_NAMES) == 45
 
     def test_feature_names_contain_receiving(self):
         """입고 패턴 피처 5개가 FEATURE_NAMES에 존재"""
@@ -361,19 +361,19 @@ class TestFeatureBuilderReceiving:
         )
 
         assert features is not None
-        assert len(features) == 36
+        assert len(features) == 45  # 35→39→45 환경피처 추가
 
-        # 마지막 5개가 입고 패턴 피처
+        # 입고 패턴 피처 (인덱스 26~30)
         # lead_time_avg: 1.5 / 3.0 = 0.5
-        assert abs(features[31] - 0.5) < 0.01
+        assert abs(features[26] - 0.5) < 0.01
         # lead_time_cv: (0.3/1.5) / 2.0 = 0.1
-        assert abs(features[32] - 0.1) < 0.01
+        assert abs(features[27] - 0.1) < 0.01
         # short_delivery_rate: 0.2 (그대로)
-        assert abs(features[33] - 0.2) < 0.01
+        assert abs(features[28] - 0.2) < 0.01
         # delivery_frequency: 7 / 14.0 = 0.5
-        assert abs(features[34] - 0.5) < 0.01
+        assert abs(features[29] - 0.5) < 0.01
         # pending_age_days: 3 / 5.0 = 0.6
-        assert abs(features[35] - 0.6) < 0.01
+        assert abs(features[30] - 0.6) < 0.01
 
     def test_receiving_stats_none_defaults(self):
         """receiving_stats=None이면 기본값 0.0"""
@@ -387,16 +387,16 @@ class TestFeatureBuilderReceiving:
         )
 
         assert features is not None
-        # lead_time_avg 기본값: 0.0
-        assert features[31] == 0.0
+        # lead_time_avg 기본값: 0.0 (인덱스 26)
+        assert features[26] == 0.0
         # lead_time_cv: (0/0.001) → _lt_avg=0 이므로 0.25 기본값 → 0.25/2.0=0.125
-        assert abs(features[32] - 0.125) < 0.01
+        assert abs(features[27] - 0.125) < 0.01
         # short_delivery_rate: 0.0
-        assert features[33] == 0.0
+        assert features[28] == 0.0
         # delivery_frequency: 0.0
-        assert features[34] == 0.0
+        assert features[29] == 0.0
         # pending_age_days: 0.0
-        assert features[35] == 0.0
+        assert features[30] == 0.0
 
     def test_lead_time_normalization_cap(self):
         """lead_time_avg > 3.0일 때 1.0으로 cap"""
@@ -414,8 +414,8 @@ class TestFeatureBuilderReceiving:
             receiving_stats=recv_stats,
         )
 
-        # min(5.0/3.0, 1.0) = 1.0
-        assert features[31] == pytest.approx(1.0, abs=0.01)
+        # min(5.0/3.0, 1.0) = 1.0 (인덱스 26)
+        assert features[26] == pytest.approx(1.0, abs=0.01)
 
     def test_short_rate_passthrough(self):
         """short_delivery_rate는 0~1 그대로 통과"""
@@ -430,7 +430,7 @@ class TestFeatureBuilderReceiving:
             receiving_stats=recv_stats,
         )
 
-        assert features[33] == pytest.approx(0.75, abs=0.01)
+        assert features[28] == pytest.approx(0.75, abs=0.01)  # 인덱스 28
 
     def test_pending_age_cap(self):
         """pending_age_days 5일 이상 → 1.0 cap"""
@@ -445,8 +445,8 @@ class TestFeatureBuilderReceiving:
             receiving_stats=recv_stats,
         )
 
-        # min(10/5.0, 1.0) = 1.0
-        assert features[35] == pytest.approx(1.0, abs=0.01)
+        # min(10/5.0, 1.0) = 1.0 (인덱스 30)
+        assert features[30] == pytest.approx(1.0, abs=0.01)
 
 
 # =========================================================================
@@ -488,7 +488,7 @@ class TestMLEnsembleReceivingIntegration:
         """_apply_ml_ensemble에서 receiving_stats가 build_features에 전달되는지"""
         from src.prediction.ml.feature_builder import MLFeatureBuilder
 
-        # receiving_stats가 있을 때 features[31:36] 값이 0이 아닌지 확인
+        # receiving_stats가 있을 때 features[26:31] 값이 0이 아닌지 확인
         daily_sales = [{"sale_qty": 5} for _ in range(30)]
         recv_stats = {
             "lead_time_avg": 2.0,
@@ -506,13 +506,13 @@ class TestMLEnsembleReceivingIntegration:
         )
 
         assert features is not None
-        # lead_time_avg: 2.0/3.0 ≈ 0.667
-        assert features[31] > 0
-        # delivery_frequency: 8/14 ≈ 0.571
-        assert features[34] > 0
+        # lead_time_avg: 2.0/3.0 ≈ 0.667 (인덱스 26)
+        assert features[26] > 0
+        # delivery_frequency: 8/14 ≈ 0.571 (인덱스 29)
+        assert features[29] > 0
 
     def test_backward_compatible_no_receiving(self):
-        """receiving_stats 없이도 기존 동작 유지 (31개→36개, 마지막 5개 기본값)"""
+        """receiving_stats 없이도 기존 동작 유지 (마지막 5개 기본값)"""
         from src.prediction.ml.feature_builder import MLFeatureBuilder
 
         daily_sales = [{"sale_qty": 3} for _ in range(14)]
@@ -525,8 +525,8 @@ class TestMLEnsembleReceivingIntegration:
         )
 
         assert features is not None
-        assert len(features) == 36
-        # 기존 31개 피처는 정상 (첫번째: daily_avg_7)
+        assert len(features) == 45  # 35→39→45 환경피처 추가
+        # 기존 피처 정상 (첫번째: daily_avg_7)
         assert features[0] == pytest.approx(3.0, abs=0.1)
 
 
@@ -566,7 +566,7 @@ class TestBuildBatchFeaturesReceiving:
 
         X, y, codes = MLFeatureBuilder.build_batch_features(items_data)
         assert X is not None
-        assert X.shape == (2, 36)
+        assert X.shape == (2, 45)  # food-ml-dual-model: 31→35→45
 
     def test_batch_without_receiving_stats(self):
         """build_batch_features에서 receiving_stats 키 없을 때 None 폴백"""
@@ -584,7 +584,7 @@ class TestBuildBatchFeaturesReceiving:
 
         X, y, codes = MLFeatureBuilder.build_batch_features(items_data)
         assert X is not None
-        assert X.shape == (1, 36)
-        # 마지막 5개 기본값
-        assert X[0, 31] == 0.0  # lead_time_avg
-        assert X[0, 33] == 0.0  # short_delivery_rate
+        assert X.shape == (1, 45)  # food-ml-dual-model: 31→35→45
+        # 마지막 5개 기본값 (인덱스 26~30)
+        assert X[0, 26] == 0.0  # lead_time_avg
+        assert X[0, 28] == 0.0  # short_delivery_rate

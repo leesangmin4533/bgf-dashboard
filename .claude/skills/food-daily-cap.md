@@ -9,8 +9,8 @@
 
 ## Common Pitfalls
 
-- ❌ `waste_buffer`를 비율(%)로 변경 → 설계 의도 파괴
-- ✅ `waste_buffer`는 **절대 수량** (폐기 허용 개수). 비율이 아님
+- ❌ Cap 비교를 `len(items)` (품목수)로 수행 → 행사 부스트(qty>1)가 Cap을 우회
+- ✅ Cap 비교는 `sum(final_order_qty)` (수량합) 기반. `_trim_qty_to_cap()`이 최종 안전망
 
 - ❌ `fallback_daily_avg`를 매장 규모에 맞춰 변경 → 데이터 축적되면 자동 해결
 - ✅ fallback은 데이터 없을 때만 사용됨. 21일 데이터 쌓이면 실제 평균으로 대체
@@ -25,7 +25,9 @@
 ### 공식
 
 ```
-cap = round(요일별_평균_판매량) + waste_buffer(3)
+cap = round(요일별_평균_판매량) + effective_buffer
+effective_buffer = int(category_total × 0.20 + 0.5)
+category_total = weekday_avg + site_order_counts
 ```
 
 ### 이 공식이 어떤 매장에든 적용 가능한 이유
@@ -34,20 +36,19 @@ cap = round(요일별_평균_판매량) + waste_buffer(3)
 따라서 매장 규모·입지·고객층과 무관하게 자동 적응한다.
 
 ```
-매장A (소형, 일평균 5개):  cap = 5 + 3 = 8   → 폐기 ~3개
-매장B (중형, 일평균 14개): cap = 14 + 3 = 17  → 폐기 ~3개
-매장C (대형, 일평균 35개): cap = 35 + 3 = 38  → 폐기 ~3개
-매장D (초대형, 일평균 60개): cap = 60 + 3 = 63 → 폐기 ~3개
+매장A (소형, 일평균 5개):  cap = 5 + 1 = 6    → 버퍼 1개
+매장B (중형, 일평균 14개): cap = 14 + 3 = 17   → 버퍼 3개
+매장C (대형, 일평균 35개): cap = 35 + 7 = 42   → 버퍼 7개
+매장D (초대형, 일평균 60개): cap = 60 + 12 = 72 → 버퍼 12개
 ```
 
-**어떤 매장이든 폐기가 최대 ~3개로 일정하다.**
-`waste_buffer=3`은 "몇 개까지 폐기를 허용할 것인가"라는 절대 수량 기준이지, 비율이 아니다.
+**버퍼가 매장 규모에 비례하여 동적으로 조정된다** (category_total의 20%).
 
 ### 절대로 변경하면 안 되는 것
 
 | 항목 | 현재값 | 변경 금지 사유 |
 |------|--------|---------------|
-| `waste_buffer` 타입 | 절대 수량 (개) | 비율(%)로 바꾸면 소형 매장 폐기 0개(결품), 대형 매장 폐기 9개(과다)로 왜곡 |
+| Cap 비교 단위 | **수량합** (`sum(qty)`) | 품목수(`len`)로 바꾸면 qty>1 품목이 Cap 우회 |
 | `get_weekday_avg_sales` 데이터 소스 | 해당 매장 DB (`daily_sales`) | 외부 평균이나 고정값으로 대체 시 매장 특성 소멸 |
 | 요일 필터링 방식 | Python `datetime.weekday()` | SQLite `strftime('%w')` 사용 시 로케일 의존성 발생 |
 
@@ -55,7 +56,7 @@ cap = round(요일별_평균_판매량) + waste_buffer(3)
 
 | 항목 | 현재값 | 조정 범위 | 의미 |
 |------|--------|-----------|------|
-| `waste_buffer` | 3 | 1~5 | 일일 폐기 허용 수량. 3=폐기 3개 허용 |
+| 버퍼 비율 | 20% (category_total 대비) | 10~30% | 폐기 허용 여유. 높을수록 폐기↑ 결품↓ |
 | `explore_ratio` | 0.25 | 0.10~0.35 | 신상품 탐색 비율. 높을수록 신상품 많이 시도 |
 | `lookback_days` | 21 | 14~42 | 평균 계산 기간. 짧으면 최근 트렌드 반영, 길면 안정적 |
 | `new_item_max_data` | 5 | 3~7 | 신상품 판별 기준. 데이터 N일 미만이면 신상품 |
@@ -72,7 +73,7 @@ cap = round(요일별_평균_판매량) + waste_buffer(3)
 FOOD_DAILY_CAP_CONFIG = {
     "enabled": True,
     "target_categories": ['001', '002', '003', '004', '005', '012'],
-    "waste_buffer": 3,           # 폐기 허용 수량 (절대값, 비율 아님)
+    "waste_buffer": 3,           # deprecated (20% 동적 버퍼로 대체, 2026-03-13)
     "lookback_days": 21,         # 요일별 평균 계산 기간
     "min_data_weeks": 2,         # 최소 데이터 주 수
     "explore_ratio": 0.25,       # 탐색 슬롯 비율 (25%)
@@ -93,14 +94,22 @@ apply_food_daily_cap(order_list, target_date)     ← 메인 진입점
        ├─ get_weekday_avg_sales(mid_cd, weekday)  ← DB 조회
        │    └─ daily_sales에서 최근 21일, 해당 요일 평균
        │
-       ├─ cap = round(avg) + waste_buffer
+       ├─ cap = round(avg) + effective_buffer (category_total × 20%)
        │
-       ├─ 상품 수 ≤ cap → 전부 유지
+       ├─ cancel_smart 분리 (Cap 대상 제외, 항상 통과)
        │
-       └─ 상품 수 > cap → select_items_with_cap()
-            ├─ classify_items() → proven / new 분류
-            ├─ exploit_slots = cap × 0.75 (검증 상품)
-            └─ explore_slots = cap × 0.25 (신상품)
+       ├─ sum(qty) ≤ cap → 전부 유지
+       │
+       └─ sum(qty) > cap → 2단계 절삭:
+            ├─ 1차: select_items_with_cap() — 품목 선별 (슬롯 기반)
+            │    ├─ classify_items() → proven / new 분류
+            │    ├─ exploit_slots = cap × 0.75 (검증 상품)
+            │    └─ explore_slots = cap × 0.25 (신상품)
+            │
+            └─ 2차: _trim_qty_to_cap() — 수량합 절삭 (안전망)
+                 ├─ sum(qty) > cap이면 후순위부터 qty 감소
+                 ├─ qty=0이면 해당 품목 제거
+                 └─ 최종 sum(qty) ≤ cap 보장
 ```
 
 ### 상품 분류 기준
@@ -117,14 +126,20 @@ data_days = 5   → proven 처리        : 중간 영역, 검증으로 분류
 |------|------|
 | 해당 요일 데이터 없음 (2주 미만) | 전체 일평균 사용 (요일 구분 없이) |
 | 전체 데이터 없음 | `fallback_daily_avg=15` 사용 |
-| 상품 수 < cap | cap 적용하지 않음 (전부 발주) |
+| 수량합 < cap | cap 적용하지 않음 (전부 발주) |
 | new 상품 부족 | proven에서 추가 채움 |
 | proven 상품 부족 | new에서 추가 채움 |
 | `enabled=False` | 원본 그대로 반환 |
+| cancel_smart 항목 | Cap 대상 제외, 항상 결과에 포함 |
+| 행사 부스트 (qty>1) | `_trim_qty_to_cap()`이 수량합 cap 이하로 절삭 |
 
 ---
 
 ## 적용 위치 (auto_order.py)
+
+### 파이프라인 순서: Floor(mid) → Floor(large) → CUT보충 → **Cap** (최종 게이트)
+
+Cap은 파이프라인 마지막 단계로서, 앞단계(Floor, CUT, 행사 부스트 등)에서 추가된 모든 수량을 절삭한다.
 
 ### 1차 적용: `get_recommendations()` — 초기 발주 목록 생성 후
 
@@ -165,7 +180,18 @@ adjusted_list = apply_food_daily_cap(adjusted_list, target_date=None)
   일 판매 ~14개, 폐기 ~23개
 
 [적용 후] 주먹밥(002) 금요일
-  cap = round(17.0) + 3 = 20개
-  proven 15개 + new 5개 = 20개 발주
-  일 판매 ~17개, 폐기 ~3개
+  cap = round(17.0) + 4 = 21개 (20% 버퍼)
+  proven 16개 + new 5개 = 21개 발주
+  일 판매 ~17개, 폐기 ~4개
+```
+
+### 행사 부스트 대응 예시 (2026-03-22 수정)
+
+```
+[수정 전] 도시락(001) 일요일, 매장 46704
+  10품목 × 할인부스트(일부 qty=2~3) = 14개 발주
+  cap=5인데 len(items)=10 > 5 → 5품목 선별되지만 각 qty>1 → 총 ~10개 (Cap 우회)
+
+[수정 후] 도시락(001) 일요일, 매장 46704
+  10품목 14개 → sum(qty)=14 > cap=5 → 5품목 선별 → _trim_qty_to_cap → 총 ≤5개 (정확)
 ```

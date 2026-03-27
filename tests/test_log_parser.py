@@ -108,12 +108,24 @@ class TestParseLine:
 class TestPatterns:
 
     def test_log_line_regex(self):
+        """이전 포맷 (session_id 없음)"""
         m = LOG_LINE_RE.match("2026-02-21 07:00:04 | INFO     | module.name | msg")
         assert m is not None
         assert m.group(1) == "2026-02-21 07:00:04"
         assert m.group(2).strip() == "INFO"
-        assert m.group(3) == "module.name"
-        assert m.group(4) == "msg"
+        assert m.group(3) is None  # session_id (없으면 None)
+        assert m.group(4) == "module.name"
+        assert m.group(5) == "msg"
+
+    def test_log_line_regex_new_format(self):
+        """새 포맷 (session_id 포함)"""
+        m = LOG_LINE_RE.match("2026-02-28 13:24:41 | INFO     | a1b2c3d4 | module.name | msg")
+        assert m is not None
+        assert m.group(1) == "2026-02-28 13:24:41"
+        assert m.group(2).strip() == "INFO"
+        assert m.group(3) == "a1b2c3d4"
+        assert m.group(4) == "module.name"
+        assert m.group(5) == "msg"
 
     def test_phase_regex_simple(self):
         m = PHASE_RE.search("[Phase 1] Data Collection")

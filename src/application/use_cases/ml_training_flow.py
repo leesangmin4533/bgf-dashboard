@@ -26,11 +26,12 @@ class MLTrainingFlow:
     def store_id(self) -> Optional[str]:
         return self.store_ctx.store_id if self.store_ctx else None
 
-    def run(self, days: int = 90) -> Dict[str, Any]:
+    def run(self, days: int = 90, incremental: bool = False) -> Dict[str, Any]:
         """ML 모델 학습 실행
 
         Args:
-            days: 학습 데이터 기간 (일)
+            days: 학습 데이터 기간 (일). incremental=True이면 90일로 자동 설정.
+            incremental: True면 증분학습 모드 (90일 윈도우, 성능 보호 게이트 적용)
 
         Returns:
             {success: bool, models_trained: int, results: {...}}
@@ -38,21 +39,33 @@ class MLTrainingFlow:
         try:
             from src.prediction.ml.trainer import MLTrainer
 
+            if incremental:
+                days = 90
+
+            mode = f"증분({days}일)" if incremental else f"전체({days}일)"
             trainer = MLTrainer(store_id=self.store_id)
-            results = trainer.train_all_groups(days=days)
+            results = trainer.train_all_groups(days=days, incremental=incremental)
 
             success_count = sum(
                 1 for r in results.values()
                 if isinstance(r, dict) and r.get("success")
             )
+            gated_count = sum(
+                1 for r in results.values()
+                if isinstance(r, dict) and r.get("gated")
+            )
             logger.info(
-                f"MLTraining 완료: store={self.store_id},"
+                f"MLTraining 완료 ({mode}): store={self.store_id},"
                 f" models={success_count}/{len(results)} 그룹 성공"
+                + (f", {gated_count}개 롤백" if gated_count else "")
             )
             return {
                 "success": True,
                 "models_trained": success_count,
                 "total_groups": len(results),
+                "gated_count": gated_count,
+                "incremental": incremental,
+                "days": days,
                 "results": results,
             }
         except ImportError as e:

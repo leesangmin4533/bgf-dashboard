@@ -37,7 +37,12 @@ class NewProduct3DayTrackingRepository(BaseRepository):
         base_name: str = "",
         product_codes: str = "",
     ) -> None:
-        """추적 레코드 UPSERT (신규 삽입 또는 기존 업데이트)"""
+        """추적 레코드 UPSERT (신규 삽입 또는 기존 업데이트)
+
+        - 신규 삽입 시: our_order_count = bgf_order_count (BGF 기존 달성 횟수 반영)
+        - 기존 레코드 충돌 시: our_order_count가 0이면 bgf_order_count로 초기화,
+          이미 발주 기록(>0)이 있으면 덮어쓰지 않음
+        """
         conn = self._get_conn()
         try:
             conn.execute(
@@ -49,10 +54,15 @@ class NewProduct3DayTrackingRepository(BaseRepository):
                     skip_count, last_sale_after_order,
                     last_checked_at, is_completed, created_at,
                     base_name, product_codes, selected_code)
-                   VALUES (?,?,?,?, ?,?,?, ?,0, ?,?, 0,0, ?,0,?, ?,?,?)
+                   VALUES (?,?,?,?, ?,?,?, ?,?, ?,?, 0,0, ?,0,?, ?,?,?)
                    ON CONFLICT(store_id, week_label, base_name)
                    DO UPDATE SET
                     bgf_order_count = excluded.bgf_order_count,
+                    our_order_count = CASE
+                        WHEN our_order_count = 0
+                        THEN excluded.our_order_count
+                        ELSE our_order_count
+                    END,
                     product_name = COALESCE(excluded.product_name, product_name),
                     product_code = COALESCE(excluded.product_code, product_code),
                     sub_category = COALESCE(excluded.sub_category, sub_category),
@@ -62,7 +72,7 @@ class NewProduct3DayTrackingRepository(BaseRepository):
                 (
                     store_id, week_label, week_start, week_end,
                     product_code, product_name, sub_category,
-                    bgf_order_count,
+                    bgf_order_count, bgf_order_count,
                     order_interval_days, next_order_date,
                     self._now(), self._now(),
                     base_name, product_codes, "",
@@ -283,5 +293,37 @@ class NewProduct3DayTrackingRepository(BaseRepository):
                 (self._now(), store_id, week_label, base_name),
             )
             conn.commit()
+        finally:
+            conn.close()
+
+    def close_expired_weeks(
+        self,
+        store_id: str,
+        today: str,
+    ) -> int:
+        """종료된 주차의 미완료 항목을 일괄 완료 처리
+
+        week_end < today인 항목 중 is_completed=0인 것을 1로 변경.
+        Returns:
+            완료 처리된 행 수
+        """
+        conn = self._get_conn()
+        try:
+            cursor = conn.execute(
+                """UPDATE new_product_3day_tracking
+                   SET is_completed = 1, last_checked_at = ?
+                   WHERE store_id = ?
+                     AND week_end < ?
+                     AND is_completed = 0""",
+                (self._now(), store_id, today),
+            )
+            conn.commit()
+            closed = cursor.rowcount
+            if closed > 0:
+                logger.info(
+                    "[NP3Day] 종료 주차 %d건 완료 처리 (store=%s, today=%s)",
+                    closed, store_id, today,
+                )
+            return closed
         finally:
             conn.close()

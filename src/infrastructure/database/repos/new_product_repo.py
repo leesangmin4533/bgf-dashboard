@@ -115,13 +115,14 @@ class NewProductStatusRepository(BaseRepository):
                 conn.execute(
                     """INSERT OR REPLACE INTO new_product_items
                        (store_id, month_ym, week_no, item_type, item_cd,
-                        item_nm, small_nm, ord_pss_nm, week_cont, ds_yn,
+                        item_nm, small_nm, mid_cd, ord_pss_nm, week_cont, ds_yn,
                         is_ordered, collected_at)
-                       VALUES (?,?,?,?,?, ?,?,?,?,?, 0,?)""",
+                       VALUES (?,?,?,?,?, ?,?,?,?,?,?, 0,?)""",
                     (
                         store_id, month_ym, week_no, item_type,
                         item.get("item_cd", ""),
                         item.get("item_nm"), item.get("small_nm"),
+                        item.get("mid_cd", ""),
                         item.get("ord_pss_nm"), item.get("week_cont"),
                         item.get("ds_yn"), self._now(),
                     ),
@@ -223,6 +224,57 @@ class NewProductStatusRepository(BaseRepository):
                 (self._now(), store_id, month_ym, item_cd, item_type),
             )
             conn.commit()
+        finally:
+            conn.close()
+
+    # ─── 3day_tracking 동기화용 조회 ───
+
+    def get_mids_for_tracking(
+        self,
+        store_id: str,
+        month_ym: str,
+        mid_cds: list = None,
+    ) -> List[Dict]:
+        """3day_tracking 등록용 mids 항목 조회
+
+        new_product_items(mids) + new_product_status(sta_dd, end_dd) JOIN
+        → 주차별 미달성 상품 + 기간 정보 반환
+
+        Args:
+            store_id: 매장 ID
+            month_ym: 월 (YYYYMM)
+            mid_cds: 대상 중분류 코드 목록 (None이면 기본값)
+
+        Returns:
+            [{"item_cd", "item_nm", "small_nm", "mid_cd", "ds_yn",
+              "week_no", "sta_dd", "end_dd"}, ...]
+        """
+        from src.settings.constants import NEW_PRODUCT_FOOD_MID_CDS
+
+        if mid_cds is None:
+            mid_cds = NEW_PRODUCT_FOOD_MID_CDS
+
+        conn = self._get_conn()
+        try:
+            cursor = conn.cursor()
+            placeholders = ",".join(["?"] * len(mid_cds))
+            cursor.execute(
+                f"""SELECT ni.item_cd, ni.item_nm, ni.small_nm,
+                          ni.mid_cd, ni.ds_yn, ni.week_no,
+                          ns.sta_dd, ns.end_dd
+                   FROM new_product_items ni
+                   JOIN new_product_status ns
+                     ON ni.store_id = ns.store_id
+                    AND ni.month_ym = ns.month_ym
+                    AND ni.week_no = ns.week_no
+                   WHERE ni.store_id = ?
+                     AND ni.month_ym = ?
+                     AND ni.item_type = 'mids'
+                     AND ni.mid_cd IN ({placeholders})
+                   ORDER BY ni.week_no, ni.item_cd""",
+                (store_id, month_ym, *mid_cds),
+            )
+            return [dict(row) for row in cursor.fetchall()]
         finally:
             conn.close()
 

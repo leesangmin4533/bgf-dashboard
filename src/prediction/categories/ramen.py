@@ -53,9 +53,10 @@ RAMEN_DYNAMIC_SAFETY_CONFIG = {
 }
 
 
-def _get_db_path() -> str:
+def _get_db_path(store_id: str = None) -> str:
     """DB 경로 반환"""
-    return str(Path(__file__).parent.parent.parent.parent / "data" / "bgf_sales.db")
+    from src.infrastructure.database.connection import resolve_db_path
+    return resolve_db_path(store_id=store_id)
 
 
 @dataclass
@@ -126,7 +127,7 @@ def analyze_ramen_pattern(
     """
     config = RAMEN_DYNAMIC_SAFETY_CONFIG
     if db_path is None:
-        db_path = _get_db_path()
+        db_path = _get_db_path(store_id)
 
     analysis_days = config["analysis_days"]
     min_data_days = config["min_data_days"]
@@ -195,13 +196,8 @@ def analyze_ramen_pattern(
     skip_order = False
     skip_reason = ""
 
-    # 비발주일 스킵 (최우선)
-    if not is_today_orderable:
-        skip_order = True
-        skip_reason = f"비발주일 (orderable_day={effective_orderable_day})"
-
     # 상한선 초과 스킵
-    elif config["max_stock_enabled"] and max_stock > 0:
+    if config["max_stock_enabled"] and max_stock > 0:
         total_available = current_stock + pending_qty
         if total_available >= max_stock:
             is_over_max_stock = True

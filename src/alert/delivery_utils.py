@@ -26,20 +26,34 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from src.alert.config import ALERT_CATEGORIES, DELIVERY_CONFIG
 
 
-def get_delivery_type(item_nm: str) -> Optional[str]:
+def get_delivery_type(
+    item_nm: str, item_cd: str = None, store_id: str = None
+) -> Optional[str]:
     """
-    상품명에서 배송 차수 판별
+    배송 차수 판별
+
+    item_cd가 주어지면 order_tracking에서 먼저 조회하고,
+    없으면 상품명 끝자리 로직으로 폴백.
 
     Args:
         item_nm: 상품명 (예: "도)압도적두툼돈까스정식1")
+        item_cd: 상품코드 (선택, order_tracking 조회용)
+        store_id: 매장코드 (선택, 미지정 시 전체 활성 매장 순회)
 
     Returns:
         "1차", "2차", or None
     """
+    # 1순위: order_tracking에서 delivery_type 조회
+    if item_cd:
+        ot_type = _lookup_delivery_type_from_order_tracking(item_cd, store_id)
+        if ot_type:
+            return ot_type
+
+    # 2순위(기존 로직): 상품명 끝자리 확인
+    # [원본 보존] 기존에는 이 로직만 사용했음
     if not item_nm:
         return None
 
-    # 상품명 끝자리 확인
     last_char = item_nm.strip()[-1]
 
     if last_char == "1":
@@ -48,6 +62,81 @@ def get_delivery_type(item_nm: str) -> Optional[str]:
         return "2차"
 
     return None
+
+
+def _lookup_delivery_type_from_order_tracking(
+    item_cd: str, store_id: str = None
+) -> Optional[str]:
+    """
+    order_tracking 테이블에서 delivery_type 조회
+
+    가장 최근 remaining_qty > 0인 레코드 우선,
+    없으면 가장 최근 레코드에서 조회.
+    store_id 미지정 시 전체 활성 매장을 순회하여 첫 매칭 반환.
+
+    Args:
+        item_cd: 상품코드
+        store_id: 매장코드 (선택)
+
+    Returns:
+        "1차", "2차", or None
+    """
+    try:
+        from src.infrastructure.database.connection import DBRouter
+        from src.settings.store_context import StoreContext
+
+        if store_id:
+            store_ids = [store_id]
+        else:
+            store_ids = [ctx.store_id for ctx in StoreContext.get_all_active()]
+
+        for sid in store_ids:
+            result = _query_delivery_type_from_store(item_cd, sid)
+            if result:
+                return result
+
+        return None
+    except Exception:
+        return None
+
+
+def _query_delivery_type_from_store(item_cd: str, store_id: str) -> Optional[str]:
+    """단일 매장의 order_tracking에서 delivery_type 조회"""
+    try:
+        from src.infrastructure.database.connection import DBRouter
+
+        conn = DBRouter.get_store_connection(store_id)
+        try:
+            cursor = conn.cursor()
+            # 활성 재고가 있는 가장 최근 레코드 우선
+            row = cursor.execute(
+                """
+                SELECT delivery_type FROM order_tracking
+                WHERE item_cd = ? AND delivery_type IN ('1차', '2차')
+                  AND remaining_qty > 0
+                ORDER BY order_date DESC LIMIT 1
+                """,
+                (item_cd,),
+            ).fetchone()
+
+            if row:
+                return row[0]
+
+            # 활성 재고 없으면 최근 레코드에서 조회
+            row = cursor.execute(
+                """
+                SELECT delivery_type FROM order_tracking
+                WHERE item_cd = ? AND delivery_type IN ('1차', '2차')
+                ORDER BY order_date DESC LIMIT 1
+                """,
+                (item_cd,),
+            ).fetchone()
+
+            return row[0] if row else None
+        finally:
+            conn.close()
+    except Exception:
+        return None
 
 
 def get_expiry_hour_for_delivery(delivery_type: str) -> int:

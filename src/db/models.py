@@ -406,12 +406,13 @@ SCHEMA_MIGRATIONS = {
         receiving_date TEXT NOT NULL,           -- 입고일 (YYYY-MM-DD)
         receiving_id INTEGER,                   -- receiving_history FK (선택)
         expiration_days INTEGER NOT NULL,       -- 유통기한 (일)
-        expiry_date TEXT NOT NULL,              -- 폐기 예정일 (입고일 + 유통기한, YYYY-MM-DD)
+        expiry_date TEXT NOT NULL,              -- 폐기 예정일 (입고일 + 유통기한)
         initial_qty INTEGER NOT NULL,           -- 입고 수량
         remaining_qty INTEGER NOT NULL,         -- 잔여 수량 (FIFO 차감)
         status TEXT DEFAULT 'active',           -- active(추적중) / consumed(전량소진) / expired(폐기확정)
         created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL
+        updated_at TEXT NOT NULL,
+        delivery_type TEXT DEFAULT NULL          -- '1차'/'2차'/NULL (배송차수)
     );
 
     CREATE INDEX IF NOT EXISTS idx_inv_batch_item ON inventory_batches(item_cd);
@@ -1763,6 +1764,44 @@ CREATE INDEX IF NOT EXISTS idx_np3day_store_week ON new_product_3day_tracking(st
 CREATE INDEX IF NOT EXISTS idx_np3day_product ON new_product_3day_tracking(product_code);
 CREATE INDEX IF NOT EXISTS idx_np3day_completed ON new_product_3day_tracking(is_completed);
 CREATE INDEX IF NOT EXISTS idx_np3day_base_name ON new_product_3day_tracking(base_name);
+    """,
+
+    61: """
+-- v61: inventory_batches에 delivery_type 컬럼 추가 (1차/2차 배송차수 구분)
+ALTER TABLE inventory_batches ADD COLUMN delivery_type TEXT DEFAULT NULL;
+    """,
+    62: """
+-- v62: new_product_items에 mid_cd 컬럼 추가 (카테고리 필터용)
+ALTER TABLE new_product_items ADD COLUMN mid_cd TEXT DEFAULT '';
+    """,
+
+    63: """
+-- v63: user_order_tendency order_diffs 기반 재구성
+DROP TABLE IF EXISTS user_order_tendency;
+CREATE TABLE IF NOT EXISTS user_order_tendency (
+    store_id TEXT NOT NULL,
+    mid_cd TEXT NOT NULL,
+    period_days INTEGER DEFAULT 90,
+    removed_count INTEGER DEFAULT 0,
+    added_count INTEGER DEFAULT 0,
+    qty_changed_count INTEGER DEFAULT 0,
+    qty_up_count INTEGER DEFAULT 0,
+    qty_down_count INTEGER DEFAULT 0,
+    remove_rate REAL,
+    add_rate REAL,
+    qty_up_rate REAL,
+    tendency TEXT,
+    zero_stock_rate REAL,
+    updated_at TEXT,
+    PRIMARY KEY (store_id, mid_cd)
+);
+CREATE INDEX IF NOT EXISTS idx_uot_tendency ON user_order_tendency(tendency);
+    """,
+
+    64: """
+-- v64: 발주 확정 pending 컬럼
+ALTER TABLE order_tracking ADD COLUMN pending_confirmed INTEGER DEFAULT 0;
+ALTER TABLE order_tracking ADD COLUMN pending_confirmed_at TEXT;
     """,
 }
 

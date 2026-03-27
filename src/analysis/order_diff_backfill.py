@@ -342,7 +342,7 @@ class OrderDiffBackfiller:
             delivery_type = tr.get("delivery_type", "")
             if not delivery_type:
                 if mid_cd in ALERT_CATEGORIES:
-                    delivery_type = get_delivery_type(item_nm) or "1차"
+                    delivery_type = get_delivery_type(item_nm, item_cd=ic) or "1차"
                 else:
                     delivery_type = "일반"
 

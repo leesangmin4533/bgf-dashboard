@@ -280,11 +280,11 @@ class TestHolidayCoefficient:
 class TestMLFeatureExtension:
     """ML Feature 30개 (기존 27 + 연휴 맥락 3)"""
 
-    def test_feature_names_count_36(self):
-        """FEATURE_NAMES가 36개 (31+입고패턴5)"""
+    def test_feature_names_count_35(self):
+        """FEATURE_NAMES가 35개 (food-ml-dual-model: +4)"""
         from src.prediction.ml.feature_builder import MLFeatureBuilder
 
-        assert len(MLFeatureBuilder.FEATURE_NAMES) == 36
+        assert len(MLFeatureBuilder.FEATURE_NAMES) == 45
 
     def test_new_features_in_names(self):
         """새 연휴 feature가 FEATURE_NAMES에 포함"""
@@ -295,8 +295,8 @@ class TestMLFeatureExtension:
         assert "is_pre_holiday" in names
         assert "is_post_holiday" in names
 
-    def test_build_features_returns_36(self):
-        """build_features()가 36개 feature 배열 반환 (31+입고패턴5)"""
+    def test_build_features_returns_35(self):
+        """build_features()가 35개 feature 배열 반환 (food-ml-dual-model: +4)"""
         from src.prediction.ml.feature_builder import MLFeatureBuilder
 
         daily_sales = [
@@ -313,7 +313,7 @@ class TestMLFeatureExtension:
             is_post_holiday=False,
         )
         assert features is not None
-        assert features.shape == (36,)
+        assert features.shape == (45,)
 
     def test_holiday_period_days_normalized(self):
         """holiday_period_days가 /7.0으로 정규화"""

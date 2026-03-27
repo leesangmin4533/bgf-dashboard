@@ -1,0 +1,28 @@
+﻿category,month,period,metric_1,metric_2,metric_3,metric_4,detail
+disuse_monthly,2025-03,before,sale=16106,disuse=92,rate=0.571%,daily_avg=3.29,"품목수=60, 수집일수=28"
+disuse_monthly,2025-04,before,sale=17555,disuse=101,rate=0.575%,daily_avg=3.37,"품목수=68, 수집일수=30"
+disuse_monthly,2025-05,before,sale=19677,disuse=109,rate=0.554%,daily_avg=3.52,"품목수=81, 수집일수=31"
+disuse_monthly,2025-06,before,sale=19029,disuse=102,rate=0.536%,daily_avg=3.4,"품목수=70, 수집일수=30"
+disuse_monthly,2025-07,before,sale=18921,disuse=111,rate=0.587%,daily_avg=3.58,"품목수=81, 수집일수=31"
+disuse_monthly,2025-08,before,sale=19393,disuse=71,rate=0.366%,daily_avg=2.29,"품목수=55, 수집일수=31"
+disuse_monthly,2025-09,before,sale=17443,disuse=85,rate=0.487%,daily_avg=2.83,"품목수=65, 수집일수=30"
+disuse_monthly,2025-10,before,sale=16156,disuse=62,rate=0.384%,daily_avg=2.0,"품목수=49, 수집일수=31"
+disuse_monthly,2025-11,before,sale=15379,disuse=59,rate=0.384%,daily_avg=1.97,"품목수=43, 수집일수=30"
+disuse_monthly,2025-12,before,sale=15104,disuse=68,rate=0.45%,daily_avg=2.19,"품목수=53, 수집일수=31"
+disuse_monthly,2026-01,before,sale=15191,disuse=69,rate=0.454%,daily_avg=2.23,"품목수=50, 수집일수=31"
+disuse_monthly,2026-02,before,sale=14218,disuse=37,rate=0.26%,daily_avg=1.32,"품목수=32, 수집일수=28"
+disuse_monthly,2026-03,after,sale=4181,disuse=21,rate=0.502%,daily_avg=3.0,"품목수=16, 수집일수=7"
+waste_slips,2026-03,after,wonga=164064,maega=270600,slips=30,items=78,일평균원가=23438.0
+prediction_accuracy,2026-03,after,accuracy=35.6%,over=1,under=6,accurate=1,"total=5836, actual=4335, coverage=74.3%"
+top_disuse_before,,before,rank=1,disuse=24,sale=48,,PBICK미네랄워터P1L (8801056075385) mid:041
+top_disuse_before,,before,rank=2,disuse=19,sale=107,,del)빅컵얼음230g (8809197840107) mid:048
+top_disuse_before,,before,rank=3,disuse=15,sale=15,,연세)우유생크림빵 (8801753108478) mid:014
+top_disuse_before,,before,rank=4,disuse=13,sale=37,,HEYROO미네랄워터P500ml (8801056169817) mid:041
+top_disuse_before,,before,rank=5,disuse=12,sale=20,,롯데)핫식스캔250ml (8801056038861) mid:040
+top_disuse_before,,before,rank=6,disuse=10,sale=10,,주)3XL리챔청양마요삼각1 (8800271902315) mid:002
+top_disuse_before,,before,rank=7,disuse=10,sale=36,,del)컵얼음180g (8809197840091) mid:048
+top_disuse_before,,before,rank=8,disuse=9,sale=8,,서울)흰우유1L (8801115114154) mid:047
+top_disuse_before,,before,rank=9,disuse=8,sale=8,,김)압도적제육김밥1 (8800271900144) mid:003
+top_disuse_before,,before,rank=10,disuse=8,sale=8,,김)집밥장조림김밥1 (8800271902711) mid:003
+top_disuse_after,,after,rank=1,disuse=1,sale=6,,하림)양푼김치찌개컵 (8809778499298) mid:032
+top_disuse_after,,after,rank=2,disuse=1,sale=1,,샌)대만식대파크림샌드1 (8809895793088) mid:004
