@@ -415,7 +415,60 @@ from src.order.auto_order import AutoOrderSystem
 | 900 | 소모품 | DefaultStrategy | 기본 예측 |
 | 기타 | 미분류 | DefaultStrategy | 기본 예측 |
 
-> **참고**: `food_daily_cap`은 독립 카테고리가 아닌, food 카테고리에 적용되는 총량 상한 로직 (cap=요일평균+3)
+> **참고**: `food_daily_cap`은 독립 카테고리가 아닌, food 카테고리에 적용되는 총량 상한 로직 (cap=요일평균+20%버퍼, 수량합 기반)
+
+---
+
+## Git 커밋 규칙 (자동 적용)
+
+> **핵심**: 코드를 수정하거나 변경할 때 **반드시 git 커밋 + push**를 수행한다. 사용자가 요청하지 않아도 자동으로 진행한다.
+
+### 커밋 타이밍
+- **코드 수정/변경 완료 시** → 즉시 커밋
+- **버그 수정 시** → 수정 완료 후 즉시 커밋
+- **새 기능 추가 시** → 기능 완성 후 즉시 커밋
+- **설정 변경 시** → 변경 후 즉시 커밋
+- 단순 탐색/조회/분석만 한 경우 → 커밋 불필요
+
+### 커밋 메시지 형식
+```
+{type}({scope}): {한줄 요약}
+
+[문제] 무엇이 문제였는지 (버그 수정 시)
+[수정] 어떻게 수정했는지
+[영향] 영향받는 파일/기능
+
+Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
+```
+
+### 타입 (type)
+| 타입 | 용도 | 예시 |
+|------|------|------|
+| `fix` | 버그 수정 | `fix(order): ordYn 오탐 수정` |
+| `feat` | 새 기능 | `feat(prediction): 계절계수 7그룹 추가` |
+| `refactor` | 구조 변경 (동작 동일) | `refactor(db): Repository 19개 분할` |
+| `docs` | 문서 변경 | `docs: CLAUDE.md 커밋 규칙 추가` |
+| `chore` | 설정/빌드 변경 | `chore: .gitignore 업데이트` |
+
+### 스코프 (scope)
+| 스코프 | 대상 |
+|--------|------|
+| `order` | 발주 관련 (order_executor, auto_order, direct_api_saver) |
+| `prediction` | 예측 관련 (improved_predictor, strategies) |
+| `collector` | 수집기 (sales, receiving, waste, order_prep) |
+| `db` | 데이터베이스 (schema, repos, migration) |
+| `alert` | 알림 (kakao, expiry) |
+| `dashboard` | 웹 대시보드 |
+| `scheduler` | 스케줄러 (daily_job, run_scheduler) |
+
+### push 규칙
+- 커밋 후 `git push origin main` 자동 실행
+- push 실패 시 경고 로그 출력 (네트워크 문제 등)
+
+### GitHub Issue 활용
+- **운영 장애 발생 시** → Issue 생성 (`gh issue create`)
+- **수정 완료 시** → Issue 닫기 (`gh issue close`)
+- 커밋 메시지에 `fixes #이슈번호` 포함하면 자동 닫힘
 
 ---
 
@@ -483,6 +536,69 @@ from src.order.auto_order import AutoOrderSystem
 
 ---
 
+## 발주 함수 수정 시 필수 체크리스트
+
+> **대상**: `get_recommendations()`, `_get_supplement_candidates()`, `_get_candidates()`, `apply_food_daily_cap()`, `supplement_orders()` 등 발주량에 직접 영향을 주는 모든 함수
+
+### 수정 전
+1. 이 함수의 **입력/출력 단위** 확인 (수량 qty vs 품목수 count)
+2. 이 함수가 파이프라인 **몇 번째 단계**에서 실행되는지 확인 (Floor→CUT→Cap 순서)
+3. 이 함수 **이후에 실행되는 단계**가 현재 수정의 의도를 덮어쓸 수 있는지 확인
+
+### 수정 시
+4. `is_available = 0` 상품이 후보에 포함되지 않는지 확인
+5. `is_cut_item = 1` 상품이 후보에 포함되지 않는지 확인
+6. LEFT JOIN 시 NULL 처리: `COALESCE(ri.is_available, 1)` 패턴 사용
+7. site_order_counts와의 단위 일치 확인 (COUNT vs SUM)
+
+### 수정 후
+8. 관련 테스트 전체 실행 (`pytest tests/ -k "관련키워드"`)
+9. 파이프라인 16단계 중 영향받는 단계 목록 기록
+10. CLAUDE.md 변경 이력 테이블 + changelog.md 업데이트
+
+### 변경 이력 (발주 파이프라인)
+
+| 날짜 | 수정 내용 | 영향 단계 |
+|------|----------|----------|
+| 2026-03-26 | auto_order.py: execute()에서 미입고조정+수동차감 후 apply_food_daily_cap() 재적용 — order_adjuster의 safety_stock 재계산으로 qty 증가 시 Cap 무력화 방지 | execute() Cap 재적용 |
+| 2026-03-22 | food_daily_cap.py: Cap 비교 count→sum(qty) 전환 + `_trim_qty_to_cap()` 2차 절삭 추가 — 행사 부스트 과잉발주 방지 | Step 14 (Cap) |
+| 2026-03-13 | category_demand_forecaster.py: is_available 필터 추가 (LEFT JOIN ri + COALESCE) | Step 11 (Floor mid) |
+| 2026-03-13 | large_category_forecaster.py: is_available 필터 추가 (LEFT JOIN ri + COALESCE) | Step 12 (Floor large) |
+| 2026-03-13 | cut_replacement.py: is_available 필터 추가 (기존 JOIN에 COALESCE 조건) | Step 13 (CUT 보충) |
+| 2026-03-13 | Floor→CUT→Cap 실행순서 재배치 | Step 11-14 |
+| 2026-03-13 | site_order_counts NOT IN 제거 (수동발주 포함) | Step 10 |
+| 2026-03-13 | effective_buffer: 고정 waste_buffer → 20%×category_total | Step 14 (Cap) |
+| 2026-03-13 | site_order_counts: COUNT(*)→SUM(order_qty) 단위 통일 (auto_order.py) | Step 10 |
+| 2026-03-13 | 빵(012) Floor(mid) target_mid_cds에 추가 (prediction_config+forecaster) | Step 11 (Floor mid) |
+| 2026-03-13 | Floor 추가 품목에 data_days 필드 전달 (appear_days→data_days, Cap 분류 정확도) | Step 11-12 (Floor mid/large) |
+| 2026-03-13 | Cap 차원 설계 문서화: ~~qty 기반 total_cap vs count 비교는 의도적 근사~~ → 2026-03-22 sum(qty) 기반으로 수정 완료 | Step 14 (Cap) |
+| 2026-03-13 | waste_buffer deprecated 표시 (config+calibrator+API), 20% 동적 버퍼로 대체 완료 | Step 14 (Cap) |
+| 2026-03-13 | Floor/CUT 항목에 order_unit_qty 필드 + 배수정렬 적용 (3파일, ceil(qty/unit)*unit) | Step 11-13 (Floor mid/large, CUT) |
+| 2026-03-13 | Floor 후보 SQL에 is_cut_item 필터 추가 (COALESCE(ri.is_cut_item, 0) = 0) | Step 11-12 (Floor mid/large) |
+| 2026-03-13 | CUT target_mid_cds에 빵(012) 추가 | Step 13 (CUT 보충) |
+| 2026-03-13 | Branch A/B 재고 체크 추가 (행사 종료/시작 임박 시 stock≥demand이면 스킵, promo_avg=0 가드) | Step 7 (Promo 조정) |
+| 2026-03-13 | improved_predictor.py: surplus 취소에 days_cover 조건 추가 (SURPLUS_MIN_DAYS_COVER=1.0, 3곳) — 대형 배수(16,20,30) 상품 발주 누락 방지 | Step 6 (Round) |
+| 2026-03-14 | improved_predictor.py: ROP에 data_days≥7 조건 추가 — slow 패턴 데이터부족 상품 과잉발주 방지 (신제품 예외) | Step 5 (ROP) |
+| 2026-03-14 | improved_predictor.py: _round_to_order_unit() 대형배수(≥10)+데이터부족(<7일) 가드 추가 — 1배수 제한 | Step 6 (Round) |
+| 2026-03-14 | order_executor.py: _refetch_order_unit_qty qty<=5 조건 제거 + common.db 직접 조회 — 박스단위 과발주 방지 | 발주 실행 직전 |
+| 2026-03-14 | order_executor.py: AUDIT 로그 PYUN_QTY 계산 버그 수정 — _calc_multiplier와 동일 계산 (L1 Direct API + L2 Batch Grid 2개소) | 발주 감사 로그 |
+| 2026-03-14 | auto_order.py: SmartOverride _unavailable_items 필터 추가 — is_available=0 상품 재주입 방지 | Smart inject (L955) |
+| 2026-03-14 | auto_order.py: SmartOverride order_unit_qty 필드 추가 — Floor/Cap 배수 정렬 오류 방지 | Smart inject (L955) |
+| 2026-03-14 | auto_order.py: SmartOverride _exclusion_records 필터 추가 — 영구제외/발주정지 상품 재추가 방지 | Smart inject (L980) |
+| 2026-03-14 | auto_order.py: SmartOverride predict_batch 실패 폴백 — 전체 실패 시 qty=0 안전 폴백 | Smart inject (L980) |
+| 2026-03-14 | auto_order.py: SmartOverride 로그 명확화 — OVERRIDE모드 접두어+필터별 카운트 | Smart inject (L980) |
+| 2026-03-14 | order_filter.py: 수동발주 차감 smart_override 태그 추가 — 스마트→수동전환 상품 식별 | 수동발주 차감 (L1359) |
+| 2026-03-14 | auto_order.py: _finalize_order_unit_qty 신규 (배치 조회, superset) — order_executor._refetch 대체 제거, 22개 테스트 | 발주 실행 직전 |
+| 2026-03-14 | auto_order.py: SmartOverride qty=0 취소 주입 — cancel_smart=True로 BGF 전송, 스마트→단품별(채택) 전환 | Smart inject (L572) |
+| 2026-03-14 | direct_api_saver.py: _calc_multiplier cancel_smart qty=0 허용 — PYUN_QTY=0 그대로 전송 | Direct API (L1692) |
+| 2026-03-14 | batch_grid_input.py: cancel_smart qty=0 multiplier=0 허용 — Batch Grid 경로 | Batch Grid (L190) |
+| 2026-03-14 | order_executor.py: cancel_smart qty=0 그룹핑+Selenium 통과 — group_orders_by_date+L3 폴백 | 발주 실행 (L1982, L2216) |
+| 2026-03-14 | order_executor.py: Selenium multiplier=0 허용 — target_qty==0이면 max(1,...) 우회하여 PYUN_QTY=0 전송 | 발주 실행 (L1071) |
+| 2026-03-14 | order_filter.py: deduct_manual_food_orders cancel_smart 바이패스 — 수동발주 차감에서 cancel_smart 항목 보호 | 수동발주 차감 (L231) |
+| 2026-03-14 | food_daily_cap.py: Cap 품목수에서 cancel_smart 제외 — cancel_items 분리 후 항상 결과에 포함 | Step 14 (Cap) |
+
+---
+
 ## 신상품 도입 현황 모듈 [부분 활성]
 
 > **활성**: `NEW_PRODUCT_MODULE_ENABLED = True` — 수집 + 3일발주 후속 관리
@@ -547,6 +663,17 @@ NEW_PRODUCT_DS_OVERSTOCK_RATIO = 1.5       # 과발주 방지 비율
 
 | 날짜 | 주요 변경 |
 |------|---------|
+| 2026-03-27 | **batch-grid-validation: L2/L3 발주 불가 상태 검증 추가** — ordYn/ordClose 체크를 Batch Grid(L2)와 Selenium(L3)에도 적용, `_check_order_availability()` 공유 메서드 신규, 거짓 성공 리포트 방지 |
+| 2026-03-26 | **food-cap-pending-deduct: 샌드위치/햄버거 Cap 입고예정 차감** — 004/005 한정 order_tracking pending을 adjusted_cap에서 차감, 유통기한 2일+ 카테고리 과잉발주 방지 |
+| 2026-03-26 | **order-verification: 발주 검증 강화 + 발주현황 기반 pending 보정** — L1: missing>50%+빈그리드 실패, L2: ordYn 빈값 차단, L3: Phase 1.96 BGF 발주현황 재수집→pending_confirmed 마킹+무효화, adjuster pending 보정, 5파일 수정 |
+| 2026-03-26 | **food-cap-reapply: 미입고 조정 후 Cap 재적용** — order_adjuster의 safety_stock 재계산으로 qty 3~4배 증가 시 Cap 무력화 방지, execute()에서 미입고+수동차감 후 apply_food_daily_cap() 재적용, 마평로드점 주먹밥 25→14개 제한 |
+| 2026-03-22 | **food-cap-qty-fix: Cap 수량 기반 전환** — count→sum(qty) 비교 + `_trim_qty_to_cap()` 2차 절삭, 행사 부스트 과잉발주 방지 (46704 도시락 14→≤5개), Match Rate 98%, 70개 테스트 |
+| 2026-03-21 | **sparse-fix-v2: DemandClassifier 초저회전 오분류 방지** — SPARSE_FIX_MIN_WINDOW_RATIO=0.05 (60일 중 최소 3일 판매) 가드 추가, window_ratio≥5% AND data_ratio≥40% 이중 조건, 37개 테스트 통과, Match Rate 100% |
+| 2026-03-20 | **DemandClassifier 수집 갭 오분류 수정** — data_ratio(sell/total)>=40%이면 SLOW→FREQUENT 보정, base_predictor WMA 폴백 안전장치, 28개 테스트 통과 |
+| 2026-03-14 | **SmartOverride qty=0 취소 로직** — cancel_smart 플래그로 BGF PYUN_QTY=0 전송, 스마트→단품별(채택) 전환 (라이브 검증 완료), 4파일 수정, 36개 테스트 |
+| 2026-03-14 | **SmartOverride 버그 4건 추가 수정** — exclusion_records 필터(C-3), predict_batch 폴백(C-4), 로그 명확화(B-1), 수동차감 스마트 태그(D-1), 27개 테스트 |
+| 2026-03-14 | **SmartOverride 버그 2건 수정** — _unavailable_items 필터 추가(is_available=0 재주입 방지), order_unit_qty 필드 추가(Floor/Cap 배수 정렬 오류 방지) |
+| 2026-03-14 | **order_unit_qty 최종 보정 통합** — auto_order._finalize_order_unit_qty 신규(배치 조회, 전품목 비교), order_executor._refetch 제거, 22개 테스트 |
 | 2026-02-17 | **신상품 3일발주 후속 관리 활성화** — MODULE_ENABLED/AUTO_INTRO_ENABLED 스위치 분리, `_process_3day_follow_orders()` 별도 메서드(mids 후속 발주), `_check_item_sold_after_receiving()` 입고→판매 확인, 수집 활성화 |
 | 2026-02-15 | **신상품 도입 현황 모듈 완성** — 10단계 구현, 수집기(ActionChains 팝업), DB v28(3테이블), 도메인 로직(점수/우선순위/3일발주/교체), 자동발주 통합, 웹 API, 1128 테스트, CLAUDE.md 문서화 |
 | 2026-02-14 | **문서-코드 정합성 정리** — dead code 제거(clear_old 3건, __main__ 560줄), prediction_config deprecated 모순 해소, 스킬문서 3건 업데이트(DB v27, 웹라우트, Feature블렌딩/계절계수/ML25), CLAUDE.md 플로우 보강 |
