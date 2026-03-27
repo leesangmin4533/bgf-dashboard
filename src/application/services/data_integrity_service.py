@@ -181,11 +181,13 @@ class DataIntegrityService:
         lines = ["[데이터 무결성 검증]", ""]
         lines.append(f"매장 {store_id}:")
         for check in results:
-            if check["status"] in ("WARN", "FAIL"):
-                marker = "!!" if check["status"] == "FAIL" else "! "
+            if check["status"] in ("WARN", "FAIL", "RESTORED"):
+                marker = "!!" if check["status"] == "FAIL" else ("OK" if check["status"] == "RESTORED" else "! ")
+                detail = f"{check['count']}건"
+                if check.get("restored_count"):
+                    detail += f" ({check['restored_count']}건 자동복원)"
                 lines.append(
-                    f"  {marker} {check['check_name']}: "
-                    f"{check['count']}건"
+                    f"  {marker} {check['check_name']}: {detail}"
                 )
 
         lines.append("")

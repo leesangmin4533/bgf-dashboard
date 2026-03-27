@@ -137,11 +137,21 @@ class RealtimeInventoryRepository(BaseRepository):
                 pending_qty = self._to_positive_int(item.get("pending_qty", 0))
                 order_unit_qty = max(1, self._to_int(item.get("order_unit_qty", 1)))
 
+                is_available = item.get("is_available", True)
+                is_available_int = 1 if is_available else 0
+
+                # unavail_reason: is_available=0일 때 사유 기록, =1일 때 NULL 클리어
+                if is_available:
+                    unavail_reason = None
+                else:
+                    unavail_reason = item.get("unavail_reason", "bulk_import")
+
                 cursor.execute(
                     """
                     INSERT INTO realtime_inventory
-                    (store_id, item_cd, item_nm, stock_qty, pending_qty, order_unit_qty, is_available, is_cut_item, queried_at, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    (store_id, item_cd, item_nm, stock_qty, pending_qty, order_unit_qty,
+                     is_available, is_cut_item, unavail_reason, queried_at, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(store_id, item_cd) DO UPDATE SET
                         item_nm = excluded.item_nm,
                         stock_qty = excluded.stock_qty,
@@ -151,7 +161,7 @@ class RealtimeInventoryRepository(BaseRepository):
                         is_cut_item = excluded.is_cut_item,
                         queried_at = excluded.queried_at,
                         query_fail_count = 0,
-                        unavail_reason = NULL
+                        unavail_reason = excluded.unavail_reason
                     """,
                     (
                         store_id,
@@ -160,8 +170,9 @@ class RealtimeInventoryRepository(BaseRepository):
                         stock_qty,
                         pending_qty,
                         order_unit_qty,
-                        1 if item.get("is_available", True) else 0,
+                        is_available_int,
                         1 if item.get("is_cut_item", False) else 0,
+                        unavail_reason,
                         now,
                         now
                     )

@@ -316,14 +316,21 @@ class IntegrityCheckRepository(BaseRepository):
             conn.close()
 
     def check_unavailable_with_sales(self, store_id: str) -> Dict[str, Any]:
-        """Check 6: is_available=0인데 최근 3일 판매 있는 상품 (잘못된 미취급 마킹)
+        """Check 6: is_available=0인데 최근 7일 판매 있는 상품 감지 + 자동 복원
 
         preserve_stock_if_zero 등으로 is_available=0이 된 뒤
         복구되지 않아 발주가 차단되는 상품을 감지한다.
+
+        자동 복원 조건 (안전):
+        - unavail_reason IS NULL (수동 마킹/query_fail은 건드리지 않음)
+        - is_cut_item = 0 (CUT 상품은 제외)
+        - 최근 7일 내 판매 기록 있음
         """
         conn = self._get_conn()
         try:
             cursor = conn.cursor()
+
+            # 감지: 최근 7일 판매 있는 is_available=0 상품 전체
             cursor.execute(
                 """
                 SELECT COUNT(*) as cnt
@@ -331,38 +338,73 @@ class IntegrityCheckRepository(BaseRepository):
                 WHERE ri.store_id = ? AND ri.is_available = 0
                   AND ri.item_cd IN (
                       SELECT DISTINCT item_cd FROM daily_sales
-                      WHERE store_id = ? AND sales_date >= date('now', '-3 days')
+                      WHERE store_id = ? AND sales_date >= date('now', '-7 days')
                         AND sale_qty > 0
                   )
                 """,
                 (store_id, store_id),
             )
             count = cursor.fetchone()["cnt"]
+
             details = []
             if count > 0:
                 cursor.execute(
                     """
                     SELECT ri.item_cd, ri.item_nm, ri.stock_qty, ri.is_cut_item,
                            ri.query_fail_count, ri.unavail_reason,
-                           s.sale_3d
+                           s.sale_7d
                     FROM realtime_inventory ri
                     JOIN (
-                        SELECT item_cd, SUM(sale_qty) as sale_3d
+                        SELECT item_cd, SUM(sale_qty) as sale_7d
                         FROM daily_sales
-                        WHERE store_id = ? AND sales_date >= date('now', '-3 days')
+                        WHERE store_id = ? AND sales_date >= date('now', '-7 days')
                           AND sale_qty > 0
                         GROUP BY item_cd
                     ) s ON ri.item_cd = s.item_cd
                     WHERE ri.store_id = ? AND ri.is_available = 0
-                    ORDER BY s.sale_3d DESC LIMIT 20
+                    ORDER BY s.sale_7d DESC LIMIT 20
                     """,
                     (store_id, store_id),
                 )
                 details = [dict(r) for r in cursor.fetchall()]
+
+            # 자동 복원: unavail_reason이 NULL이고 CUT 아닌 상품만 안전하게 복원
+            now = datetime.now().isoformat()
+            cursor.execute(
+                """
+                UPDATE realtime_inventory
+                SET is_available = 1,
+                    query_fail_count = 0,
+                    queried_at = ?
+                WHERE store_id = ? AND is_available = 0
+                  AND (unavail_reason IS NULL OR unavail_reason = '')
+                  AND is_cut_item = 0
+                  AND item_cd IN (
+                      SELECT DISTINCT item_cd FROM daily_sales
+                      WHERE store_id = ? AND sales_date >= date('now', '-7 days')
+                        AND sale_qty > 0
+                  )
+                """,
+                (now, store_id, store_id),
+            )
+            restored_count = cursor.rowcount
+            conn.commit()
+
+            if restored_count > 0:
+                logger.info(
+                    f"[Integrity] {store_id}/unavailable_with_sales: "
+                    f"{restored_count}건 자동 복원 (감지 {count}건 중)"
+                )
+
+            # 복원 후에도 남아있는 건 (수동마킹/CUT/query_fail로 인한 것)
+            remaining = count - restored_count
+
             return {
                 "check_name": "unavailable_with_sales",
-                "status": "WARN" if count > 0 else "OK",
+                "status": "WARN" if remaining > 0 else ("RESTORED" if restored_count > 0 else "OK"),
                 "count": count,
+                "restored_count": restored_count,
+                "remaining_count": remaining,
                 "details": details,
             }
         finally:
