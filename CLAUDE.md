@@ -311,21 +311,16 @@ results = runner.run_parallel(task_fn=my_task, task_name="daily_order")
 ### 스케줄러
 
 ```bash
-python run_scheduler.py                     # 전체 스케줄 시작 (07:00 자동)
-python run_scheduler.py --now               # 즉시 실행 (수집 + 발주)
-python run_scheduler.py --weekly-report     # 주간 리포트
-python run_scheduler.py --expiry 14         # 폐기 알림 테스트
-python run_scheduler.py --multi-store       # 다매장 병렬 실행
+python run_scheduler.py                           # 전체 스케줄 시작 (07:00 자동, 3매장 병렬)
+python run_scheduler.py --now                     # 즉시 실행 (전체 매장, 수집→발주 전체 플로우)
+python run_scheduler.py --now --store 46513       # ★ 한 점포만 즉시 실행 (07시 스케줄과 100% 동일)
+python run_scheduler.py --weekly-report           # 주간 리포트
+python run_scheduler.py --expiry 14               # 폐기 알림 테스트
 ```
 
-### 개별 실행
-
-```bash
-python scripts/run_full_flow.py --no-collect --max-items 3       # 테스트 모드
-python scripts/run_full_flow.py --run --no-collect --max-items 3  # 실제 발주
-python scripts/run_auto_order.py --preview                        # 예측만
-python scripts/run_expiry_alert.py --send                         # 폐기 알림만
-```
+> **주의**: `scripts/run_auto_order.py`는 Phase 2(발주)만 실행합니다.
+> 수집/보정/재고갱신(Phase 1)이 빠져있어 07시 스케줄과 다릅니다.
+> **테스트/재실행 시 반드시 `run_scheduler.py --now --store {점포코드}` 를 사용하세요.**
 
 ### 프로그래밍 API
 
