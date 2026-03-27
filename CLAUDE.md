@@ -79,6 +79,7 @@ BGF 리테일(CU 편의점) 다매장 자동 발주 시스템
 | [BGF 화면 매핑](.claude/skills/bgf-screen-map.md) | 프레임 ID, 데이터셋, 그리드 컬럼 인덱스 |
 | [푸드류 총량 상한](.claude/skills/food-daily-cap.md) | 요일별 cap 공식, 탐색/활용 선별, 설계 원칙, 변경 금지 항목 |
 | [웹 대시보드](.claude/skills/web-dashboard.md) | Flask 대시보드 구조, API 엔드포인트, 라우트 설정 |
+| [배송/도착 가이드](.claude/skills/bgf-delivery-guide.md) | 1차/2차 배송, 카테고리별 도착시간, 폐기 스케줄, 예측 날짜 기준 |
 
 ---
 
