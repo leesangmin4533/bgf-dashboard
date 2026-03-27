@@ -8,6 +8,7 @@
 """
 
 import calendar
+import re
 import sys
 import time
 from datetime import datetime, timedelta
@@ -36,8 +37,65 @@ from src.infrastructure.database.repos import (
 from src.prediction.promotion import PromotionManager
 from src.utils.logger import get_logger
 from src.utils.popup_manager import auto_close_popups, close_all_popups
+from src.collectors.direct_api_fetcher import DirectApiFetcher, parse_full_ssv_response, extract_item_data
 
 logger = get_logger(__name__)
+
+# 행사 유효성 검증 (발주단위명 오염 방지)
+_VALID_PROMO_RE = re.compile(r'^\d+\+\d+$')
+_NPN_SEARCH_RE = re.compile(r'(\d+\+\d+)')
+_INVALID_UNIT_NAMES = {'낱개', '묶음', 'BOX', '지함'}
+_VALID_PROMO_KEYWORDS = {'할인', '덤', '1+1', '2+1', '3+1'}
+
+
+def _normalize_promo(value: str) -> str:
+    """행사 값에서 핵심 프로모션 타입 추출
+
+    BGF MONTH_EVT/NEXT_MONTH_EVT 원시값 → 정규화:
+      "기간1+1" → "1+1", "기간2+1" → "2+1", "기간1+1 기간2+1" → "1+1"
+      "아침애 할인" → "할인", "기간할인" → "할인"
+      "증정" → "증정", "기간증정" → "증정"
+      "컵얼음" → "컵얼음" (무효)
+    """
+    if not value:
+        return ''
+    text = value.replace('\r\n', ' ').replace('\r', ' ').replace('\n', ' ').strip()
+    if not text:
+        return ''
+
+    # 1) N+N 패턴 추출 (기간1+1, 증정 2+1, 1+1 컵얼음 등)
+    m = _NPN_SEARCH_RE.search(text)
+    if m:
+        return m.group(1)
+
+    # 2) "할인"/"덤" → 단순화
+    if '할인' in text:
+        return '할인'
+    if '덤' in text:
+        return '덤'
+
+    # 3) "증정" → 단순화
+    if '증정' in text:
+        return '증정'
+
+    # 4) 그 외 원시값 반환 (validator가 거부)
+    return text
+
+
+def _is_valid_promo(value: str) -> bool:
+    """행사 유형이 유효한지 검증 (발주단위명 오염 방지)"""
+    if not value:
+        return False
+    normalized = _normalize_promo(value)
+    if not normalized or normalized in _INVALID_UNIT_NAMES or normalized.isdigit():
+        return False
+    # N+N 패턴 (1+1, 2+1 등)
+    if _VALID_PROMO_RE.match(normalized):
+        return True
+    # "할인", "덤", "증정" 포함
+    if '할인' in normalized or '덤' in normalized or normalized == '증정':
+        return True
+    return False
 
 
 class OrderPrepCollector:
@@ -69,6 +127,7 @@ class OrderPrepCollector:
         self._promo_repo = PromotionRepository(store_id=self.store_id) if save_to_db else None
         self._promo_manager = PromotionManager(store_id=store_id) if save_to_db else None
         self._sales_repo = SalesRepository(store_id=self.store_id) if save_to_db else None
+        self._direct_api = self._init_direct_api(driver)
         self._pending_log_entries: List[Dict[str, Any]] = []
         self._comparison_stats: Dict[str, Any] = {
             'total': 0,
@@ -82,6 +141,23 @@ class OrderPrepCollector:
             'multiple_order_cases': 0,
         }
 
+    @staticmethod
+    def _init_direct_api(driver: Any) -> Optional['DirectApiFetcher']:
+        """DirectApiFetcher 초기화 (constants 설정 참조)"""
+        if not driver:
+            return None
+        try:
+            from src.settings.constants import (
+                DIRECT_API_CONCURRENCY, DIRECT_API_TIMEOUT_MS,
+            )
+            return DirectApiFetcher(
+                driver,
+                concurrency=DIRECT_API_CONCURRENCY,
+                timeout_ms=DIRECT_API_TIMEOUT_MS,
+            )
+        except Exception:
+            return DirectApiFetcher(driver)
+
     def set_driver(self, driver: Any) -> None:
         """드라이버 설정 및 메뉴/날짜 선택 상태 초기화
 
@@ -91,6 +167,7 @@ class OrderPrepCollector:
         self.driver = driver
         self._menu_navigated = False
         self._date_selected = False
+        self._direct_api = self._init_direct_api(driver)
 
     def reset_navigation_state(self) -> None:
         """메뉴/날짜 선택 상태 초기화
@@ -532,6 +609,11 @@ class OrderPrepCollector:
                 }
             """, self.FRAME_ID)
 
+            # 셀 활성화 실패 시 조기 반환 (홈 검색창에 입력되는 것 방지)
+            if not result or result.get('error'):
+                logger.warning(f"[수집] 그리드 셀 활성화 실패: {result} → 상품 조회 건너뜀")
+                return {'item_cd': item_cd, 'success': False}
+
             time.sleep(PREP_CELL_ACTIVATE_WAIT)
 
             # 상품검색 팝업 닫기
@@ -649,14 +731,14 @@ class OrderPrepCollector:
                         const ds = wf.gdList._binddataset;
                         const lastRow = ds.getRowCount() - 1;
                         if (lastRow >= 0) {
-                            // 행사 정보 (컬럼 인덱스 11: 당월행사, 12: 익월행사)
+                            // 행사 정보 (MONTH_EVT: 당월행사, NEXT_MONTH_EVT: 익월행사)
                             let curPromo = '';
                             let nextPromo = '';
                             try {
-                                curPromo = ds.getColumn(lastRow, ds.getColID(11)) || '';
+                                curPromo = ds.getColumn(lastRow, 'MONTH_EVT') || '';
                             } catch(e2) {}
                             try {
-                                nextPromo = ds.getColumn(lastRow, ds.getColID(12)) || '';
+                                nextPromo = ds.getColumn(lastRow, 'NEXT_MONTH_EVT') || '';
                             } catch(e2) {}
                             if (curPromo || nextPromo) {
                                 result.promoInfo = {
@@ -752,10 +834,20 @@ class OrderPrepCollector:
                         'has_buy_no_ord': has_buy_no_ord,
                     })
 
-            # 행사 정보 추출
+            # 행사 정보 추출 + 정규화 + 유효성 검증
             promo_info = data.get('promoInfo') or {}
-            current_month_promo = promo_info.get('current_month_promo', '')
-            next_month_promo = promo_info.get('next_month_promo', '')
+            current_month_promo = _normalize_promo(promo_info.get('current_month_promo', ''))
+            next_month_promo = _normalize_promo(promo_info.get('next_month_promo', ''))
+
+            # 유효성 검증 — 발주단위명(낱개/묶음/BOX) 오염 방지
+            if not _is_valid_promo(current_month_promo):
+                if current_month_promo:
+                    logger.debug(f"[행사 검증] {item_cd}: 당월 '{current_month_promo}' 무효 → 빈값")
+                current_month_promo = ''
+            if not _is_valid_promo(next_month_promo):
+                if next_month_promo:
+                    logger.debug(f"[행사 검증] {item_cd}: 익월 '{next_month_promo}' 무효 → 빈값")
+                next_month_promo = ''
 
             # 발주중지(CUT) 상품 여부
             cut_item_yn_raw = data.get('cutItemYn', '0')
@@ -802,93 +894,7 @@ class OrderPrepCollector:
 
             # DB에 저장
             if self._save_to_db:
-                # 재고/미입고 저장
-                if self._repo:
-                    self._repo.save(
-                        item_cd=result['item_cd'],
-                        stock_qty=result['current_stock'],
-                        pending_qty=pending_qty,
-                        order_unit_qty=order_unit_qty,
-                        is_available=True,
-                        item_nm=result['item_nm'],
-                        is_cut_item=is_cut_item,
-                        store_id=self.store_id
-                    )
-
-                # 유통기한 + 매가/이익율 저장
-                if self._product_repo and (expiration_days or sell_price_raw or margin_rate_raw):
-                    self.save_expiration_to_db(
-                        result['item_cd'], expiration_days or 0,
-                        sell_price=sell_price_raw,
-                        margin_rate=margin_rate_raw
-                    )
-
-                # buy_qty 역보정: dsOrderSale 입고 데이터로 daily_sales.buy_qty 업데이트
-                if self._sales_repo:
-                    try:
-                        backfill_count = 0
-                        for h in history:
-                            h_buy_qty = h.get('buy_qty', 0)
-                            h_date = h.get('date', '')
-                            if h_buy_qty > 0 and h_date:
-                                # ORD_YMD 형식: YYYYMMDD → YYYY-MM-DD
-                                if len(h_date) == 8:
-                                    formatted_date = f"{h_date[:4]}-{h_date[4:6]}-{h_date[6:8]}"
-                                else:
-                                    formatted_date = h_date
-                                if self._sales_repo.update_buy_qty(
-                                    sales_date=formatted_date,
-                                    item_cd=item_cd,
-                                    buy_qty=h_buy_qty
-                                ):
-                                    backfill_count += 1
-                        if backfill_count > 0:
-                            logger.info(f"[buy_qty 보정] {result['item_nm']}: {backfill_count}건 역보정 완료")
-                    except Exception as e:
-                        logger.warning(f"[buy_qty 보정 실패] {item_cd}: {e}")
-
-                # 행사 정보 저장
-                if (current_month_promo or next_month_promo) and self._promo_repo:
-                    promo_result = self._promo_repo.save_monthly_promo(
-                        item_cd=result['item_cd'],
-                        item_nm=result['item_nm'],
-                        current_month_promo=current_month_promo,
-                        next_month_promo=next_month_promo
-                    )
-                    if promo_result.get('change_detected'):
-                        change_type = promo_result['change_type']
-                        logger.info(f"[행사변경] {result['item_nm']}: {current_month_promo or '없음'} → {next_month_promo or '없음'} ({change_type})")
-
-                    # 행사/비행사 일평균 통계 갱신
-                    if self._promo_manager:
-                        try:
-                            self._promo_manager.calculate_promotion_stats(result['item_cd'])
-                        except Exception as e:
-                            logger.warning(f"행사 통계 갱신 실패: {result['item_cd']} - {e}")
-
-                # daily_sales.promo_type 역보정: 행사 기간의 daily_sales에 행사 타입 기록
-                if self._sales_repo and current_month_promo:
-                    try:
-                        today = datetime.now()
-                        # 1일/15일 주기: 현재 행사 기간 계산
-                        if today.day <= 15:
-                            period_start = today.strftime('%Y-%m-01')
-                            period_end = today.strftime('%Y-%m-15')
-                        else:
-                            period_start = today.strftime('%Y-%m-16')
-                            last_day = calendar.monthrange(today.year, today.month)[1]
-                            period_end = today.strftime(f'%Y-%m-{last_day:02d}')
-
-                        updated = self._sales_repo.update_promo_type(
-                            item_cd=item_cd,
-                            promo_type=current_month_promo,
-                            start_date=period_start,
-                            end_date=period_end
-                        )
-                        if updated > 0:
-                            logger.info(f"[promo_type 보정] {result['item_nm']}: {current_month_promo} ({period_start}~{period_end}, {updated}건)")
-                    except Exception as e:
-                        logger.warning(f"[promo_type 보정 실패] {item_cd}: {e}")
+                self._save_item_to_db(result, history, item_cd)
 
             # 상품 조회 완료 후 남아있는 팝업 정리
             popup_count = close_all_popups(self.driver, silent=False)
@@ -903,32 +909,247 @@ class OrderPrepCollector:
             popup_count = close_all_popups(self.driver, silent=False)
             if popup_count > 0:
                 logger.info(f"조회 실패 후 팝업 {popup_count}개 정리")
-            # 조회 실패 시 미취급으로 표시
+            # 조회 실패 시 실패 카운트 증가 (3회 연속 시 미취급 마킹)
             if self._save_to_db and self._repo:
-                self._repo.mark_unavailable(item_cd, store_id=self.store_id)
+                self._repo.increment_fail_count(item_cd, store_id=self.store_id)
             return {'item_cd': item_cd, 'success': False}
 
-    def collect_for_items(self, item_codes: List[str]) -> Dict[str, Dict[str, Any]]:
+    def _process_api_result(self, item_cd: str, api_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        DirectApiFetcher가 반환한 데이터를 collect_for_item 형식으로 후처리
+
+        collect_for_item()의 라인 737~928과 동일한 후처리를 적용합니다:
+        - 미입고 수량 계산
+        - 행사 정규화/검증
+        - DB 저장
+
+        Args:
+            item_cd: 상품코드
+            api_data: extract_item_data()의 결과
+
+        Returns:
+            collect_for_item()과 동일한 구조의 결과
+        """
+        if not api_data or not api_data.get('success'):
+            return {'item_cd': item_cd, 'success': False}
+
+        # 빈 응답 (CUT/미취급): 행 데이터 없이 발주불가 확인된 경우
+        if api_data.get('is_empty_response'):
+            logger.info(f"[DirectAPI] {item_cd}: 발주불가 (빈 응답 → CUT/미취급)")
+            return {
+                'item_cd': item_cd,
+                'item_nm': '',
+                'current_stock': 0,
+                'order_unit_qty': 1,
+                'pending_qty': 0,
+                'expiration_days': None,
+                'current_month_promo': '',
+                'next_month_promo': '',
+                'is_cut_item': True,
+                'is_empty_response': True,
+                'sell_price': '',
+                'margin_rate': '',
+                'history': [],
+                'week_dates': [],
+                'success': True,
+            }
+
+        # 미입고 수량 계산 (기존 로직 재사용)
+        history = api_data.get('history', [])
+        order_unit_qty = api_data.get('order_unit_qty', 1) or 1
+
+        from src.settings.constants import USE_SIMPLIFIED_PENDING, PENDING_COMPARISON_MODE
+
+        if PENDING_COMPARISON_MODE:
+            pending_qty, pending_detail = self._calculate_pending_with_comparison(
+                history, order_unit_qty, item_cd, api_data.get('item_nm', '')
+            )
+        elif USE_SIMPLIFIED_PENDING:
+            pending_qty = self._calculate_pending_simplified(history, order_unit_qty, item_cd=item_cd)
+            pending_detail = []
+        else:
+            pending_qty, pending_detail = self._calculate_pending_complex(history, order_unit_qty, item_cd)
+
+        # 디버그 로그 수집
+        if not USE_SIMPLIFIED_PENDING and pending_detail:
+            has_ord_no_buy = any(d['ord_qty'] > 0 and d['buy_qty'] == 0 for d in pending_detail)
+            has_buy_no_ord = any(d['ord_qty'] == 0 and d['buy_qty'] > 0 for d in pending_detail)
+            naive_pending = sum(d['diff'] for d in pending_detail)
+            was_corrected = naive_pending != pending_qty
+            if pending_qty > 0 or has_ord_no_buy or has_buy_no_ord or was_corrected:
+                self._pending_log_entries.append({
+                    'item_cd': item_cd,
+                    'item_nm': api_data.get('item_nm', ''),
+                    'current_stock': api_data.get('current_stock', 0),
+                    'order_unit_qty': order_unit_qty,
+                    'pending_qty': pending_qty,
+                    'naive_pending': naive_pending,
+                    'was_corrected': was_corrected,
+                    'history': pending_detail,
+                    'has_ord_no_buy': has_ord_no_buy,
+                    'has_buy_no_ord': has_buy_no_ord,
+                })
+
+        # 행사 정규화 + 유효성 검증
+        current_month_promo = _normalize_promo(api_data.get('current_month_promo', ''))
+        next_month_promo = _normalize_promo(api_data.get('next_month_promo', ''))
+
+        if not _is_valid_promo(current_month_promo):
+            if current_month_promo:
+                logger.debug(f"[행사 검증] {item_cd}: 당월 '{current_month_promo}' 무효 → 빈값")
+            current_month_promo = ''
+        if not _is_valid_promo(next_month_promo):
+            if next_month_promo:
+                logger.debug(f"[행사 검증] {item_cd}: 익월 '{next_month_promo}' 무효 → 빈값")
+            next_month_promo = ''
+
+        # CUT 상품 여부
+        is_cut_item = api_data.get('is_cut_item', False)
+
+        result = {
+            'item_cd': api_data.get('item_cd', item_cd),
+            'item_nm': api_data.get('item_nm', ''),
+            'current_stock': api_data.get('current_stock', 0),
+            'order_unit_qty': order_unit_qty,
+            'pending_qty': pending_qty,
+            'expiration_days': api_data.get('expiration_days'),
+            'current_month_promo': current_month_promo,
+            'next_month_promo': next_month_promo,
+            'is_cut_item': is_cut_item,
+            'sell_price': api_data.get('sell_price', ''),
+            'margin_rate': api_data.get('margin_rate', ''),
+            'history': history,
+            'week_dates': api_data.get('week_dates', []),
+            'success': True
+        }
+
+        # 로그 출력
+        cut_text = " [발주중지]" if is_cut_item else ""
+        promo_text = ""
+        if current_month_promo or next_month_promo:
+            promo_text = f", 당월={current_month_promo or '없음'}, 익월={next_month_promo or '없음'}"
+        price_text = ""
+        if result['sell_price']:
+            price_text = f", 매가={result['sell_price']}"
+        if result['margin_rate']:
+            price_text += f", 이익율={result['margin_rate']}%"
+        logger.info(f"{result['item_nm']}{cut_text}: 재고={result['current_stock']}, 미입고={pending_qty}개, 유통기한={result['expiration_days']}일{promo_text}{price_text}")
+
+        # DB 저장
+        if self._save_to_db:
+            self._save_item_to_db(result, history, item_cd)
+
+        return result
+
+    def _save_item_to_db(self, result: Dict[str, Any], history: List[Dict], item_cd: str) -> None:
+        """수집 결과를 DB에 저장 (collect_for_item / _process_api_result 공통)"""
+        # 재고/미입고 저장
+        # preserve_stock_if_zero: prefetch에서 stock=0 반환 시 매출조회 재고 보존
+        # (직배 상품 등 단품발주조회에서 NOW_QTY=0이지만 실제 매장 재고는 있는 경우)
+        if self._repo:
+            self._repo.save(
+                item_cd=result['item_cd'],
+                stock_qty=result['current_stock'],
+                pending_qty=result['pending_qty'],
+                order_unit_qty=result['order_unit_qty'],
+                is_available=True,
+                item_nm=result['item_nm'],
+                is_cut_item=result.get('is_cut_item', False),
+                store_id=self.store_id,
+                preserve_stock_if_zero=True,
+            )
+
+        # 유통기한 + 매가/이익율 저장
+        expiration_days = result.get('expiration_days')
+        sell_price = result.get('sell_price', '')
+        margin_rate = result.get('margin_rate', '')
+        if self._product_repo and (expiration_days or sell_price or margin_rate):
+            self.save_expiration_to_db(
+                result['item_cd'], expiration_days or 0,
+                sell_price=sell_price,
+                margin_rate=margin_rate
+            )
+
+        # buy_qty 역보정
+        if self._sales_repo:
+            try:
+                backfill_count = 0
+                for h in history:
+                    h_buy_qty = h.get('buy_qty', 0)
+                    h_date = h.get('date', '')
+                    if h_buy_qty > 0 and h_date:
+                        if len(h_date) == 8:
+                            formatted_date = f"{h_date[:4]}-{h_date[4:6]}-{h_date[6:8]}"
+                        else:
+                            formatted_date = h_date
+                        if self._sales_repo.update_buy_qty(
+                            sales_date=formatted_date,
+                            item_cd=item_cd,
+                            buy_qty=h_buy_qty
+                        ):
+                            backfill_count += 1
+                if backfill_count > 0:
+                    logger.info(f"[buy_qty 보정] {result['item_nm']}: {backfill_count}건 역보정 완료")
+            except Exception as e:
+                logger.warning(f"[buy_qty 보정 실패] {item_cd}: {e}")
+
+        # 행사 정보 저장
+        current_month_promo = result.get('current_month_promo', '')
+        next_month_promo = result.get('next_month_promo', '')
+        if (current_month_promo or next_month_promo) and self._promo_repo:
+            promo_result = self._promo_repo.save_monthly_promo(
+                item_cd=result['item_cd'],
+                item_nm=result['item_nm'],
+                current_month_promo=current_month_promo,
+                next_month_promo=next_month_promo,
+                store_id=self.store_id
+            )
+            if promo_result.get('change_detected'):
+                change_type = promo_result['change_type']
+                logger.info(f"[행사변경] {result['item_nm']}: {current_month_promo or '없음'} → {next_month_promo or '없음'} ({change_type})")
+
+            if self._promo_manager:
+                try:
+                    self._promo_manager.calculate_promotion_stats(result['item_cd'])
+                except Exception as e:
+                    logger.warning(f"행사 통계 갱신 실패: {result['item_cd']} - {e}")
+
+        # daily_sales.promo_type 역보정
+        if self._sales_repo and current_month_promo:
+            try:
+                today = datetime.now()
+                if today.day <= 15:
+                    period_start = today.strftime('%Y-%m-01')
+                    period_end = today.strftime('%Y-%m-15')
+                else:
+                    period_start = today.strftime('%Y-%m-16')
+                    last_day = calendar.monthrange(today.year, today.month)[1]
+                    period_end = today.strftime(f'%Y-%m-{last_day:02d}')
+
+                updated = self._sales_repo.update_promo_type(
+                    item_cd=item_cd,
+                    promo_type=current_month_promo,
+                    start_date=period_start,
+                    end_date=period_end
+                )
+                if updated > 0:
+                    logger.info(f"[promo_type 보정] {result['item_nm']}: {current_month_promo} ({period_start}~{period_end}, {updated}건)")
+            except Exception as e:
+                logger.warning(f"[promo_type 보정 실패] {item_cd}: {e}")
+
+    def collect_for_items(self, item_codes: List[str], use_direct_api: bool = True) -> Dict[str, Dict[str, Any]]:
         """
         여러 상품 일괄 수집
 
         Args:
             item_codes: 상품코드 목록
+            use_direct_api: Direct API 사용 여부 (기본 True)
 
         Returns:
             {item_cd: {...}, ...}
         """
         if not self.driver:
             return {}
-
-        # 메뉴 이동 및 날짜 선택
-        if not self._menu_navigated:
-            if not self.navigate_to_menu():
-                return {}
-
-        if not self._date_selected:
-            if not self.select_order_date():
-                return {}
 
         self._pending_log_entries = []  # 로그 초기화
         # 비교 통계 초기화
@@ -938,6 +1159,29 @@ class OrderPrepCollector:
             'max_diff': 0, 'total_diff': 0,
             'cross_pattern_cases': 0, 'multiple_order_cases': 0,
         }
+
+        # Direct API 모드
+        from src.settings.constants import USE_DIRECT_API
+        if use_direct_api and USE_DIRECT_API and self._direct_api:
+            results = self._collect_via_direct_api(item_codes)
+            if results is not None:
+                # 미입고 디버그 로그 저장
+                self._write_pending_debug_log()
+                from src.settings.constants import PENDING_COMPARISON_MODE
+                if PENDING_COMPARISON_MODE:
+                    self._write_comparison_log()
+                return results
+            # Direct API 전체 실패 → Selenium 폴백
+            logger.warning("[DirectAPI] 전체 실패 → Selenium 폴백")
+
+        # Selenium 모드 (기본/폴백)
+        if not self._menu_navigated:
+            if not self.navigate_to_menu():
+                return {}
+
+        if not self._date_selected:
+            if not self.select_order_date():
+                return {}
 
         results = {}
         for item_cd in item_codes:
@@ -953,6 +1197,129 @@ class OrderPrepCollector:
         if PENDING_COMPARISON_MODE:
             self._write_comparison_log()
 
+        return results
+
+    def _collect_via_direct_api(self, item_codes: List[str]) -> Optional[Dict[str, Dict[str, Any]]]:
+        """
+        Direct API를 사용한 배치 수집
+
+        템플릿이 아직 캡처되지 않은 경우:
+        1. 인터셉터 설치
+        2. 단품별 발주 메뉴 이동 + 날짜 선택
+        3. 첫 번째 상품을 Selenium으로 1건 검색 (selSearch 요청 발생 → 인터셉터 캡처)
+        4. 캡처된 템플릿으로 나머지 배치 처리
+
+        Args:
+            item_codes: 상품코드 목록
+
+        Returns:
+            결과 딕셔너리 또는 None (템플릿 준비 실패 시)
+        """
+        if not self._direct_api:
+            return None
+
+        results = {}
+        remaining_codes = list(item_codes)
+
+        # 템플릿 준비 — 없으면 Selenium 1건 검색으로 캡처
+        if not self._direct_api.ensure_template():
+            logger.info("[DirectAPI] 템플릿 없음 → Selenium 1건 검색으로 캡처 시도")
+
+            # 1) 인터셉터 설치 (ensure_template 내부에서 이미 설치됨)
+            # 2) 메뉴 이동 + 날짜 선택
+            if not self._menu_navigated:
+                if not self.navigate_to_menu():
+                    logger.warning("[DirectAPI] 메뉴 이동 실패 → 템플릿 캡처 불가")
+                    return None
+            if not self._date_selected:
+                if not self.select_order_date():
+                    logger.warning("[DirectAPI] 날짜 선택 실패 → 템플릿 캡처 불가")
+                    return None
+
+            # 3) Selenium 검색으로 캡처 시도 (최대 2회)
+            captured = False
+            for attempt in range(min(2, len(remaining_codes))):
+                item = remaining_codes[0]
+                logger.info(
+                    f"[DirectAPI] 템플릿 캡처용 Selenium 검색 "
+                    f"(시도 {attempt + 1}/2): {item}"
+                )
+
+                if attempt > 0:
+                    # 재시도 시 인터셉터 강제 재설치
+                    self._direct_api.reset_interceptor()
+
+                item_result = self.collect_for_item(item)
+                results[item] = item_result
+                remaining_codes = remaining_codes[1:]
+
+                # 캡처 확인 (약간 대기 후)
+                time.sleep(0.5)
+                if self._direct_api.capture_request_template():
+                    logger.info(
+                        f"[DirectAPI] 템플릿 캡처 성공 "
+                        f"(Selenium 검색 {attempt + 1}회차)"
+                    )
+                    captured = True
+                    break
+                else:
+                    logger.warning(
+                        f"[DirectAPI] 캡처 실패 (시도 {attempt + 1}/2)"
+                    )
+
+            if not captured:
+                logger.warning("[DirectAPI] 템플릿 캡처 최종 실패 → Selenium 폴백")
+                return None
+
+        if not remaining_codes:
+            return results
+
+        total = len(remaining_codes)
+        logger.info(f"[DirectAPI] 배치 수집 시작: {total}개 상품")
+
+        # 배치 조회
+        batch_data = self._direct_api.fetch_items_batch(remaining_codes)
+
+        if not batch_data:
+            logger.warning("[DirectAPI] 배치 조회 결과 없음 → Selenium 전체 폴백")
+            # 첫 번째 결과가 있으면 유지하되 나머지 실패로 None 반환
+            return None
+
+        # API 결과를 collect_for_item 형식으로 변환 + DB 저장
+        api_success = 0
+        for item_cd in remaining_codes:
+            api_data = batch_data.get(item_cd)
+            if api_data and api_data.get('success'):
+                result = self._process_api_result(item_cd, api_data)
+                results[item_cd] = result
+                if result.get('success'):
+                    api_success += 1
+            else:
+                results[item_cd] = {'item_cd': item_cd, 'success': False}
+
+        # API 실패 항목은 Selenium 폴백
+        failed = [ic for ic in remaining_codes if not results.get(ic, {}).get('success')]
+        if failed:
+            fallback_count = min(len(failed), 50)  # 폴백은 최대 50개
+            logger.info(f"[DirectAPI] API 실패 {len(failed)}건 중 {fallback_count}건 Selenium 폴백")
+
+            # Selenium 모드를 위한 메뉴 이동 (템플릿 캡처 시 이미 이동했을 수 있음)
+            if not self._menu_navigated:
+                if not self.navigate_to_menu():
+                    return results  # 메뉴 이동 실패해도 API 결과는 반환
+
+            if not self._date_selected:
+                if not self.select_order_date():
+                    return results
+
+            for item_cd in failed[:fallback_count]:
+                result = self.collect_for_item(item_cd)
+                results[item_cd] = result
+                time.sleep(PREP_ITEM_QUERY_DELAY)
+
+        empty_count = sum(1 for ic in remaining_codes if results.get(ic, {}).get('is_empty_response'))
+        empty_text = f", 빈응답(CUT/미취급)={empty_count}건" if empty_count else ""
+        logger.info(f"[DirectAPI] 수집 완료: API {api_success}건 + 폴백 {len(failed)}건{empty_text}")
         return results
 
     # ============================================================

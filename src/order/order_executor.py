@@ -5,6 +5,7 @@
 - 상품별 발주 가능 요일에 맞춰 요일별 그룹핑 발주
 """
 
+import json
 import time
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
@@ -50,6 +51,9 @@ from src.settings.constants import (
     ORDER_INPUT_OPTIMIZATION_PHASE,
     DEBUG_SCREENSHOT_ENABLED, DEBUG_SCREENSHOT_ON_ERROR,
     DEBUG_SCREENSHOT_SAMPLE_RATE, DEBUG_SCREENSHOT_MAX_PER_SESSION,
+    # Direct API 발주 저장 설정
+    DIRECT_API_ORDER_ENABLED, BATCH_GRID_INPUT_ENABLED,
+    DIRECT_API_ORDER_MAX_BATCH,
 )
 
 
@@ -62,6 +66,10 @@ class OrderExecutor:
     SUBMENU_SINGLE_ORDER_TEXT = "단품별 발주"
     # 발주 프레임 ID (단품별 발주)
     ORDER_FRAME_ID = "STBJ030_M0"
+
+    # 메뉴 렌더링 대기 설정 (C-03: 넥사크로 메뉴 렌더링 전 즉시 실패 방지)
+    MENU_WAIT_TIMEOUT = 10    # 메뉴 렌더링 대기 최대 시간(초)
+    MENU_POLL_INTERVAL = 0.5  # 폴링 간격(초)
 
     # 요일 매핑 (Python weekday -> 한글)
     WEEKDAY_MAP = {
@@ -92,12 +100,14 @@ class OrderExecutor:
         const workForm = stbjForm?.div_workForm?.form?.div_work_01?.form;
     """
 
-    def __init__(self, driver: Any) -> None:
+    def __init__(self, driver: Any, store_id: Optional[str] = None) -> None:
         """
         Args:
             driver: Selenium WebDriver (로그인된 상태)
+            store_id: 매장 ID (로깅용, 선택)
         """
         self.driver = driver
+        self.store_id = store_id
         self._scripts_loaded = False
         self.product_collector = ProductInfoCollector(driver)
         self._last_selected_date = None  # select_order_day()에서 실제 선택된 날짜
@@ -168,13 +178,34 @@ class OrderExecutor:
                 self._close_existing_order_tab()
                 timer.check("기존_탭_닫기")
 
-                # 1. 발주 메뉴 클릭 (텍스트로 찾기)
-                result = self._click_top_menu_by_text("발주")
-                if not result:
-                    # ID로 재시도
-                    result = self._click_element_by_id(self.MENU_ORDER)
-                if not result:
-                    log_timeout_error("발주_메뉴_클릭", timer.elapsed(), {"status": "menu_click_failed"})
+                # 1. 발주 메뉴 클릭 (폴링 대기: 넥사크로 메뉴 렌더링 완료까지)
+                menu_elapsed = 0.0
+                menu_clicked = False
+                no_element_count = 0
+                js_error_count = 0
+                last_exception = None
+                while menu_elapsed < self.MENU_WAIT_TIMEOUT:
+                    try:
+                        if self._click_top_menu_by_text("발주") or self._click_element_by_id(self.MENU_ORDER):
+                            menu_clicked = True
+                            break
+                        no_element_count += 1
+                    except Exception as e:
+                        js_error_count += 1
+                        last_exception = e
+                        logger.debug(f"[MENU_POLL] 시도 중 예외: {e}")
+                    time.sleep(self.MENU_POLL_INTERVAL)
+                    menu_elapsed += self.MENU_POLL_INTERVAL
+
+                if not menu_clicked:
+                    logger.warning(
+                        f"[MENU_POLL] 메뉴 클릭 실패 요약 "
+                        f"시도={int(menu_elapsed / self.MENU_POLL_INTERVAL)}회 "
+                        f"요소없음={no_element_count}회 "
+                        f"JS예외={js_error_count}회 "
+                        f"마지막예외={last_exception}"
+                    )
+                    log_timeout_error("발주_메뉴_클릭", timer.elapsed(), {"status": "menu_click_failed"}, store_id=self.store_id)
                     logger.error("발주 메뉴 클릭 실패")
                     return False
 
@@ -195,7 +226,7 @@ class OrderExecutor:
                     time.sleep(ORDER_MENU_AFTER_CLICK)
 
                 if not submenu_clicked:
-                    log_timeout_error("단품별_발주_서브메뉴_클릭", timer.elapsed(), {"status": "submenu_click_failed"})
+                    log_timeout_error("단품별_발주_서브메뉴_클릭", timer.elapsed(), {"status": "submenu_click_failed"}, store_id=self.store_id)
                     logger.error("단품별 발주 메뉴 클릭 실패 (3회 재시도 후)")
                     return False
 
@@ -1002,21 +1033,33 @@ class OrderExecutor:
             # 그리드에서 실제 배수(order_unit_qty) 읽기 - 해당 상품코드 행에서
             grid_data = self._read_product_info_from_grid(item_cd)
 
+            # DB에서 배수단위 미리 조회 (그리드 폴백용)
+            db_data = self.product_collector.get_from_db(item_cd)
+            db_order_unit_qty = int(db_data.get("order_unit_qty", 1) or 1) if db_data else 1
+
             if grid_data:
                 actual_order_unit_qty = grid_data.get("order_unit_qty", 1) or 1
                 item_nm = grid_data.get("item_nm", "")
                 orderable_day = grid_data.get("orderable_day", "")
                 actual_order_date = grid_data.get("actual_order_date", "")
 
-                # DB에 저장
+                # ★ 그리드 값이 1인데 DB 값이 더 크면 DB 우선 (그리드 읽기 실패 보호)
+                if actual_order_unit_qty <= 1 < db_order_unit_qty:
+                    logger.warning(f"[order_unit 보정] {item_nm}({item_cd}): 그리드={actual_order_unit_qty} → DB={db_order_unit_qty} 사용")
+                    actual_order_unit_qty = db_order_unit_qty
+
+                # ★ 발주가능요일 DB 비교 검증 (save_to_db 전에 실행)
+                if orderable_day:
+                    self._verify_orderable_day(item_cd, orderable_day)
+
+                # DB에 저장 (최신 grid_data로 업데이트)
                 self.product_collector.save_to_db(item_cd, grid_data)
                 logger.info(f"그리드 상품명: {item_nm}, 배수단위: {actual_order_unit_qty}, 발주요일: {orderable_day}"
                             + (f", 실제발주일: {actual_order_date}" if actual_order_date else ""))
             else:
                 # 그리드에서 못 읽으면 DB에서 조회
-                db_data = self.product_collector.get_from_db(item_cd)
-                if db_data and db_data.get("order_unit_qty"):
-                    actual_order_unit_qty = db_data.get("order_unit_qty", 1)
+                if db_order_unit_qty > 1:
+                    actual_order_unit_qty = db_order_unit_qty
                     logger.info(f"DB 배수단위: {actual_order_unit_qty} (그리드 읽기 실패, DB 사용)")
                 else:
                     actual_order_unit_qty = 1
@@ -1024,7 +1067,12 @@ class OrderExecutor:
 
             # 올바른 배수 계산 (목표수량 / 배수단위, 최대 99)
             actual_order_unit_qty = max(1, actual_order_unit_qty)  # 0 방지
-            actual_multiplier = min(MAX_ORDER_MULTIPLIER, max(1, (target_qty + actual_order_unit_qty - 1) // actual_order_unit_qty))
+            # cancel_smart (target_qty=0): PYUN_QTY=0으로 전송하여 스마트→단품별(채택) 전환
+            # 라이브 검증 (2026-03-14): BGF 서버 PYUN_QTY=0 수락 확인
+            if target_qty == 0:
+                actual_multiplier = 0
+            else:
+                actual_multiplier = min(MAX_ORDER_MULTIPLIER, max(1, (target_qty + actual_order_unit_qty - 1) // actual_order_unit_qty))
             actual_qty = actual_multiplier * actual_order_unit_qty
             logger.info(f"계산 목표: {target_qty}개 -> 배수: {actual_multiplier} x {actual_order_unit_qty} = {actual_qty}개")
 
@@ -1061,6 +1109,7 @@ class OrderExecutor:
                 "order_unit_qty": actual_order_unit_qty,
                 "actual_qty": actual_qty,
                 "actual_order_date": grid_order_date or self._last_selected_date or "",
+                "orderable_day": orderable_day,  # BGF 그리드에서 읽은 발주가능요일
                 "qty_input": qty_result.get('success', False) if qty_result else False,
                 "message": "OK"
             }
@@ -1894,36 +1943,49 @@ class OrderExecutor:
                 available_days.add(day_map[char])
 
         if not available_days:
-            # 발주 가능 요일 정보 없으면 내일 반환
-            return (from_date + timedelta(days=1)).strftime("%Y-%m-%d")
+            # 발주 가능 요일 정보 없으면: 10시 이전=오늘, 이후=내일
+            offset = 0 if from_date.hour < 10 else 1
+            return (from_date + timedelta(days=offset)).strftime("%Y-%m-%d")
 
-        # 오늘부터 7일 내 가장 빠른 발주 가능일 찾기
-        for i in range(1, 8):  # 내일부터 시작
+        # 10시 이전 발주 → 오늘 배송 가능 (1차 배송), 10시 이후 → 내일부터
+        start_offset = 0 if from_date.hour < 10 else 1
+        for i in range(start_offset, 8):
             check_date = from_date + timedelta(days=i)
             if check_date.weekday() in available_days:
                 return check_date.strftime("%Y-%m-%d")
 
-        # 못 찾으면 내일 반환
-        return (from_date + timedelta(days=1)).strftime("%Y-%m-%d")
+        # 못 찾으면: 10시 이전=오늘, 이후=내일
+        offset = 0 if from_date.hour < 10 else 1
+        return (from_date + timedelta(days=offset)).strftime("%Y-%m-%d")
 
     def group_orders_by_date(self, order_list: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
         """
-        발주 목록을 발주 가능 날짜별로 그룹핑
+        당일 배송 가능 상품만 오늘 날짜로 그룹핑
+
+        미래 날짜 발주는 해당 일에 최신 매출 데이터로 재예측하여
+        발주하는 것이 더 정확하므로, 당일분만 발주한다.
 
         Args:
             order_list: 발주 목록 [{item_cd, final_order_qty, orderable_day, ...}, ...]
 
         Returns:
-            날짜별 그룹핑된 발주 목록 {"2026-01-27": [{...}, ...], "2026-01-28": [...]}
+            당일 발주 목록 {"2026-03-01": [{...}, ...]}
         """
         from_date = datetime.now()
+        today_str = from_date.strftime("%Y-%m-%d")
+        today_weekday = from_date.weekday()
+        day_map = WEEKDAY_KR_TO_NUM
         grouped = defaultdict(list)
+        skipped_count = 0
 
         for item in order_list:
             item_cd = item.get("item_cd")
             qty = item.get("final_order_qty", 0)
 
-            if not item_cd or qty <= 0:
+            if not item_cd:
+                continue
+            # qty=0: 일반 상품은 스킵, cancel_smart 상품은 통과 (스마트 취소용)
+            if qty <= 0 and not item.get("cancel_smart"):
                 continue
 
             # 발주 가능 요일 (기본값: 모든 요일)
@@ -1931,19 +1993,24 @@ class OrderExecutor:
             if not orderable_days:
                 orderable_days = DEFAULT_ORDERABLE_DAYS
 
-            # 가장 빠른 발주 가능일 계산
-            order_date = self.get_next_orderable_date(orderable_days, from_date)
+            # 오늘 배송 가능한 상품만 포함
+            available_days = {day_map[c] for c in orderable_days if c in day_map}
+            if not available_days or today_weekday in available_days:
+                grouped[today_str].append(item)
+            else:
+                skipped_count += 1
 
-            grouped[order_date].append(item)
+        if skipped_count > 0:
+            logger.info(f"[당일전용] 비발주일 상품 {skipped_count}개 스킵 (해당 일에 재예측)")
 
-        # 날짜순 정렬하여 반환
         return dict(sorted(grouped.items()))
 
     def execute_orders(
         self,
         order_list: List[Dict[str, Any]],
         target_date: Optional[str] = None,
-        dry_run: bool = False
+        dry_run: bool = False,
+        target_dates: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """
         여러 상품 발주 실행 (요일별 그룹핑)
@@ -1952,6 +2019,7 @@ class OrderExecutor:
             order_list: 발주 목록 [{item_cd, final_order_qty, orderable_day, ...}, ...]
             target_date: 발주 날짜 (None이면 상품별 가장 빠른 발주 가능일 자동 선택)
             dry_run: True면 실제 발주 안함 (테스트용)
+            target_dates: 발주할 날짜 목록 (YYYY-MM-DD). None이면 전체 발주
 
         Returns:
             결과 {success_count, fail_count, results: [...]}
@@ -1959,6 +2027,10 @@ class OrderExecutor:
         logger.info("발주 실행 시작")
         logger.info(f"상품 수: {len(order_list)}개")
         logger.info(f"모드: {'테스트(dry_run)' if dry_run else '실제 발주'}")
+
+        # 방어적 초기화 (테스트에서 __new__ 사용 시)
+        if not hasattr(self, '_last_selected_date'):
+            self._last_selected_date = None
 
         # 요일별 그룹핑
         if target_date:
@@ -1970,6 +2042,21 @@ class OrderExecutor:
         else:
             # 상품별 발주 가능일에 맞춰 그룹핑
             grouped_orders = self.group_orders_by_date(order_list)
+
+        # target_dates 필터: 지정된 날짜만 발주
+        if target_dates and not target_date:
+            all_dates = set(grouped_orders.keys())
+            filtered = {d: items for d, items in grouped_orders.items() if d in target_dates}
+            skipped_dates = all_dates - set(filtered.keys())
+            skipped_count = sum(len(grouped_orders[d]) for d in skipped_dates)
+            if skipped_dates:
+                logger.info(
+                    f"[날짜 필터] {len(target_dates)}개 날짜만 발주: {target_dates}"
+                )
+                logger.info(
+                    f"[날짜 필터] 제외: {sorted(skipped_dates)} ({skipped_count}건 스킵)"
+                )
+            grouped_orders = filtered
 
         logger.info("발주 일정")
         for date, items in grouped_orders.items():
@@ -1984,8 +2071,8 @@ class OrderExecutor:
         for order_date, items in grouped_orders.items():
             logger.info(f"[{order_date}] 발주 시작 ({len(items)}개 상품)")
 
+            # ── 0. 메뉴 탐색 + 날짜 선택 (Direct API / Selenium 공통) ──
             if is_first_date:
-                # 첫 번째 날짜: 메뉴 이동 (자동으로 팝업 뜸)
                 nav_success = False
                 for nav_attempt in range(3):
                     if self.navigate_to_single_order():
@@ -2010,10 +2097,9 @@ class OrderExecutor:
             else:
                 # 두 번째 이후 날짜: 발주일자 버튼 클릭하여 팝업 열기
                 logger.info("발주일자 버튼 클릭하여 다음 날짜 선택...")
-                self._clear_any_alerts(silent=True)  # 버튼 클릭 전 Alert 정리
+                self._clear_any_alerts(silent=True)
                 if not self._click_order_date_button():
                     logger.error("발주일자 버튼 클릭 실패")
-                    # 메뉴 재이동 시도 (최대 3회)
                     nav_success = False
                     for nav_attempt in range(3):
                         logger.info(f"메뉴 재이동 시도 ({nav_attempt + 1}/3)...")
@@ -2038,11 +2124,111 @@ class OrderExecutor:
 
             time.sleep(ORDER_DATE_BUTTON_AFTER)
 
-            # 2. 요일 선택
+            # 1. 요일 선택
             if not self.select_order_day(order_date):
                 logger.warning(f"{order_date} 요일 선택 실패, 계속 진행")
 
             time.sleep(ORDER_AFTER_DAY_SELECT)
+
+            # 실제 선택된 발주일자로 보정 (10시 이후 다음날 자동 선택 등)
+            actual_date = self._last_selected_date or order_date
+            if actual_date != order_date:
+                logger.info(f"발주일자 보정: {order_date} → {actual_date}")
+                order_date = actual_date
+
+            # ── Level 1: Direct API 발주 저장 시도 (폼이 열린 상태에서) ──
+            form_not_available = False  # L1에서 발주 불가 감지 시 L2/L3도 차단
+            if DIRECT_API_ORDER_ENABLED and not dry_run:
+                api_result = self._try_direct_api_save(items, order_date)
+                if api_result and api_result.success:
+                    logger.info(f"[{order_date}] Direct API 저장 성공: {api_result.saved_count}건, {api_result.elapsed_ms:.0f}ms")
+                    for item in items:
+                        qty = item.get("final_order_qty", 0)
+                        unit = item.get("order_unit_qty", 1) or 1
+                        # _calc_multiplier와 동일한 계산: ceil(qty / unit)
+                        mult = max(1, (qty + unit - 1) // unit) if qty > 0 else 0
+                        actual = mult * unit
+                        # 발주 감사 로그: BGF에 실제 전송된 배수/총발주량
+                        logger.info(
+                            f"[AUDIT] {item.get('item_cd')} "
+                            f"PYUN_QTY={mult} ORD_UNIT_QTY={unit} "
+                            f"TOT_QTY={actual} (need={qty}) "
+                            f"method=direct_api"
+                        )
+                        results.append({
+                            "item_cd": item.get("item_cd"),
+                            "target_qty": qty,
+                            "actual_qty": actual,
+                            "multiplier": mult,
+                            "order_unit_qty": unit,
+                            "order_date": order_date,
+                            "success": True,
+                            "method": "direct_api",
+                        })
+                        total_success += 1
+                    continue
+                else:
+                    msg = api_result.message if api_result else 'returned None'
+                    saved = api_result.saved_count if api_result else 0
+                    logger.warning(f"[{order_date}] Direct API 실패 ({msg}, saved={saved}/{len(items)}), 다음 레벨로 폴백")
+                    # L1에서 전략1(gfn_transaction)+전략2(fetch) 모두 실패하여
+                    # saved_count=0이면 BGF 서버가 발주를 거부한 것 → L2/L3도 동일하게 실패할 것
+                    if api_result and api_result.saved_count == 0:
+                        form_not_available = True
+                        logger.warning(
+                            f"[{order_date}] L1 saved_count=0 → BGF 서버 거부 판단, "
+                            f"L2/L3 스킵 (거짓 성공 방지)"
+                        )
+
+            # ── Level 2: Hybrid 배치 그리드 입력 시도 ──
+            if form_not_available:
+                logger.warning(f"[{order_date}] L1 전략1+2 모두 실패 (saved=0) → L2/L3 스킵, 전체 {len(items)}건 실패 처리")
+                for item in items:
+                    results.append({
+                        "item_cd": item.get("item_cd"),
+                        "target_qty": item.get("final_order_qty", 0),
+                        "order_date": order_date,
+                        "success": False,
+                        "method": "blocked_form_not_available",
+                    })
+                total_fail += len(items)
+                continue
+
+            if BATCH_GRID_INPUT_ENABLED and not dry_run and len(items) >= 3:
+                batch_result = self._try_batch_grid_input(items, order_date)
+                if batch_result and batch_result.success:
+                    logger.info(f"[{order_date}] Batch Grid 저장 성공: {batch_result.saved_count}건, {batch_result.elapsed_ms:.0f}ms")
+                    for item in items:
+                        qty = item.get("final_order_qty", 0)
+                        unit = item.get("order_unit_qty", 1) or 1
+                        # _calc_multiplier와 동일한 계산: ceil(qty / unit)
+                        mult = max(1, (qty + unit - 1) // unit) if qty > 0 else 0
+                        actual = mult * unit
+                        # 발주 감사 로그: BGF에 실제 전송된 배수/총발주량
+                        logger.info(
+                            f"[AUDIT] {item.get('item_cd')} "
+                            f"PYUN_QTY={mult} ORD_UNIT_QTY={unit} "
+                            f"TOT_QTY={actual} (need={qty}) "
+                            f"method=batch_grid"
+                        )
+                        results.append({
+                            "item_cd": item.get("item_cd"),
+                            "target_qty": qty,
+                            "actual_qty": actual,
+                            "multiplier": mult,
+                            "order_unit_qty": unit,
+                            "order_date": order_date,
+                            "success": True,
+                            "method": "batch_grid",
+                        })
+                        total_success += 1
+                    continue
+                else:
+                    msg = batch_result.message if batch_result else 'returned None'
+                    logger.warning(f"[{order_date}] Batch Grid 실패 ({msg}), Selenium 폴백")
+
+            # ── Level 3: 기존 Selenium 발주 (폴백) ──
+            # 폼이 이미 열려 있고 날짜도 선택된 상태
 
             # 3. 상품들 입력
             date_success = 0
@@ -2053,7 +2239,10 @@ class OrderExecutor:
                 target_qty = item.get("final_order_qty", 0)
                 item_nm = item.get("item_nm", item_cd)
 
-                if not item_cd or target_qty <= 0:
+                if not item_cd:
+                    continue
+                # qty=0: 일반 상품은 스킵, cancel_smart 상품은 통과 (스마트 취소용)
+                if target_qty <= 0 and not item.get("cancel_smart"):
                     continue
 
                 logger.info(f"[{i+1}/{len(items)}] {item_nm} ({item_cd}): 목표 {target_qty}개")
@@ -2084,13 +2273,37 @@ class OrderExecutor:
 
                 # input_result가 None일 경우 기본값 사용
                 if input_result:
+                    # 발주 감사 로그: BGF에 실제 전송된 배수/총발주량
+                    logger.info(
+                        f"[AUDIT] {item_cd} "
+                        f"PYUN_QTY={input_result.get('multiplier', 0)} "
+                        f"ORD_UNIT_QTY={input_result.get('order_unit_qty', 1)} "
+                        f"TOT_QTY={input_result.get('actual_qty', 0)} "
+                        f"(need={target_qty}) method=selenium"
+                    )
+
                     # 실제 발주일: BGF 그리드/팝업에서 확인된 날짜 우선, 없으면 계산된 날짜
                     verified_order_date = input_result.get('actual_order_date', '') or order_date
 
                     if verified_order_date != order_date:
+                        # 밀림 원인 분석: orderable_day 불일치인지 확인
+                        orderable_day_from_grid = input_result.get('orderable_day', '')
+                        mismatch_reason = "unknown"
+                        if orderable_day_from_grid:
+                            try:
+                                target_weekday = datetime.strptime(order_date, "%Y-%m-%d").weekday()
+                                target_kr = self.WEEKDAY_MAP.get(target_weekday, "")
+                                if target_kr and target_kr not in orderable_day_from_grid:
+                                    mismatch_reason = f"비발주일(발주가능:{orderable_day_from_grid})"
+                                else:
+                                    mismatch_reason = "BGF시스템 마감 또는 기타"
+                            except ValueError:
+                                mismatch_reason = "날짜 파싱 실패"
+
                         logger.warning(
-                            f"발주일 불일치 감지: 예상={order_date}, "
-                            f"실제={verified_order_date} ({item_cd})"
+                            f"[발주일 밀림] {item_cd}: "
+                            f"예상={order_date} -> 실제={verified_order_date}, "
+                            f"원인={mismatch_reason}"
                         )
 
                     results.append({
@@ -2173,6 +2386,296 @@ class OrderExecutor:
             "results": results,
             "grouped_by_date": {date: len(items) for date, items in grouped_orders.items()}
         }
+
+    # ─────────────────────────────────────────
+    # Direct API / Batch Grid 통합 메서드
+    # ─────────────────────────────────────────
+
+    def _try_direct_api_save(
+        self,
+        items: List[Dict[str, Any]],
+        order_date: str,
+    ):
+        """
+        Level 1: Direct API로 발주 저장 시도
+
+        Returns:
+            SaveResult 또는 None (모듈 미설치 시)
+        """
+        try:
+            from src.order.direct_api_saver import DirectApiOrderSaver, SaveResult
+        except ImportError:
+            logger.debug("[DirectAPI] direct_api_saver 모듈 없음")
+            return None
+
+        try:
+            saver = DirectApiOrderSaver(self.driver)
+
+            # 캡처 파일에서 템플릿 로드 시도
+            import os
+            from pathlib import Path
+            # 프로젝트 루트 기반 절대 경로 + 상대 경로 병렬 탐색
+            project_root = Path(__file__).resolve().parent.parent.parent
+            capture_dir = project_root / 'captures'
+            capture_files = [
+                str(capture_dir / 'saveOrd_live_capture_20260228.json'),
+                str(capture_dir / 'save_api_capture_valid.json'),
+                str(capture_dir / 'save_api_capture.json'),
+                'captures/saveOrd_live_capture_20260228.json',
+                'captures/save_api_capture_valid.json',
+                'captures/save_api_capture.json',
+                'bgf_auto/captures/saveOrd_live_capture_20260228.json',
+                'bgf_auto/captures/save_api_capture_valid.json',
+                'bgf_auto/captures/save_api_capture.json',
+            ]
+            for fpath in capture_files:
+                if os.path.exists(fpath):
+                    if saver.set_template_from_file(fpath):
+                        logger.info(f"[DirectAPI] 캡처 파일에서 템플릿 로드 성공: {os.path.basename(fpath)}")
+                        break
+
+            # 인터셉터에서 실시간 캡처 시도
+            if not saver.has_template:
+                logger.info("[DirectAPI] 캡처 파일 미발견, 인터셉터 실시간 캡처 시도")
+                saver.install_interceptor()
+                if not saver.capture_save_template():
+                    return SaveResult(success=False, message='no save template')
+
+            # 날짜 형식 정규화
+            date_str = order_date.replace('-', '')
+
+            result = saver.save_orders(items, date_str)
+
+            # 검증 (단일 배치만 — 청크 분할 시 마지막 청크만 그리드에 남음)
+            if result.success:
+                if result.method == 'direct_api_chunked':
+                    logger.info(f"[DirectAPI] 청크 분할 완료: {result.saved_count}건, 검증 스킵 (다중 트랜잭션)")
+                else:
+                    verify = saver.verify_save(items)
+                    if not verify.get('verified') and not verify.get('skipped'):
+                        matched = verify.get('matched', 0)
+                        total = verify.get('total', 0)
+                        mismatched_count = len(verify.get('mismatched', []))
+
+                        if total > 0 and matched == 0 and mismatched_count == 0:
+                            # 전체 누락 + 불일치 0건 = 그리드 교체 패턴
+                            # gfn_transaction errCd=99999 확인 완료 → 성공으로 간주
+                            logger.info(
+                                f"[DirectAPI] 검증: 전체 누락({total}건) + 불일치 0건 "
+                                f"→ 그리드 교체 추정, gfn_transaction 성공 신뢰"
+                            )
+                            # result 변경 없음 (success=True 유지)
+                        elif total > 0 and matched == 0:
+                            # 불일치 존재 = 수량이 다르게 저장됨 → 실제 문제
+                            logger.error(
+                                f"[DirectAPI] 검증 전체 실패 (0/{total}건 일치, "
+                                f"불일치={mismatched_count}건) → 폴백 트리거"
+                            )
+                            from src.order.direct_api_saver import SaveResult as SR
+                            result = SR(
+                                success=False,
+                                saved_count=0,
+                                method='direct_api',
+                                message=f'verification failed: 0/{total} matched, '
+                                        f'{mismatched_count} mismatched',
+                            )
+                        else:
+                            logger.warning(f"[DirectAPI] 저장은 성공했으나 검증 부분 실패: {verify}")
+
+            return result
+
+        except Exception as e:
+            logger.error(f"[DirectAPI] 발주 저장 예외: {e}")
+            from src.order.direct_api_saver import SaveResult
+            return SaveResult(success=False, message=f'exception: {e}')
+
+    def _check_order_availability(self) -> dict:
+        """발주 가능 여부 확인 (ordYn/ordClose 폼 변수 검사).
+
+        Direct API와 동일한 JS를 재사용하여 BGF 폼의 발주 가능 상태를 확인.
+        실패 시 빈 dict 반환 (기존 동작 유지 — 검증 실패가 발주를 차단하지 않음).
+        """
+        try:
+            from src.order.direct_api_saver import CHECK_ORDER_AVAILABILITY_JS
+            result_str = self.driver.execute_script(f"return {CHECK_ORDER_AVAILABILITY_JS}")
+            if result_str:
+                result = json.loads(result_str)
+                logger.info(
+                    f"[ordYn체크] ordYn='{result.get('ordYn', '')}', "
+                    f"ordClose='{result.get('ordClose', '')}', "
+                    f"available={result.get('available')}"
+                )
+                return result
+            logger.info("[ordYn체크] JS 반환값 없음 (빈 응답)")
+            return {}
+        except Exception as e:
+            logger.warning(f"[ordYn체크] 확인 실패 (무시): {e}")
+            return {}
+
+    def _try_batch_grid_input(
+        self,
+        items: List[Dict[str, Any]],
+        order_date: str,
+    ):
+        """
+        Level 2: Hybrid 배치 그리드 입력 시도
+
+        Returns:
+            SaveResult 또는 None (모듈 미설치 시)
+        """
+        try:
+            from src.order.batch_grid_input import BatchGridInputter
+        except ImportError:
+            logger.debug("[BatchGrid] batch_grid_input 모듈 없음")
+            return None
+
+        try:
+            inputter = BatchGridInputter(self.driver)
+
+            # 그리드 준비 확인
+            grid_status = inputter.check_grid_ready()
+            if not grid_status.get('ready'):
+                from src.order.direct_api_saver import SaveResult
+                return SaveResult(
+                    success=False, method='batch_grid',
+                    message=f'grid not ready: {grid_status.get("reason", "unknown")}',
+                )
+
+            # 배치 입력 + 저장 (confirm_order 재사용)
+            result = inputter.input_batch(
+                items, order_date,
+                confirm_fn=self.confirm_order,
+            )
+
+            return result
+
+        except Exception as e:
+            logger.error(f"[BatchGrid] 발주 입력 예외: {e}")
+            from src.order.direct_api_saver import SaveResult
+            return SaveResult(success=False, method='batch_grid', message=f'exception: {e}')
+
+    def _verify_orderable_day(self, item_cd: str, bgf_orderable_day: str) -> None:
+        """BGF 그리드에서 읽은 발주가능요일을 DB와 비교 검증.
+
+        불일치 시 WARNING 로그 기록. DB 업데이트는 save_to_db()에서 처리.
+
+        Args:
+            item_cd: 상품코드
+            bgf_orderable_day: BGF 그리드에서 읽은 발주가능요일 (예: "화목토")
+        """
+        try:
+            db_data = self.product_collector.get_from_db(item_cd)
+            if not db_data:
+                logger.info(
+                    f"[발주요일검증] {item_cd}: "
+                    f"DB 데이터 없음, BGF값({bgf_orderable_day}) 신규 저장 예정"
+                )
+                return
+
+            db_orderable_day = db_data.get("orderable_day", "")
+
+            # 정규화 비교 (문자 순서 무관)
+            bgf_set = set(bgf_orderable_day)
+            db_set = set(db_orderable_day) if db_orderable_day else set()
+
+            if bgf_set != db_set:
+                logger.warning(
+                    f"[발주요일 변경감지] {item_cd}: "
+                    f"DB={db_orderable_day} -> BGF={bgf_orderable_day}"
+                )
+                # save_to_db()에서 grid_data 기반으로 자동 업데이트됨
+        except Exception as e:
+            logger.debug(f"[발주요일검증] {item_cd} 검증 실패: {e}")
+
+    def collect_product_info_only(self, item_cd: str) -> Optional[Dict[str, Any]]:
+        """발주 없이 상품정보만 수집 (orderable_day 검증용).
+
+        단품별 발주 화면에서 상품코드를 입력하여 그리드 데이터를 읽고,
+        배수 0을 입력하여 실제 발주는 하지 않음.
+
+        Args:
+            item_cd: 상품 코드
+
+        Returns:
+            그리드 상품정보 dict (orderable_day 포함) 또는 None
+        """
+        logger.info(f"[정보수집] {item_cd}: orderable_day 검증용 상품정보 수집")
+
+        try:
+            # 0. Alert 정리
+            self._clear_any_alerts(silent=True)
+
+            # 0.5. 마지막 행 상품명 셀 클릭 (포커스 설정)
+            self._click_last_row_item_cell()
+            time.sleep(ORDER_CELL_ACTIVATE_WAIT)
+
+            # 1. 상품코드 입력
+            if ORDER_INPUT_OPTIMIZATION_PHASE >= 2:
+                input_result = self._input_product_code_optimized(item_cd)
+                if not input_result.get('success'):
+                    logger.warning(f"[정보수집] {item_cd}: 상품코드 입력 실패")
+                    return None
+            else:
+                # Phase 0/1: ActionChains로 상품코드 입력
+                actions = ActionChains(self.driver)
+                actions.send_keys(item_cd)
+                actions.perform()
+
+            # 2. Enter로 상품 검색
+            time.sleep(ORDER_BEFORE_ENTER)
+            actions = ActionChains(self.driver)
+            actions.send_keys(Keys.ENTER)
+            actions.perform()
+
+            # 3. 로딩 대기
+            if ORDER_INPUT_OPTIMIZATION_PHASE >= 1:
+                self._wait_for_loading_complete(item_cd)
+            else:
+                time.sleep(ORDER_AFTER_ENTER)
+
+            # Alert 체크
+            alert_text = self._clear_any_alerts(silent=True)
+            if alert_text and ('없' in alert_text or '불가' in alert_text):
+                logger.info(f"[정보수집] {item_cd}: {alert_text}")
+                return None
+
+            # 4. 그리드에서 상품정보 읽기
+            grid_data = self._read_product_info_from_grid(item_cd)
+
+            if grid_data:
+                orderable_day = grid_data.get("orderable_day", "")
+                logger.info(
+                    f"[정보수집] {item_cd}: "
+                    f"orderable_day={orderable_day}, "
+                    f"item_nm={grid_data.get('item_nm', '')}"
+                )
+
+                # DB 저장 (최신값 업데이트)
+                if orderable_day:
+                    self._verify_orderable_day(item_cd, orderable_day)
+                self.product_collector.save_to_db(item_cd, grid_data)
+
+            # 5. 배수 0 입력 (발주 취소 — 그리드에 행이 추가되었으므로 0으로 설정)
+            try:
+                actions = ActionChains(self.driver)
+                actions.send_keys(Keys.TAB)  # 배수 셀로 이동
+                actions.perform()
+                time.sleep(0.3)
+                actions = ActionChains(self.driver)
+                actions.send_keys("0")
+                actions.send_keys(Keys.ENTER)
+                actions.perform()
+                time.sleep(0.3)
+                # 0 입력 시 Alert 정리
+                self._clear_any_alerts(silent=True)
+            except Exception as e:
+                logger.debug(f"[정보수집] {item_cd}: 배수 0 입력 실패 (무시): {e}")
+
+            return grid_data
+
+        except Exception as e:
+            logger.warning(f"[정보수집] {item_cd}: 수집 실패: {e}")
+            return None
 
     def _read_product_info_from_grid(self, item_cd: str) -> Optional[Dict[str, Any]]:
         """

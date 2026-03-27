@@ -304,6 +304,16 @@ class AutoOrderSystem:
             exclusion_records=self._exclusion_records,
         )
 
+    def _exclude_site_ordered_items(
+        self, order_list: List[Dict[str, Any]], order_date: str
+    ) -> List[Dict[str, Any]]:
+        """site(사용자) 기발주 상품 제외 — BGF UPSERT 덮어쓰기 방지"""
+        return self._filter.exclude_site_ordered_items(
+            order_list=order_list,
+            order_date=order_date,
+            exclusion_records=self._exclusion_records,
+        )
+
     def _deduct_manual_food_orders(
         self,
         order_list: List[Dict[str, Any]],
@@ -377,6 +387,7 @@ class AutoOrderSystem:
         Phase B: new_product_3day_tracking 기반 분산 발주 (our_order_count 추적)
         Phase C: AI 예측 목록과 총량 합산 (중복 방지)
         """
+        before_codes = {item.get("item_cd") for item in order_list}
         try:
             # Phase A: 기존 mids 후속 발주 (레거시 호환 — placed>0만 대상)
             order_list = self._process_3day_follow_legacy(order_list)
@@ -418,6 +429,24 @@ class AutoOrderSystem:
 
         except Exception as e:
             logger.warning(f"3일발주 후속 처리 실패 (발주 플로우 계속): {e}")
+
+        # 3일발주로 추가된 푸드 상품 추적 (food_daily_cap 보호용)
+        FOOD_SAME_DAY_MID_CDS = {'001', '002', '003'}
+        after_codes = {item.get("item_cd") for item in order_list}
+        added_3day = after_codes - before_codes
+        if added_3day:
+            # mid_cd 확인하여 푸드만 보호
+            for item in order_list:
+                ic = item.get("item_cd", "")
+                if ic in added_3day:
+                    mid = item.get("mid_cd", "")
+                    if mid in FOOD_SAME_DAY_MID_CDS:
+                        self._3day_protected_items.add(ic)
+            if self._3day_protected_items:
+                logger.info(
+                    f"[3day_protect] 푸드 3일발주 보호 대상: "
+                    f"{len(self._3day_protected_items)}건"
+                )
 
         return order_list
 
@@ -537,6 +566,7 @@ class AutoOrderSystem:
         try:
             from src.application.services.new_product_order_service import record_order_completed
             from src.infrastructure.database.repos import NP3DayTrackingRepo
+            from src.settings.constants import NEW_PRODUCT_DS_MIN_ORDERS
 
             logger.info(
                 f"[신상품3일발주] 추적 업데이트 시작: {len(self._pending_np3day_orders)}건"
@@ -872,7 +902,43 @@ class AutoOrderSystem:
         self._exclusion_records.extend(new_exclusions)
         self._last_stock_data = stock_data
 
+        # DB confirmed pending 합산 (발주확정 후 pending_sync가 저장한 값)
+        try:
+            confirmed = self._get_confirmed_pending_from_db()
+            if confirmed:
+                for item_cd, qty in confirmed.items():
+                    pending_data[item_cd] = max(pending_data.get(item_cd, 0), qty)
+                logger.info(
+                    f"[pending] DB confirmed pending {len(confirmed)}건 합산"
+                )
+        except Exception as e:
+            logger.debug(f"[pending] DB confirmed pending 조회 실패 (무시): {e}")
+
         return pending_data
+
+    def _get_confirmed_pending_from_db(self) -> Dict[str, int]:
+        """order_tracking에서 오늘 확정된 pending 조회"""
+        from src.infrastructure.database.connection import DBRouter
+
+        today = datetime.now().strftime("%Y-%m-%d")
+        conn = DBRouter.get_connection(
+            store_id=self.store_id, table="order_tracking"
+        )
+        try:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT item_cd, remaining_qty
+                FROM order_tracking
+                WHERE pending_confirmed = 1
+                  AND DATE(pending_confirmed_at) = ?
+                  AND remaining_qty > 0
+                """,
+                (today,),
+            )
+            return {row[0]: row[1] for row in cursor.fetchall()}
+        finally:
+            conn.close()
 
     def _convert_prediction_result_to_dict(self, result: PredictionResult) -> Dict[str, Any]:
         """
@@ -938,6 +1004,8 @@ class AutoOrderSystem:
             "proposal_summary": getattr(result, "proposal_summary", ""),
             "round_floor": getattr(result, "round_floor", 0),
             "round_ceil": getattr(result, "round_ceil", 0),
+            # 골든 스냅샷용 단계별 중간값 (리팩토링 검증)
+            "_snapshot_stages": getattr(result, "snapshot_stages", None),
         }
 
     def _get_expiration_days_for_item(self, result, product_detail: Optional[Dict]) -> int:
@@ -1008,7 +1076,8 @@ class AutoOrderSystem:
         self,
         min_order_qty: int = 1,
         max_items: Optional[int] = None,
-        target_date: Optional[datetime] = None
+        target_date: Optional[datetime] = None,
+        skip_db_write: bool = False
     ) -> List[Dict[str, Any]]:
         """
         발주 추천 목록 생성 (예측 기반)
@@ -1017,6 +1086,7 @@ class AutoOrderSystem:
             min_order_qty: 최소 발주량 (이하는 제외)
             max_items: 최대 상품 수 (None이면 전체)
             target_date: 발주 대상 날짜
+            skip_db_write: True이면 eval_outcomes/prediction_logs DB 쓰기 스킵 (스냅샷 모드)
 
         Returns:
             발주 추천 목록 [{item_cd, item_nm, final_order_qty, orderable_day, ...}, ...]
@@ -1053,11 +1123,14 @@ class AutoOrderSystem:
                     logger.info(f"사전 평가: SKIP {len(skip_codes)}개 상품 제외")
 
                     # 평가 결과를 DB에 저장 (사후 검증용)
-                    try:
-                        saved = self._eval_calibrator.save_eval_results(eval_results)
-                        logger.info(f"평가 결과 DB 저장: {saved}건")
-                    except Exception as save_err:
-                        logger.warning(f"평가 결과 DB 저장 실패: {save_err}")
+                    if skip_db_write:
+                        logger.info(f"평가 결과 저장: {len(eval_results)}건 (skip_db_write=True, 스킵)")
+                    else:
+                        try:
+                            saved = self._eval_calibrator.save_eval_results(eval_results)
+                            logger.info(f"평가 결과 DB 저장: {saved}건")
+                        except Exception as save_err:
+                            logger.warning(f"평가 결과 DB 저장 실패: {save_err}")
             except Exception as e:
                 logger.warning(f"사전 발주 평가 실패 (원본 플로우 유지): {e}")
 
@@ -1145,14 +1218,17 @@ class AutoOrderSystem:
                 candidates.sort(key=_sort_key)
 
             # 예측 결과 로그 저장 (Phase 1.7에서 이미 저장했으면 스킵)
-            try:
-                saved_count = self.prediction_logger.log_predictions_batch_if_needed(candidates)
-                if saved_count > 0:
-                    logger.info(f"예측 로그 저장: {saved_count}/{len(candidates)}건")
-                else:
-                    logger.info(f"예측 로그: 이미 기록됨 (Phase 1.7), 스킵")
-            except Exception as e:
-                logger.warning(f"예측 로그 저장 실패: {e}")
+            if skip_db_write:
+                logger.info(f"예측 로그: skip_db_write=True, 스킵")
+            else:
+                try:
+                    saved_count = self.prediction_logger.log_predictions_batch_if_needed(candidates)
+                    if saved_count > 0:
+                        logger.info(f"예측 로그 저장: {saved_count}/{len(candidates)}건")
+                    else:
+                        logger.info(f"예측 로그: 이미 기록됨 (Phase 1.7), 스킵")
+                except Exception as e:
+                    logger.warning(f"예측 로그 저장 실패: {e}")
 
             # PredictionResult -> dict 변환
             order_list = [self._convert_prediction_result_to_dict(r) for r in candidates]
@@ -1160,6 +1236,9 @@ class AutoOrderSystem:
             # 공통 제외 필터 적용 (미취급/CUT/자동발주/스마트발주)
             order_list = self._exclude_filtered_items(order_list)
             self._warn_stale_cut_items(order_list)
+
+            # site(사용자) 기발주 상품 제외 — BGF UPSERT 덮어쓰기 방지
+            order_list = self._exclude_site_ordered_items(order_list, target_date)
 
             # ★ 신상품 도입 현황 (실패해도 기존 발주 플로우 중단 금지)
             try:
@@ -1187,6 +1266,12 @@ class AutoOrderSystem:
                 today_str = datetime.now().strftime('%Y-%m-%d')
                 site_order_counts = self._get_site_order_counts_by_midcd(today_str)
 
+            # ── 골든 스냅샷: Floor/CUT/Cap 전 qty 기록 ──
+            for _item in order_list:
+                _ss = _item.get("_snapshot_stages")
+                if _ss is not None:
+                    _ss["before_floor"] = _item.get("final_order_qty", 0)
+
             # ★ 카테고리 총량 floor 보충 (신선식품) — Cap 전에 실행하여 최선의 상품 선별
             try:
                 from src.prediction.prediction_config import PREDICTION_PARAMS
@@ -1208,10 +1293,16 @@ class AutoOrderSystem:
             # ★ 대분류(large_cd) 기반 카테고리 총량 floor 보충
             try:
                 if self._large_category_forecaster and self._large_category_forecaster.enabled:
+                    # mid Floor 보충량을 large에 전달 (이중 보충 방지)
+                    mid_floor_added = {}
+                    if self._category_forecaster:
+                        mid_floor_added = self._category_forecaster.get_last_supplement_added()
+
                     before_qty = sum(item.get('final_order_qty', 0) for item in order_list)
                     order_list = self._large_category_forecaster.supplement_orders(
                         order_list, eval_results, self._cut_items,
-                        site_order_counts=site_order_counts
+                        site_order_counts=site_order_counts,
+                        mid_floor_added=mid_floor_added,
                     )
                     after_qty = sum(item.get('final_order_qty', 0) for item in order_list)
                     if after_qty > before_qty:
@@ -1268,18 +1359,76 @@ class AutoOrderSystem:
             except Exception as e:
                 logger.warning(f"CUT 대체 보충 실패 (원본 유지): {e}")
 
+            # ── 골든 스냅샷: Floor/CUT 보충 후, Cap 전 qty 기록 ──
+            for _item in order_list:
+                _ss = _item.get("_snapshot_stages")
+                if _ss is not None:
+                    _ss["after_floor"] = _item.get("final_order_qty", 0)
+
             # 푸드류 요일별 총량 상한 적용 — 마지막에 실행하여 Floor/CUT 보충 결과를 최종 절삭
+            # Floor 보호: Floor/CUT 보충 품목은 비보호 품목 모두 절삭 후에야 절삭
             try:
-                before_count = len(order_list)
-                order_list = apply_food_daily_cap(
-                    order_list, target_date=target_date, store_id=self.store_id,
-                    site_order_counts=site_order_counts
+                # Floor/CUT 보충 품목 코드 수집 (source 태그 기반)
+                floor_protected_codes = {
+                    item.get("item_cd") for item in order_list
+                    if item.get("source") in ("category_floor", "large_category_floor", "cut_replacement")
+                }
+                if floor_protected_codes:
+                    logger.info(
+                        f"[Cap] Floor 보호 품목: {len(floor_protected_codes)}개 "
+                        f"(비보호 우선 절삭)"
+                    )
+
+                # 3일발주 미달성 푸드 상품은 cap에서 보호 (분리 → cap 적용 → 재합산)
+                protected_set = getattr(self, '_3day_protected_items', set())
+                if protected_set:
+                    must_3day = [
+                        item for item in order_list
+                        if item.get("item_cd") in protected_set
+                    ]
+                    normal_items = [
+                        item for item in order_list
+                        if item.get("item_cd") not in protected_set
+                    ]
+                else:
+                    must_3day = []
+                    normal_items = order_list
+
+                before_count = len(normal_items)
+                capped_items = apply_food_daily_cap(
+                    normal_items, target_date=target_date, store_id=self.store_id,
+                    site_order_counts=site_order_counts,
+                    floor_protected_codes=floor_protected_codes or None
                 )
-                after_count = len(order_list)
-                if before_count != after_count:
+                after_count = len(capped_items)
+
+                # 3일발주 보호 상품 재합산
+                order_list = must_3day + capped_items
+
+                if must_3day:
+                    logger.info(
+                        f"[3day_protect] 3일달성보호={len(must_3day)}건 "
+                        f"cap적용={before_count}→{after_count}건 "
+                        f"최종={len(order_list)}건"
+                    )
+                elif before_count != after_count:
                     logger.info(f"푸드류 총량 상한 적용: {before_count} → {after_count}개")
             except Exception as e:
                 logger.warning(f"푸드류 총량 상한 적용 실패 (원본 유지): {e}")
+
+            # ── 골든 스냅샷: Cap 후 qty 기록 ──
+            for _item in order_list:
+                _ss = _item.get("_snapshot_stages")
+                if _ss is not None:
+                    _ss["after_food_cap"] = _item.get("final_order_qty", 0)
+
+            # Cap 재적용에 필요한 파라미터 보존 (미입고 조정 후 재적용용)
+            self._last_cap_params = {
+                "site_order_counts": site_order_counts,
+                "floor_protected_codes": floor_protected_codes or None,
+                "target_date": target_date,
+                "protected_set": getattr(self, '_3day_protected_items', set()),
+            }
 
             logger.info(f"개선된 예측기: {len(order_list)}개 상품 추천")
 
@@ -1293,6 +1442,9 @@ class AutoOrderSystem:
             # 공통 제외 필터 적용 (미취급/CUT/자동발주/스마트발주)
             order_list = self._exclude_filtered_items(order_list)
             self._warn_stale_cut_items(order_list)
+
+            # site(사용자) 기발주 상품 제외 — BGF UPSERT 덮어쓰기 방지
+            order_list = self._exclude_site_ordered_items(order_list, target_date)
 
             # ★ 스마트발주 오버라이드 (기존 예측기 경로)
             order_list = self._inject_smart_order_items(order_list, target_date)
@@ -1389,6 +1541,8 @@ class AutoOrderSystem:
         # 발주 제외 사유 기록 초기화 (새 실행 사이클)
         self._exclusion_records.clear()
         self._cut_lost_items = []  # CUT 탈락 상품 초기화 (이전 실행 오염 방지)
+        self._3day_protected_items: Set[str] = set()  # 3일발주 미달성 → cap 보호 대상
+        self._last_cap_params = None  # Cap 재적용 파라미터 초기화
 
         # DB에서 미취급 상품 목록 로드 (이전 조회에서 실패한 상품)
         self.load_unavailable_from_db()
@@ -1555,9 +1709,55 @@ class AutoOrderSystem:
         # ===== 푸드 수동발주 차감 =====
         order_list = self._deduct_manual_food_orders(order_list, min_order_qty)
 
+        # ── 골든 스냅샷: 수동차감 후 qty 기록 ──
+        for _item in order_list:
+            _ss = _item.get("_snapshot_stages")
+            if _ss is not None:
+                _ss["after_manual_deduct"] = _item.get("final_order_qty", 0)
+
         if not order_list:
             logger.info("수동발주 차감 후 발주 대상 없음")
             return {"success": True, "success_count": 0, "fail_count": 0, "message": "all deducted by manual orders"}
+
+        # ===== 푸드류 Cap 재적용 (미입고 조정 후) =====
+        # 미입고 조정(order_adjuster)에서 safety_stock 재계산으로 qty가 증가할 수 있으므로
+        # Cap을 다시 적용하여 요일별 총량 상한을 보장한다.
+        cap_params = getattr(self, '_last_cap_params', None)
+        if cap_params:
+            try:
+                protected_set = cap_params.get("protected_set", set())
+                if protected_set:
+                    must_3day = [
+                        item for item in order_list
+                        if item.get("item_cd") in protected_set
+                    ]
+                    normal_items = [
+                        item for item in order_list
+                        if item.get("item_cd") not in protected_set
+                    ]
+                else:
+                    must_3day = []
+                    normal_items = order_list
+
+                before_qty = sum(item.get('final_order_qty', 0) for item in normal_items)
+                recapped = apply_food_daily_cap(
+                    normal_items,
+                    target_date=cap_params.get("target_date"),
+                    store_id=self.store_id,
+                    site_order_counts=cap_params.get("site_order_counts"),
+                    floor_protected_codes=cap_params.get("floor_protected_codes"),
+                )
+                after_qty = sum(item.get('final_order_qty', 0) for item in recapped)
+
+                order_list = must_3day + recapped
+
+                if before_qty != after_qty:
+                    logger.info(
+                        f"[Cap재적용] 미입고조정 후 푸드 총량 재절삭: "
+                        f"qty {before_qty} → {after_qty} ({before_qty - after_qty}개 감소)"
+                    )
+            except Exception as e:
+                logger.warning(f"[Cap재적용] 실패 (원본 유지): {e}")
 
         # 발주 목록 출력
         self.print_recommendations(order_list)
@@ -1642,7 +1842,7 @@ class AutoOrderSystem:
                     dates_str = ", ".join(sorted(date_groups.keys()))
                     logger.info(f"[발주분석] 스냅샷 저장: {total_saved}건 (발주일: {dates_str})")
             except Exception as e:
-                logger.debug(f"[발주분석] 스냅샷 저장 실패 (무시): {e}")
+                logger.warning(f"[발주분석] 스냅샷 저장 실패: {e}")
 
         # ★ 재고 불일치 진단 저장
         if not dry_run and getattr(self, '_last_stock_discrepancies', None):
@@ -1707,6 +1907,24 @@ class AutoOrderSystem:
         result["order_list"] = order_list
         result["eval_results"] = self._last_eval_results
 
+        # Q5 만료 재고 차감 통계 (카카오 알림용)
+        q5_overrides = getattr(self, '_q5_expired_overrides', {})
+        q5_applied = getattr(self, '_q5_applied_items', [])
+        if q5_overrides:
+            result["q5_expired_stock"] = {
+                "total_skus": len(q5_overrides),
+                "total_expiring_qty": sum(q5_overrides.values()),
+                "applied_items": [
+                    {
+                        "item_cd": d["item_cd"],
+                        "item_nm": d.get("item_nm", ""),
+                        "stock_before": d.get("stock_at_prediction", 0),
+                        "stock_after": d.get("stock_at_order", 0),
+                    }
+                    for d in q5_applied[:5]  # 최대 5개까지
+                ],
+            }
+
         return result
 
     def _recalculate_need_qty(
@@ -1742,6 +1960,52 @@ class AutoOrderSystem:
         min_order_qty: int = 1
     ) -> List[Dict[str, Any]]:
         """기존 발주 목록에 미입고/실시간재고 데이터를 직접 반영"""
+        # 오늘 만료 배치 잔여수량 조회 (DB 수정 없음, 계산용 override)
+        expired_stock_overrides = {}
+        try:
+            from src.infrastructure.database.repos.inventory_batch_repo import InventoryBatchRepository
+            batch_repo = InventoryBatchRepository(store_id=self.store_id)
+            expired_stock_overrides = batch_repo.get_today_expiring_item_qty(
+                store_id=self.store_id
+            )
+            if expired_stock_overrides:
+                logger.info(
+                    f"[만료재고조회] {len(expired_stock_overrides)}개 SKU "
+                    f"(총 {sum(expired_stock_overrides.values())}개) 오늘 만료"
+                )
+        except Exception as e:
+            logger.warning(f"만료 재고 조회 실패 (무시): {e}")
+
+        # ★ BGF 확인 미입고 보정: order_prep_collector가 pending=0으로 잘못 반환한 경우
+        # Phase 1.96에서 BGF 발주현황과 대조하여 pending_confirmed=1로 마킹된 항목을
+        # pending_data에 병합하여 adjuster의 재계산에서 정확한 pending을 사용하도록 한다.
+        try:
+            from datetime import timedelta
+            from src.infrastructure.database.repos.order_tracking_repo import OrderTrackingRepository
+            yesterday_str = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+            tracking_repo = OrderTrackingRepository(store_id=self.store_id)
+            confirmed_pending = tracking_repo.get_confirmed_pending(
+                order_date=yesterday_str, store_id=self.store_id
+            )
+            if confirmed_pending:
+                corrected_count = 0
+                for item_cd, conf_qty in confirmed_pending.items():
+                    current_pending = pending_data.get(item_cd, 0)
+                    if current_pending < conf_qty:
+                        pending_data[item_cd] = conf_qty
+                        corrected_count += 1
+                        logger.info(
+                            f"[pending보정] {item_cd}: "
+                            f"order_prep={current_pending} → BGF확인={conf_qty}"
+                        )
+                if corrected_count > 0:
+                    logger.info(
+                        f"[pending보정] BGF 확인 기반 {corrected_count}건 보정 완료 "
+                        f"(confirmed_pending {len(confirmed_pending)}건 중)"
+                    )
+        except Exception as e:
+            logger.warning(f"[pending보정] BGF 확인 pending 조회 실패 (무시): {e}")
+
         adjusted_list, stock_discrepancies = self._adjuster.apply_pending_and_stock(
             order_list=order_list,
             pending_data=pending_data,
@@ -1751,8 +2015,17 @@ class AutoOrderSystem:
             unavailable_items=self._unavailable_items,
             exclusion_records=self._exclusion_records,
             last_eval_results=self._last_eval_results,
+            expired_stock_overrides=expired_stock_overrides,
         )
         self._last_stock_discrepancies = stock_discrepancies
+
+        # Q5 통계 저장 (카카오 알림용)
+        self._q5_expired_overrides = expired_stock_overrides
+        self._q5_applied_items = [
+            d for d in stock_discrepancies
+            if d.get("item_cd") in expired_stock_overrides
+        ]
+
         return adjusted_list
 
     def _finalize_order_unit_qty(self, order_list: List[Dict[str, Any]]) -> None:

@@ -124,17 +124,19 @@ try {
     }
     result.workFormVars = ordVars;
 
-    // 3. 발주 가능 여부 판단
+    // 3. 발주 관련 폼 변수 (fv_OrdYn은 단품별발주 폼에 존재하지 않음)
     var ordYn = ordVars.fv_OrdYn || '';
     var ordClose = ordVars.fv_OrdClose || '';
     result.ordYn = ordYn;
     result.ordClose = ordClose;
+    result.ordInputFlag = ordVars.fv_OrdInputFlag || '';
 
-    // 4. 발주 가능 판단
+    // 4. 발주 가능 판단 (세션 + 명시적 불가 플래그만 체크)
     var available = true;
     if (!result.hasSession) available = false;
-    if (ordYn === 'N' || ordYn === '0' || ordYn === 'false') available = false;
-    if (ordClose === 'Y' || ordClose === '1' || ordClose === 'true') available = false;
+    // ordYn이 명시적으로 존재하면서 N인 경우만 차단 (빈값=미존재는 허용)
+    if (ordYn && (ordYn === 'N' || ordYn === '0' || ordYn === 'false')) available = false;
+    if (ordClose && (ordClose === 'Y' || ordClose === '1' || ordClose === 'true')) available = false;
     result.available = available;
 
     // 5. 현재 시간
@@ -1097,11 +1099,17 @@ class DirectApiOrderSaver:
             Phase 2 (비동기): gfn_transaction 호출 + 폴링 대기
         """
         try:
-            # Phase -1: 발주 가능 여부 확인 (진단용 — 실패해도 진행)
+            # Phase -1: 발주 가능 여부 확인 (진단용 — 실패해도 gfn_transaction 진행)
+            # fv_OrdYn 폼 변수가 단품별발주에 존재하지 않으므로 빈값=정상.
+            # ordYn 체크 결과와 무관하게 gfn_transaction을 시도하고,
+            # 서버 응답(saved_count)으로 성공/실패를 판단한다.
             avail = self.check_order_availability()
             if not avail.get('available', True):
+                ord_yn = avail.get('ordYn', '')
+                ord_close = avail.get('ordClose', '')
                 logger.warning(
-                    f"[DirectApiSaver] 발주 불가 상태에서 저장 시도: {avail}"
+                    f"[DirectApiSaver] 발주 불가 상태 감지 (진단용, 저장 계속 진행): "
+                    f"ordYn='{ord_yn}', ordClose='{ord_close}'"
                 )
 
             # Phase 0: selSearch 프리페치 (실패해도 진행)
@@ -1109,16 +1117,32 @@ class DirectApiOrderSaver:
             item_details = self._prefetch_item_details(item_codes, date_str)
 
             # 주문 데이터 준비 (프리페치 필드 포함)
-            orders_json = json.dumps([
-                {
-                    'item_cd': str(o.get('item_cd', '')),
-                    'multiplier': self._calc_multiplier(o),
-                    'ord_unit_qty': o.get('order_unit_qty', 1) or 1,
+            order_data_list = []
+            unit_mismatch_count = 0
+            for o in orders:
+                item_cd = str(o.get('item_cd', ''))
+                mul = self._calc_multiplier(o)
+                unit = o.get('order_unit_qty', 1) or 1
+                qty = o.get('final_order_qty', 0)
+                # 배수 비정렬 진단
+                if unit > 1 and qty > 0 and qty % unit != 0:
+                    unit_mismatch_count += 1
+                    if unit_mismatch_count <= 5:
+                        logger.warning(
+                            f"[DirectApiSaver] 배수 비정렬: {item_cd} "
+                            f"qty={qty} unit={unit} → mul={mul} "
+                            f"(TOT_QTY={mul * unit})"
+                        )
+                order_data_list.append({
+                    'item_cd': item_cd,
+                    'multiplier': mul,
+                    'ord_unit_qty': unit,
                     'store_cd': o.get('store_cd', ''),
-                    'fields': item_details.get(str(o.get('item_cd', '')), {}),
-                }
-                for o in orders
-            ], ensure_ascii=False)
+                    'fields': item_details.get(item_cd, {}),
+                })
+            if unit_mismatch_count > 0:
+                logger.warning(f"[DirectApiSaver] 배수 비정렬 상품: {unit_mismatch_count}건")
+            orders_json = json.dumps(order_data_list, ensure_ascii=False)
 
             logger.info(f"[DirectApiSaver] gfn_transaction 저장: {len(orders)}건, 날짜={date_str}")
 
@@ -1542,9 +1566,25 @@ class DirectApiOrderSaver:
                 const workForm = stbjForm?.div_workForm?.form?.div_work_01?.form;
                 if (!workForm?.gdList) return {error: 'no_grid'};
 
-                let ds = workForm.gdList._binddataset;
+                // 1순위: dsGeneralGrid 직접 참조 (gfn_transaction이 사용하는 dataset)
+                let ds = workForm.dsGeneralGrid;
+                let dsSource = 'dsGeneralGrid';
+
+                // 2순위: gdList 바인딩 폴백
+                if (!ds || typeof ds.getRowCount !== 'function') {
+                    ds = workForm.gdList._binddataset;
+                    dsSource = 'gdList._binddataset';
+                    // _binddataset이 문자열(이름)인 경우 → 실제 객체 접근
+                    if (typeof ds === 'string') {
+                        dsSource = 'gdList._binddataset[' + ds + ']';
+                        ds = workForm[ds];
+                    }
+                }
+
+                // 3순위: _binddataset_obj 폴백
                 if (!ds || typeof ds.getRowCount !== 'function') {
                     ds = workForm.gdList._binddataset_obj;
+                    dsSource = 'gdList._binddataset_obj';
                 }
                 if (!ds) return {error: 'no_dataset'};
 
@@ -1555,7 +1595,12 @@ class DirectApiOrderSaver:
                         ord_qty: parseInt(ds.getColumn(i, 'PYUN_QTY') || ds.getColumn(i, 'ORD_MUL_QTY') || '0'),
                     });
                 }
-                return {items: items, count: ds.getRowCount()};
+                return {
+                    items: items,
+                    count: ds.getRowCount(),
+                    dsSource: dsSource,
+                    sampleItems: items.slice(0, 3).map(function(x){ return x.item_cd; })
+                };
             """)
 
             if not grid_data or grid_data.get('error'):
@@ -1563,6 +1608,12 @@ class DirectApiOrderSaver:
 
             grid_items = {item['item_cd']: item['ord_qty'] for item in grid_data.get('items', [])}
             grid_count = grid_data.get('count', 0)
+            ds_source = grid_data.get('dsSource', 'unknown')
+            sample_items = grid_data.get('sampleItems', [])
+            logger.info(
+                f"[DirectApiSaver] 검증 그리드: count={grid_count}, "
+                f"source={ds_source}, sample={sample_items}"
+            )
 
             # gfn_transaction 성공 후 넥사크로가 그리드를 클리어하는 경우
             # (콜백에서 clearData 호출 → 검증 시점에 0행)
@@ -1599,6 +1650,56 @@ class DirectApiOrderSaver:
                 else:
                     missing.append(item_cd)
 
+            logger.info(
+                f"[DirectApiSaver] 검증 비교: matched={matched}, "
+                f"mismatched={len(mismatched)}, missing={len(missing)}, "
+                f"orders={len(orders)}, "
+                f"grid_replaced_cond={matched == 0 and len(mismatched) == 0 and len(missing) == len(orders)}"
+            )
+
+            # ── missing 임계치 가드 (false positive 방지) ──
+            # grid_replaced 추정보다 우선: missing>50%이고 grid에 의미있는 데이터가 없으면
+            # BGF가 실제 저장하지 않은 것으로 판단하여 실패 처리.
+            # 정상적인 grid_replaced는 그리드에 다른 상품(리로드 결과)이 채워져야 하지만,
+            # grid_count<=1이고 sample이 빈값이면 폼 자체가 비정상 상태.
+            missing_ratio = len(missing) / max(len(orders), 1)
+            # 그리드가 빈 상태: count<=1이고 sample에 유효한 상품코드가 없음
+            sample_items = grid_data.get('sampleItems', [])
+            has_valid_sample = any(s and str(s).strip() for s in sample_items)
+            is_grid_empty = grid_count <= 1 and not has_valid_sample
+            if missing_ratio > 0.5 and is_grid_empty:
+                logger.warning(
+                    f"[DirectApiSaver] 검증 실패: missing={len(missing)}/{len(orders)} "
+                    f"({missing_ratio:.0%}) + grid_count={grid_count} "
+                    f"→ BGF 미저장 판정 (grid_replaced 추정 무시)"
+                )
+                return {
+                    'verified': False,
+                    'skipped': False,
+                    'reason': f'missing_{missing_ratio:.0%}_with_empty_grid',
+                    'total': len(orders),
+                    'matched': matched,
+                    'missing': len(missing),
+                }
+
+            # gfn_transaction outDS='dsGeneralGrid=dsGeneralGrid' 때문에
+            # 서버 응답이 그리드를 덮어씀 + fn_callback이 selSearch 리로드.
+            # 검증 시점에 그리드 내용이 완전히 교체되어 우리 상품이 안 보임.
+            # matched=0 AND mismatched=0 = 그리드 교체 (실패가 아님) → 스킵 처리
+            # NOTE: 위 missing 가드를 통과한 경우만 도달 (grid에 데이터가 있는 정상 교체)
+            if matched == 0 and len(mismatched) == 0 and len(missing) == len(orders):
+                logger.info(
+                    f"[DirectApiSaver] 검증 스킵: 그리드 교체됨 "
+                    f"(gfn_transaction 후 outDS 덮어쓰기+콜백 리로드 추정, "
+                    f"grid_count={grid_count}, orders={len(orders)}건)"
+                )
+                return {
+                    'verified': True,
+                    'skipped': True,
+                    'reason': 'grid_replaced_after_save',
+                    'total': len(orders),
+                }
+
             verified = matched == len(orders)
             logger.info(
                 f"[DirectApiSaver] 검증: {matched}/{len(orders)}건 일치, "
@@ -1625,14 +1726,22 @@ class DirectApiOrderSaver:
     def _calc_multiplier(order: Dict) -> int:
         """발주 배수 계산
 
-        qty=0 항목은 auto_order에서 이미 제외됨 (배치 포함 X).
+        cancel_smart=True인 qty=0 항목은 PYUN_QTY=0으로 BGF 전송 (스마트 취소용).
+        라이브 검증 (2026-03-14): PYUN_QTY=0 → BGF 수락, "단품별(채택)" 전환 확인.
+        MAX_ORDER_MULTIPLIER(99) 캡 적용하여 과발주 방지.
         """
+        from src.settings.constants import MAX_ORDER_MULTIPLIER
+
+        # 스마트발주 취소: qty=0 그대로 전송
+        if order.get('cancel_smart') and order.get('final_order_qty', 0) <= 0:
+            return 0
+
         multiplier = order.get('multiplier', 0)
         if multiplier and multiplier > 0:
-            return int(multiplier)
+            return min(int(multiplier), MAX_ORDER_MULTIPLIER)
         qty = order.get('final_order_qty', 0)
         unit = order.get('order_unit_qty', 1) or 1
-        return max(1, (qty + unit - 1) // unit)
+        return min(MAX_ORDER_MULTIPLIER, max(1, (qty + unit - 1) // unit))
 
     def _count_saved_items(self, response_text: str, orders: List[Dict]) -> int:
         """SSV 응답에서 저장 성공 여부 파악"""
