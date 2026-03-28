@@ -709,6 +709,59 @@ class RealtimeInventoryRepository(BaseRepository):
         finally:
             conn.close()
 
+    def get_promo_missing_item_codes(
+        self,
+        store_id: Optional[str] = None,
+    ) -> List[str]:
+        """product_details에 유효 행사가 있지만 promotions에 미등록인 상품 목록.
+
+        Phase 1.68에서 selSearch 조회 대상에 추가하여
+        신제품 행사 수집 지연을 해소한다.
+
+        조건:
+            1. product_details.promo_type IS NOT NULL (행사 있음)
+            2. product_details.promo_end >= today (아직 유효)
+            3. realtime_inventory.is_available = 1 (취급 상품)
+            4. promotions에 해당 기간 활성 레코드 없음
+        """
+        sid = store_id or self.store_id or DEFAULT_STORE_ID
+        today = datetime.now().strftime("%Y-%m-%d")
+
+        try:
+            conn = self._get_conn_with_common() if self.store_id else self._get_conn()
+            try:
+                cursor = conn.cursor()
+                prefix = "common." if self.store_id else ""
+
+                cursor.execute(
+                    f"""
+                    SELECT pd.item_cd
+                    FROM {prefix}product_details pd
+                    JOIN realtime_inventory ri ON pd.item_cd = ri.item_cd
+                    WHERE pd.promo_type IS NOT NULL
+                      AND pd.promo_type != ''
+                      AND pd.promo_type != 'None'
+                      AND pd.promo_end >= ?
+                      AND ri.is_available = 1
+                      AND ri.store_id = ?
+                      AND pd.item_cd NOT IN (
+                          SELECT DISTINCT item_cd
+                          FROM promotions
+                          WHERE store_id = ?
+                            AND is_active = 1
+                            AND start_date <= ?
+                            AND end_date >= ?
+                      )
+                    """,
+                    (today, sid, sid, today, today),
+                )
+                return [row[0] for row in cursor.fetchall()]
+            finally:
+                conn.close()
+        except Exception as e:
+            logger.warning(f"행사 미등록 상품 조회 실패: {e}")
+            return []
+
     def decrement_stock(
         self,
         item_cd: str,

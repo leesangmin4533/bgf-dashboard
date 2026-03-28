@@ -759,8 +759,27 @@ class DailyCollectionJob:
                     ri_repo = RealtimeInventoryRepository(store_id=self.store_id)
                     stale_items = ri_repo.get_stale_stock_item_codes(store_id=self.store_id)
 
-                    if stale_items:
-                        logger.info(f"[Phase 1.68] DirectAPI Stock Refresh: {len(stale_items)}개 stale 상품")
+                    # ★ 행사 사전 동기화: product_details에 행사 있지만 promotions 미등록 상품
+                    from src.settings.constants import PROMO_SYNC_ENABLED
+                    promo_missing_items = []
+                    if PROMO_SYNC_ENABLED:
+                        promo_missing_items = ri_repo.get_promo_missing_item_codes(
+                            store_id=self.store_id
+                        )
+                        if promo_missing_items:
+                            logger.info(
+                                f"[Phase 1.68] 행사 미등록 상품: {len(promo_missing_items)}개"
+                            )
+
+                    # 중복 제거 후 병합
+                    refresh_items = list(set(stale_items + promo_missing_items))
+
+                    if refresh_items:
+                        logger.info(
+                            f"[Phase 1.68] DirectAPI Refresh: "
+                            f"stale={len(stale_items)}, promo_sync={len(promo_missing_items)}, "
+                            f"total={len(refresh_items)}개"
+                        )
                         logger.info(LOG_SEPARATOR_THIN)
                         driver = self.collector.get_driver()
                         if driver:
@@ -771,7 +790,7 @@ class DailyCollectionJob:
                                 save_to_db=True,
                             )
                             try:
-                                api_results = stock_collector._collect_via_direct_api(stale_items)
+                                api_results = stock_collector._collect_via_direct_api(refresh_items)
 
                                 if api_results:
                                     refreshed = len([
@@ -779,8 +798,8 @@ class DailyCollectionJob:
                                         if r and r.get('success')
                                     ])
                                     logger.info(
-                                        f"[Phase 1.68] RI 갱신 완료: "
-                                        f"{refreshed}/{len(stale_items)}건"
+                                        f"[Phase 1.68] 갱신 완료: "
+                                        f"{refreshed}/{len(refresh_items)}건"
                                     )
                                 else:
                                     logger.info(
@@ -797,7 +816,7 @@ class DailyCollectionJob:
                         else:
                             logger.warning("[Phase 1.68] 드라이버 없음 — 스킵")
                     else:
-                        logger.info("[Phase 1.68] stale 상품 없음 — 스킵")
+                        logger.info("[Phase 1.68] 갱신 대상 없음 — 스킵")
                 except Exception as e:
                     logger.warning(
                         f"[Phase 1.68] 실시간 재고 갱신 실패 (발주 플로우 계속): {e}"
