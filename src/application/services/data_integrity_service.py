@@ -104,6 +104,9 @@ class DataIntegrityService:
         # v68: 하네스 엔지니어링 — AI 요약 자동 실행
         self._run_ai_summary(store_id, results)
 
+        # 자동화 2단계: 액션 제안 생성 + 카카오 발송
+        self._run_action_proposals(store_id, results)
+
         return {
             "store_id": store_id,
             "check_date": check_date,
@@ -216,6 +219,27 @@ class DataIntegrityService:
                 logger.info(f"[Integrity] {store_id} AI 요약 생성 완료")
         except Exception as e:
             logger.error(f"[Integrity] {store_id} AI 요약 실패 (무시): {e}")
+
+    def _run_action_proposals(
+        self, store_id: str, check_results: List[Dict[str, Any]]
+    ) -> None:
+        """액션 제안 생성 + 카카오 발송. 실패해도 예외 전파 없음."""
+        try:
+            from src.application.services.action_proposal_service import ActionProposalService
+            from src.application.services.kakao_proposal_formatter import KakaoProposalFormatter
+
+            proposals = ActionProposalService(store_id=store_id).generate(check_results)
+            if not proposals:
+                return
+
+            from src.notification.kakao_notifier import (
+                KakaoNotifier, DEFAULT_REST_API_KEY,
+            )
+            msg = KakaoProposalFormatter().format(store_id, proposals)
+            KakaoNotifier(DEFAULT_REST_API_KEY).send_message(msg)
+            logger.info(f"[Integrity] {store_id} 액션 제안 {len(proposals)}건 카카오 발송")
+        except Exception as e:
+            logger.error(f"[Integrity] {store_id} 액션 제안 실패 (무시): {e}")
 
     def get_latest_results(
         self, store_id: str, days: int = 7

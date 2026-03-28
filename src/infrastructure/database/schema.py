@@ -1179,6 +1179,21 @@ _STORE_COLUMN_PATCHES = [
     "ALTER TABLE eval_outcomes ADD COLUMN skip_reason TEXT",
     "ALTER TABLE eval_outcomes ADD COLUMN skip_detail TEXT",
     "CREATE INDEX IF NOT EXISTS idx_eval_outcomes_skip_reason ON eval_outcomes(store_id, eval_date, skip_reason)",
+    # 자동화 2단계: 액션 제안 테이블
+    """CREATE TABLE IF NOT EXISTS action_proposals (
+        id             INTEGER PRIMARY KEY AUTOINCREMENT,
+        proposed_at    TEXT DEFAULT (datetime('now', 'localtime')),
+        proposal_date  TEXT NOT NULL,
+        store_id       TEXT NOT NULL,
+        item_cd        TEXT,
+        action_type    TEXT NOT NULL,
+        reason         TEXT NOT NULL,
+        suggestion     TEXT NOT NULL,
+        evidence       TEXT,
+        status         TEXT DEFAULT 'PENDING',
+        resolved_at    TEXT
+    )""",
+    "CREATE INDEX IF NOT EXISTS idx_action_proposals_date ON action_proposals(store_id, proposal_date, status)",
 ]
 
 
