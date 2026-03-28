@@ -611,33 +611,37 @@ class DailyCollectionJob:
         except Exception as e:
             logger.error(f"Kakao failed: {e}")
 
-        # 폐기 위험 알림
-        self._send_expiry_alert()
+        # 폐기 위험 알림: ���도 프로세스로 실행 (Phase 2 차단 방지)
+        self._send_expiry_alert_async()
 
-    def _send_expiry_alert(self) -> None:
-        """폐기 위험 알림 발송 (타임아웃 60초 — Phase 2 차단 방지)"""
-        import concurrent.futures
+    def _send_expiry_alert_async(self) -> None:
+        """폐기 위험 알림을 ���도 프로세스로 실행 (블로킹 방지)"""
+        import multiprocessing
 
-        def _run():
-            return run_expiry_check_and_alert(store_id=self.store_id)
+        def _run(store_id):
+            """자식 프로세스에서 실행 — ��모 블로킹 없음"""
+            try:
+                result = run_expiry_check_and_alert(store_id=store_id)
+                if result.get("success"):
+                    total = result.get("total_alerts", 0)
+                    if total > 0:
+                        print(f"[ExpiryAlert] {store_id}: {total} items alerted")
+            except Exception:
+                pass
 
         try:
-            logger.info("Checking expiry alerts...")
-            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                future = pool.submit(_run)
-                result = future.result(timeout=60)
-
-            if result["success"]:
-                total = result.get("total_alerts", 0)
-                if total > 0:
-                    logger.info(f"Expiry alert: {total} items")
-                else:
-                    logger.info("No expiry alerts")
+            logger.info("Checking expiry alerts (async process)...")
+            proc = multiprocessing.Process(
+                target=_run, args=(self.store_id,), daemon=True
+            )
+            proc.start()
+            proc.join(timeout=30)
+            if proc.is_alive():
+                logger.warning("Expiry alert process timed out (30s) — killing")
+                proc.kill()
+                proc.join(timeout=5)
             else:
-                logger.error(f"Expiry check failed: {result.get('error')}")
-
-        except concurrent.futures.TimeoutError:
-            logger.warning("Expiry alert timed out (60s) — skipping to Phase 2")
+                logger.info("Expiry alert process completed")
         except Exception as e:
             logger.error(f"Expiry alert failed: {e}")
 
