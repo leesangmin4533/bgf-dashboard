@@ -2127,11 +2127,24 @@ class OrderExecutor:
             if DIRECT_API_ORDER_ENABLED and not dry_run:
                 api_result = self._try_direct_api_save(items, order_date)
                 if api_result and api_result.success:
+                    # 프리페치 성공 상품: Direct API로 처리 완료
+                    prefetch_failed = getattr(self, '_prefetch_failed_items', [])
+                    prefetch_failed_cds = {str(o.get('item_cd', '')) for o in prefetch_failed}
+                    api_items = [it for it in items if str(it.get('item_cd', '')) not in prefetch_failed_cds]
+
                     logger.info(f"[{order_date}] Direct API 저장 성공: {api_result.saved_count}건, {api_result.elapsed_ms:.0f}ms")
-                    for item in items:
+                    for item in api_items:
                         results.append(self._calc_order_result(item, order_date, "direct_api"))
                         total_success += 1
-                    continue
+
+                    # 프리페치 실패 상품: L3 Selenium으로 개별 처리
+                    if prefetch_failed:
+                        logger.info(f"[{order_date}] 프리페치 실패 {len(prefetch_failed)}건 → L3 Selenium 개별 처리")
+                        items = prefetch_failed  # L3 루프에서 이 상품만 처리
+                        self._prefetch_failed_items = []
+                        # continue하지 않고 L3으로 fall through
+                    else:
+                        continue
                 else:
                     msg = api_result.message if api_result else 'returned None'
                     saved = api_result.saved_count if api_result else 0
@@ -2441,6 +2454,13 @@ class OrderExecutor:
             date_str = order_date.replace('-', '')
 
             result = saver.save_orders(items, date_str)
+
+            # 프리페치 실패 상품 수집 (L3 Selenium 폴백 대상)
+            self._prefetch_failed_items = getattr(saver, '_prefetch_failed_items', [])
+            if self._prefetch_failed_items:
+                logger.info(
+                    f"[DirectAPI] 프리페치 실패 {len(self._prefetch_failed_items)}건 → L3 Selenium 대상"
+                )
 
             # 검증 (단일 배치만 — 청크 분할 시 마지막 청크만 그리드에 남음)
             if result.success:

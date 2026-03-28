@@ -1112,15 +1112,24 @@ class DirectApiOrderSaver:
                     f"ordYn='{ord_yn}', ordClose='{ord_close}'"
                 )
 
-            # Phase 0: selSearch 프리페치 (실패해도 진행)
+            # Phase 0: selSearch 프리페치
             item_codes = [str(o.get('item_cd', '')) for o in orders]
             item_details = self._prefetch_item_details(item_codes, date_str)
 
-            # 주문 데이터 준비 (프리페치 필드 포함)
+            # 주문 데이터 준비 (프리페치 성공 상품만 Direct API, 실패 상품은 제외)
             order_data_list = []
+            self._prefetch_failed_items = []  # 프리페치 실패 → L3 Selenium으로 처리
             unit_mismatch_count = 0
             for o in orders:
                 item_cd = str(o.get('item_cd', ''))
+                fields = item_details.get(item_cd, {})
+
+                # 프리페치 실패 상품은 Direct API 배치에서 제외
+                # (빈 필드 → 서버 NumberFormatException 방지)
+                if not fields:
+                    self._prefetch_failed_items.append(o)
+                    continue
+
                 mul = self._calc_multiplier(o)
                 unit = o.get('order_unit_qty', 1) or 1
                 qty = o.get('final_order_qty', 0)
@@ -1138,10 +1147,15 @@ class DirectApiOrderSaver:
                     'multiplier': mul,
                     'ord_unit_qty': unit,
                     'store_cd': o.get('store_cd', ''),
-                    'fields': item_details.get(item_cd, {}),
+                    'fields': fields,
                 })
             if unit_mismatch_count > 0:
                 logger.warning(f"[DirectApiSaver] 배수 비정렬 상품: {unit_mismatch_count}건")
+            if self._prefetch_failed_items:
+                logger.info(
+                    f"[DirectApiSaver] 프리페치 실패 {len(self._prefetch_failed_items)}건 "
+                    f"Direct API 배치에서 제외 (L3 Selenium으로 폴백)"
+                )
             orders_json = json.dumps(order_data_list, ensure_ascii=False)
 
             logger.info(f"[DirectApiSaver] gfn_transaction 저장: {len(orders)}건, 날짜={date_str}")
