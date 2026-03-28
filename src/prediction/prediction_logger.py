@@ -123,31 +123,63 @@ class PredictionLogger:
                             now.isoformat()
                         ))
                 else:
-                    cursor.execute("""
-                        INSERT INTO prediction_logs (
-                            prediction_date, item_cd, mid_cd, target_date,
-                            predicted_qty, adjusted_qty,
-                            weekday_coef, confidence, current_stock, safety_stock,
-                            order_qty, model_type, store_id,
-                            association_boost, created_at
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """, (
-                        prediction_date,
-                        result.item_cd,
-                        result.mid_cd,
-                        result.target_date,
-                        result.predicted_qty,
-                        result.adjusted_qty,
-                        result.weekday_coef,
-                        result.confidence,
-                        result.current_stock,
-                        result.safety_stock,
-                        result.order_qty,
-                        result.model_type,
-                        self.store_id,
-                        getattr(result, 'association_boost', 1.0),
-                        now.isoformat()
-                    ))
+                    # stock_source 없지만 ml_weight 컬럼은 있을 수 있음
+                    if has_ml_weight:
+                        cursor.execute("""
+                            INSERT INTO prediction_logs (
+                                prediction_date, item_cd, mid_cd, target_date,
+                                predicted_qty, adjusted_qty,
+                                weekday_coef, confidence, current_stock, safety_stock,
+                                order_qty, model_type, store_id,
+                                rule_order_qty, ml_order_qty, ml_weight_used,
+                                association_boost, created_at
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """, (
+                            prediction_date,
+                            result.item_cd,
+                            result.mid_cd,
+                            result.target_date,
+                            result.predicted_qty,
+                            result.adjusted_qty,
+                            result.weekday_coef,
+                            result.confidence,
+                            result.current_stock,
+                            result.safety_stock,
+                            result.order_qty,
+                            result.model_type,
+                            self.store_id,
+                            _rule_oq,
+                            _ml_oq,
+                            _ml_w,
+                            getattr(result, 'association_boost', 1.0),
+                            now.isoformat()
+                        ))
+                    else:
+                        cursor.execute("""
+                            INSERT INTO prediction_logs (
+                                prediction_date, item_cd, mid_cd, target_date,
+                                predicted_qty, adjusted_qty,
+                                weekday_coef, confidence, current_stock, safety_stock,
+                                order_qty, model_type, store_id,
+                                association_boost, created_at
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """, (
+                            prediction_date,
+                            result.item_cd,
+                            result.mid_cd,
+                            result.target_date,
+                            result.predicted_qty,
+                            result.adjusted_qty,
+                            result.weekday_coef,
+                            result.confidence,
+                            result.current_stock,
+                            result.safety_stock,
+                            result.order_qty,
+                            result.model_type,
+                            self.store_id,
+                            getattr(result, 'association_boost', 1.0),
+                            now.isoformat()
+                        ))
             else:
                 # 기존 스키마 호환
                 cursor.execute("""
@@ -273,31 +305,63 @@ class PredictionLogger:
                                     now.isoformat()
                                 ))
                         else:
-                            cursor.execute("""
-                                INSERT INTO prediction_logs (
-                                    prediction_date, item_cd, mid_cd, target_date,
-                                    predicted_qty, adjusted_qty,
-                                    weekday_coef, confidence, current_stock, safety_stock,
-                                    order_qty, model_type, store_id,
-                                    association_boost, created_at
-                                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                            """, (
-                                prediction_date,
-                                result.item_cd,
-                                result.mid_cd,
-                                result.target_date,
-                                result.predicted_qty,
-                                result.adjusted_qty,
-                                result.weekday_coef,
-                                result.confidence,
-                                result.current_stock,
-                                result.safety_stock,
-                                result.order_qty,
-                                result.model_type,
-                                self.store_id,
-                                getattr(result, 'association_boost', 1.0),
-                                now.isoformat()
-                            ))
+                            # stock_source 없지만 ml_weight 컬럼은 있을 수 있음
+                            if has_ml_weight:
+                                cursor.execute("""
+                                    INSERT INTO prediction_logs (
+                                        prediction_date, item_cd, mid_cd, target_date,
+                                        predicted_qty, adjusted_qty,
+                                        weekday_coef, confidence, current_stock, safety_stock,
+                                        order_qty, model_type, store_id,
+                                        rule_order_qty, ml_order_qty, ml_weight_used,
+                                        association_boost, created_at
+                                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                """, (
+                                    prediction_date,
+                                    result.item_cd,
+                                    result.mid_cd,
+                                    result.target_date,
+                                    result.predicted_qty,
+                                    result.adjusted_qty,
+                                    result.weekday_coef,
+                                    result.confidence,
+                                    result.current_stock,
+                                    result.safety_stock,
+                                    result.order_qty,
+                                    result.model_type,
+                                    self.store_id,
+                                    _rule_oq,
+                                    _ml_oq,
+                                    _ml_w,
+                                    getattr(result, 'association_boost', 1.0),
+                                    now.isoformat()
+                                ))
+                            else:
+                                cursor.execute("""
+                                    INSERT INTO prediction_logs (
+                                        prediction_date, item_cd, mid_cd, target_date,
+                                        predicted_qty, adjusted_qty,
+                                        weekday_coef, confidence, current_stock, safety_stock,
+                                        order_qty, model_type, store_id,
+                                        association_boost, created_at
+                                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                """, (
+                                    prediction_date,
+                                    result.item_cd,
+                                    result.mid_cd,
+                                    result.target_date,
+                                    result.predicted_qty,
+                                    result.adjusted_qty,
+                                    result.weekday_coef,
+                                    result.confidence,
+                                    result.current_stock,
+                                    result.safety_stock,
+                                    result.order_qty,
+                                    result.model_type,
+                                    self.store_id,
+                                    getattr(result, 'association_boost', 1.0),
+                                    now.isoformat()
+                                ))
                         saved_count += 1
                     except Exception as e:
                         logger.warning(f"예측 로그 저장 실패 ({result.item_cd}): {e}")

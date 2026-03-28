@@ -1133,6 +1133,10 @@ _STORE_COLUMN_PATCHES = [
     "ALTER TABLE waste_slips ADD COLUMN updated_at TEXT",
     # waste_slips 타입 보정 (INTEGER → REAL)
     # Note: SQLite는 ALTER COLUMN 미지원이므로 새 DB에서만 REAL 적용됨
+    # prediction_logs 누락 컬럼 보정 (stock_source 계열: 47863에만 존재하던 것을 전 매장 통일)
+    "ALTER TABLE prediction_logs ADD COLUMN stock_source TEXT",
+    "ALTER TABLE prediction_logs ADD COLUMN pending_source TEXT",
+    "ALTER TABLE prediction_logs ADD COLUMN is_stock_stale INTEGER DEFAULT 0",
     # v55: ML 가중치 개선 인프라 — Rule vs ML 분리 추적
     "ALTER TABLE prediction_logs ADD COLUMN rule_order_qty INTEGER",
     "ALTER TABLE prediction_logs ADD COLUMN ml_order_qty INTEGER",
