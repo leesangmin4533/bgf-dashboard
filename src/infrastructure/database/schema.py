@@ -180,6 +180,20 @@ COMMON_SCHEMA = [
         reviewed_at TEXT,
         reviewed_by INTEGER
     )""",
+    # v68: 하네스 엔지니어링 — AI 요약 테이블
+    """CREATE TABLE IF NOT EXISTS ai_summaries (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        summary_date  TEXT NOT NULL,
+        summary_type  TEXT NOT NULL,
+        store_id      TEXT,
+        summary_text  TEXT,
+        anomaly_count INTEGER DEFAULT 0,
+        model_used    TEXT,
+        token_count   INTEGER DEFAULT 0,
+        cost_usd      REAL    DEFAULT 0.0,
+        created_at    TEXT DEFAULT (datetime('now', 'localtime')),
+        UNIQUE(summary_date, summary_type, store_id)
+    )""",
 ]
 
 COMMON_INDEXES = [
@@ -199,6 +213,8 @@ COMMON_INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_mid_categories_large ON mid_categories(large_cd)",
     "CREATE INDEX IF NOT EXISTS idx_product_details_large ON product_details(large_cd)",
     "CREATE INDEX IF NOT EXISTS idx_product_details_small ON product_details(small_cd)",
+    # v68: ai_summaries 인덱스
+    "CREATE INDEX IF NOT EXISTS idx_ai_summaries_date ON ai_summaries(summary_date, summary_type)",
 ]
 
 
@@ -1158,6 +1174,11 @@ _STORE_COLUMN_PATCHES = [
     # v67: 발주정지 예정 (STOP_PLAN_YMD) + 정지 사유
     "ALTER TABLE realtime_inventory ADD COLUMN stop_plan_ymd TEXT",
     "ALTER TABLE realtime_inventory ADD COLUMN cut_reason TEXT",
+    # v68: 하네스 엔지니어링 — SKIP 사유 저장
+    "ALTER TABLE eval_outcomes ADD COLUMN reason TEXT",
+    "ALTER TABLE eval_outcomes ADD COLUMN skip_reason TEXT",
+    "ALTER TABLE eval_outcomes ADD COLUMN skip_detail TEXT",
+    "CREATE INDEX IF NOT EXISTS idx_eval_outcomes_skip_reason ON eval_outcomes(store_id, eval_date, skip_reason)",
 ]
 
 

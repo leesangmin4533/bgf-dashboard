@@ -69,6 +69,9 @@ class PreOrderEvalResult:
     pending_qty: int
     daily_avg: float
     trend_score: float = 1.0    # 7일/30일 트렌드 비율 (ML 데이터용)
+    # v68: 하네스 엔지니어링 — SKIP/PASS 사유 저장
+    skip_reason: Optional[str] = None   # SkipReason 코드 (SKIP/PASS일 때 설정)
+    skip_detail: Optional[str] = None   # JSON 수치 스냅샷 (판정 시점 감사용)
 
 
 class PreOrderEvaluator(BaseRepository):
