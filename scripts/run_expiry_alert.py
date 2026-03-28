@@ -30,10 +30,16 @@ def main() -> None:
     parser = argparse.ArgumentParser(description='폐기 위험 알림')
     parser.add_argument('--send', action='store_true', help='카카오톡 발송')
     parser.add_argument('--quiet', action='store_true', help='콘솔 출력 없이 발송만')
+    parser.add_argument('--store', type=str, default=None, help='매장 ID (지정 시 해당 매장만)')
     args = parser.parse_args()
 
+    # subprocess에서 --store만 호출 시 자동 발송
+    if args.store and not args.send and not args.quiet:
+        result = run_expiry_check_and_alert(store_id=args.store)
+        return
+
     # 폐기 위험 체크
-    checker = ExpiryChecker()
+    checker = ExpiryChecker(store_id=args.store)
 
     if not args.quiet:
         checker.print_status()

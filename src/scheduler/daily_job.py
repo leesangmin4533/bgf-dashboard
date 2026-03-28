@@ -615,33 +615,25 @@ class DailyCollectionJob:
         self._send_expiry_alert_async()
 
     def _send_expiry_alert_async(self) -> None:
-        """폐기 위험 알림을 ���도 프로세스로 실행 (블로킹 방지)"""
-        import multiprocessing
-
-        def _run(store_id):
-            """자식 프로세스에서 실행 — ��모 블로킹 없음"""
-            try:
-                result = run_expiry_check_and_alert(store_id=store_id)
-                if result.get("success"):
-                    total = result.get("total_alerts", 0)
-                    if total > 0:
-                        print(f"[ExpiryAlert] {store_id}: {total} items alerted")
-            except Exception:
-                pass
+        """폐기 위험 알림을 별도 프로세스로 실행 (블로킹 방지)"""
+        import subprocess
+        import sys
 
         try:
-            logger.info("Checking expiry alerts (async process)...")
-            proc = multiprocessing.Process(
-                target=_run, args=(self.store_id,), daemon=True
+            logger.info("Checking expiry alerts (subprocess)...")
+            script_path = str(Path(__file__).parent.parent.parent / "scripts" / "run_expiry_alert.py")
+            proc = subprocess.Popen(
+                [sys.executable, script_path, "--store", str(self.store_id)],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
             )
-            proc.start()
-            proc.join(timeout=30)
-            if proc.is_alive():
-                logger.warning("Expiry alert process timed out (30s) — killing")
+            try:
+                proc.wait(timeout=30)
+                logger.info(f"Expiry alert subprocess completed (exit={proc.returncode})")
+            except subprocess.TimeoutExpired:
+                logger.warning("Expiry alert subprocess timed out (30s) — killing")
                 proc.kill()
-                proc.join(timeout=5)
-            else:
-                logger.info("Expiry alert process completed")
+                proc.wait(timeout=5)
         except Exception as e:
             logger.error(f"Expiry alert failed: {e}")
 
