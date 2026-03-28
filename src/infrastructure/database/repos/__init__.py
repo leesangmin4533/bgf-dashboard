@@ -40,6 +40,7 @@ from .beverage_decision_repo import BeverageDecisionRepository
 from .np_3day_tracking_repo import NewProduct3DayTrackingRepository as NP3DayTrackingRepo
 
 # --- Common DB repositories (공통 DB) ---
+from .ai_summary_repo import AISummaryRepository
 from .product_detail_repo import ProductDetailRepository
 from .external_factor_repo import ExternalFactorRepository
 from .app_settings_repo import AppSettingsRepository

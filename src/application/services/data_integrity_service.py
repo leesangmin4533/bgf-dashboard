@@ -101,6 +101,9 @@ class DataIntegrityService:
         if total_anomalies > 0:
             self._send_alert(store_id, results)
 
+        # v68: 하네스 엔지니어링 — AI 요약 자동 실행
+        self._run_ai_summary(store_id, results)
+
         return {
             "store_id": store_id,
             "check_date": check_date,
@@ -200,6 +203,19 @@ class DataIntegrityService:
         except Exception as e:
             logger.warning(f"[Integrity] 카카오 알림 발송 실패: {e}")
             return False
+
+    def _run_ai_summary(
+        self, store_id: str, check_results: List[Dict[str, Any]]
+    ) -> None:
+        """integrity 체크 후 AI 요약 자동 실행. 실패해도 예외 전파 없음."""
+        try:
+            from src.application.services.ai_summary_service import AISummaryService
+            service = AISummaryService(store_id=store_id)
+            summary = service.summarize_integrity(check_results)
+            if summary:
+                logger.info(f"[Integrity] {store_id} AI 요약 생성 완료")
+        except Exception as e:
+            logger.error(f"[Integrity] {store_id} AI 요약 실패 (무시): {e}")
 
     def get_latest_results(
         self, store_id: str, days: int = 7
