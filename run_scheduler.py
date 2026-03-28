@@ -210,7 +210,18 @@ def job_wrapper_multi_store() -> None:
         from src.scheduler.daily_job import DailyCollectionJob
 
         job = DailyCollectionJob(store_id=ctx.store_id)
-        return job.run_optimized(run_auto_order=True, use_improved_predictor=True)
+        result = job.run_optimized(run_auto_order=True, use_improved_predictor=True)
+
+        # Phase별 시간 로깅
+        timings = result.get("phase_timings", {})
+        if timings:
+            logger.info(
+                "[%s] Phase timings: %s (total=%.1fs)",
+                ctx.store_id,
+                " | ".join(f"{k}={v}s" for k, v in timings.items()),
+                result.get("duration", 0),
+            )
+        return result
 
     _runner.run_parallel(
         task_fn=_run_daily_order,

@@ -219,23 +219,34 @@ class DailyCollectionJob:
         }
 
         try:
+            # Phase별 시간 측정
+            phase_timings = {}
+
             # Phase 1.0~1.35: 데이터 수집
             from src.scheduler.phases.collection import run_collection_phases
+            _t0 = time.time()
             ctx = run_collection_phases(ctx, self)
+            phase_timings["collection"] = round(time.time() - _t0, 1)
 
             # Phase 1.5~1.67: 보정/검증 (수집 성공 시)
+            _t0 = time.time()
             if ctx["collection_success"]:
                 from src.scheduler.phases.calibration import run_calibration_phases
                 ctx = run_calibration_phases(ctx)
+            phase_timings["calibration"] = round(time.time() - _t0, 1)
 
             # Phase 1.68~1.95: 발주 준비 (수집 성공 시)
+            _t0 = time.time()
             if ctx["collection_success"]:
                 from src.scheduler.phases.preparation import run_preparation_phases
                 ctx = run_preparation_phases(ctx, self)
+            phase_timings["preparation"] = round(time.time() - _t0, 1)
 
             # Phase 2.0~3.0: 발주 실행
             from src.scheduler.phases.execution import run_execution_phases
+            _t0 = time.time()
             ctx = run_execution_phases(ctx, self)
+            phase_timings["execution"] = round(time.time() - _t0, 1)
 
             # 결과 통합
             collection_results = ctx["collection_results"]
@@ -253,7 +264,8 @@ class DailyCollectionJob:
                 "fail_reasons": ctx["fail_reason_result"],
                 "dates_collected": ctx.get("dates_to_collect", [yesterday_str, today_str]),
                 "total_items": total_items,
-                "duration": time.time() - start_time
+                "duration": time.time() - start_time,
+                "phase_timings": phase_timings
             }
 
         except Exception as e:
