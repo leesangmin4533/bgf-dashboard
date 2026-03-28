@@ -31,9 +31,17 @@ class IntegrityCheckRepository(BaseRepository):
     # ── 테이블 보장 ──
 
     def ensure_table(self) -> None:
-        """CREATE TABLE IF NOT EXISTS (마이그레이션 전 안전 보장)"""
+        """CREATE TABLE IF NOT EXISTS (구 스키마면 재생성)"""
         conn = self._get_conn()
         try:
+            # 구 스키마 감지: session_id 컬럼 없으면 재생성
+            cols = [r[1] for r in conn.execute("PRAGMA table_info(integrity_checks)").fetchall()]
+            if cols and "session_id" not in cols:
+                from src.utils.logger import get_logger
+                get_logger(__name__).warning("[IntegrityCheck] 구 스키마 감지 → 재생성")
+                conn.execute("DROP TABLE integrity_checks")
+                conn.commit()
+
             conn.executescript("""
                 CREATE TABLE IF NOT EXISTS integrity_checks (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,

@@ -51,7 +51,17 @@ def _get_store_db_path(store_id: str) -> Path:
 
 
 def _ensure_table(conn: sqlite3.Connection) -> None:
-    """croston_params 테이블 보장 (없으면 생성)"""
+    """croston_params 테이블 보장 (없으면 생성, 구 스키마면 재생성)"""
+    # 구 스키마 감지: optimized_at 컬럼 없으면 재생성
+    try:
+        cols = [r[1] for r in conn.execute("PRAGMA table_info(croston_params)").fetchall()]
+        if cols and "optimized_at" not in cols:
+            logger.warning("[Croston] 구 스키마 감지 → croston_params 재생성")
+            conn.execute("DROP TABLE croston_params")
+            conn.commit()
+    except Exception:
+        pass
+
     conn.execute("""
         CREATE TABLE IF NOT EXISTS croston_params (
             item_cd      TEXT PRIMARY KEY,

@@ -615,10 +615,17 @@ class DailyCollectionJob:
         self._send_expiry_alert()
 
     def _send_expiry_alert(self) -> None:
-        """폐기 위험 알림 발송"""
+        """폐기 위험 알림 발송 (타임아웃 60초 — Phase 2 차단 방지)"""
+        import concurrent.futures
+
+        def _run():
+            return run_expiry_check_and_alert(store_id=self.store_id)
+
         try:
             logger.info("Checking expiry alerts...")
-            result = run_expiry_check_and_alert(store_id=self.store_id)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                future = pool.submit(_run)
+                result = future.result(timeout=60)
 
             if result["success"]:
                 total = result.get("total_alerts", 0)
@@ -629,6 +636,8 @@ class DailyCollectionJob:
             else:
                 logger.error(f"Expiry check failed: {result.get('error')}")
 
+        except concurrent.futures.TimeoutError:
+            logger.warning("Expiry alert timed out (60s) — skipping to Phase 2")
         except Exception as e:
             logger.error(f"Expiry alert failed: {e}")
 
