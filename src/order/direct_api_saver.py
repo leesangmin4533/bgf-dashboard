@@ -498,7 +498,7 @@ try {
         // 3c. 숫자 컬럼 빈값→0 (서버 NumberFormatException 방지)
         //     미프리페치 항목은 숫자 컬럼이 빈 문자열 → parseInt("") 예외
         //     이중 안전망: 컬럼 메타 타입 + 알려진 숫자 컬럼 목록
-        var _knownNums = 'HQ_MAEGA_SET,ORD_UNIT_QTY,ORD_MULT_ULMT,ORD_MULT_LLMT,NOW_QTY,ORD_MUL_QTY,OLD_PYUN_QTY,TOT_QTY,PAGE_CNT,EXPIRE_DAY,PROFIT_RATE,PYUN_QTY';
+        var _knownNumsSet = {HQ_MAEGA_SET:1,ORD_UNIT_QTY:1,ORD_MULT_ULMT:1,ORD_MULT_LLMT:1,NOW_QTY:1,ORD_MUL_QTY:1,OLD_PYUN_QTY:1,TOT_QTY:1,PAGE_CNT:1,EXPIRE_DAY:1,PROFIT_RATE:1,PYUN_QTY:1,EVT_DC_RATE:1,RB_AMT:1};
         var _numFilled = 0;
         var _numFilledCols = [];
         for (var _ci = 0; _ci < ds.getColCount(); _ci++) {
@@ -515,7 +515,7 @@ try {
                         _detectBy = 'meta:' + _t;
                     }
                 } catch(e2) {}
-                if (!_isNum && _knownNums.indexOf(_cid) >= 0) {
+                if (!_isNum && _knownNumsSet[_cid]) {
                     _isNum = true;
                     _detectBy = 'known';
                 }
@@ -1455,6 +1455,7 @@ class DirectApiOrderSaver:
             'HQ_MAEGA_SET', 'ORD_UNIT_QTY', 'ORD_MULT_ULMT', 'ORD_MULT_LLMT',
             'NOW_QTY', 'ORD_MUL_QTY', 'OLD_PYUN_QTY', 'TOT_QTY',
             'PAGE_CNT', 'EXPIRE_DAY', 'PROFIT_RATE', 'PYUN_QTY',
+            'EVT_DC_RATE', 'RB_AMT',
         }
 
         # 새 행 생성
