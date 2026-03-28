@@ -211,10 +211,12 @@ class SalesRepository(BaseRepository):
             )
             is_new = True
 
-        # realtime_inventory 테이블도 함께 업데이트 (재고 동기화)
+        # realtime_inventory 테이블 — 新規상품만 INSERT, 기존 상품은 item_nm만 갱신
+        # ★ stock_qty는 갱신하지 않음: prefetch(DirectAPI)가 저장한 정확한 BGF NOW_QTY를
+        #   daily_sales.stock_qty(매출분석 화면의 과거 시점 재고)로 덮어쓰면 재고 불일치 발생
+        #   (2026-03-28 실측: prefetch stock=13 → sales_repo가 0으로 덮어씀 → 11/20 불일치)
         # 주의: is_cut_item은 INSERT 기본값 0, ON CONFLICT에서 갱신하지 않음
         #       → 기존 CUT 상태가 판매수집으로 리셋되지 않음
-        # item_nm은 호출자에서 전달받음 (products는 common.db에 있으므로 store cursor로 직접 조회 불가)
 
         cursor.execute(
             """
@@ -223,9 +225,7 @@ class SalesRepository(BaseRepository):
              is_available, is_cut_item, queried_at, created_at)
             VALUES (?, ?, ?, ?, 0, 1, 1, 0, ?, ?)
             ON CONFLICT(store_id, item_cd) DO UPDATE SET
-                item_nm = COALESCE(excluded.item_nm, realtime_inventory.item_nm),
-                stock_qty = excluded.stock_qty,
-                queried_at = excluded.queried_at
+                item_nm = COALESCE(excluded.item_nm, realtime_inventory.item_nm)
             """,
             (store_id, item_cd, item_nm, stock_qty, now, now)
         )
