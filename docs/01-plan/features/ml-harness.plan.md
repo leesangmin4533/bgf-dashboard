@@ -276,6 +276,7 @@ ml-harness
 1. **Phase A** (Core): MLWeightCalibrator + DB 테이블 + improved_predictor 연동
 2. **Phase B** (Integration): daily_job Phase 1.59 + 카카오 알림
 3. **Phase C** (UI): API + 대시보드 탭
+4. **Week 3** (AI 요약): SummaryReportService + ai_summaries DB + 카카오 통합 (토론 결과 2026-03-28)
 
 ---
 

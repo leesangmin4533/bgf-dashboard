@@ -7,7 +7,7 @@
 | eval_outcomes | 90일 | eval_date < 90일 전 | ML 학습 윈도우 90일 |
 | prediction_logs | 60일 | prediction_date < 60일 전 | 디버깅 용도 |
 | hourly_sales_detail | 90일 | sales_date < 90일 전 | 시간대별 분석 |
-| calibration_history | 120일 | calibrated_at < 120일 전 | 보정 추이 확인 |
+| calibration_history | 120일 | calibration_date < 120일 전 | 보정 추이 확인 |
 
 ## 2. 구현 위치
 
@@ -28,7 +28,7 @@ def purge_old_data(store_id: str, conn) -> Dict[str, int]:
         "eval_outcomes": ("eval_date", 90),
         "prediction_logs": ("prediction_date", 60),
         "hourly_sales_detail": ("sales_date", 90),
-        "calibration_history": ("calibrated_at", 120),
+        "calibration_history": ("calibration_date", 120),
     }
 
     results = {}

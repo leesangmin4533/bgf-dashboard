@@ -996,3 +996,270 @@ def calibrator_db(tmp_path):
 2. **캐시 무효화**: `_ml_weight_override_cache`는 ImprovedPredictor 인스턴스 생성 시 1회 로드. 매 배치마다 새 인스턴스이므로 자동 갱신
 3. **UNIQUE 제약**: ml_weight_history의 `(store_id, calibration_date, category_group)` 로 하루 1회만 보장
 4. **기존 테스트 영향**: ML_MAX_WEIGHT 하드코딩을 참조하는 테스트는 DB 오버라이드 미존재 시 기존 값 유지이므로 영향 없음
+
+---
+
+## 16. Week 3: AI 요약 서비스 (토론 결과 반영, 2026-03-28)
+
+> **원칙**: Week 3에서는 인터페이스와 저장 구조만 확보하고, 고도화는 후속 Week에 위임
+
+### 16.1 확정된 설계 결정
+
+| 항목 | 결정 | 근거 |
+|------|------|------|
+| 발주 요약 수준 | B안 (카테고리별 이상 강조) | 카카오톡 1000자 제한 + 점주 빠른 확인 |
+| 주의품목 표시 | 최대 3개 + "외 N건" | 정보 과부하 방지 |
+| 이상 감지 표시 | C안 (조건부) - 이상 있을 때만 [주의] 섹션 | 알림 피로 방지 |
+| 발주 요약 | 항상 1~2줄 포함 (하이브리드) | 이상 없는 날에도 발주 확인 필요 |
+| 트리거 타이밍 | Phase 3 send_report() 내 통합 | 별도 메시지 = 알림 피로 |
+| action_proposals | Optional 파라미터만 확보 | 자동화 2단계는 Week 4+ |
+| timeout 방어 | DB 조회 레벨에 timeout만 | rule-based는 0.5초 이내, 5초 걸리면 DB 문제 |
+| ai_summaries 저장 | Week 3에서 INSERT만 | 매장 간 비교 조회는 Week 5+ |
+| AI 역할 | 규칙 기반 템플릿 (AI 없이) | BGF 외부전송 제약 + 안정성 |
+
+### 16.2 신규 파일
+
+| # | 파일 | 계층 | 역할 | 예상 LOC |
+|---|------|------|------|---------|
+| 1 | `src/notification/summary_report_service.py` | Application | 발주/이상감지 요약 생성 + DB 저장 | ~150 |
+
+### 16.3 수정 파일
+
+| # | 파일 | 수정 내용 | 예상 변경량 |
+|---|------|----------|-----------|
+| 1 | `src/infrastructure/database/schema.py` | ai_summaries DDL (COMMON_SCHEMA) | +10줄 |
+| 2 | `src/scheduler/daily_job.py` | Phase 3 send_report() 내 요약 연동 | +15줄 |
+| 3 | `src/notification/kakao_notifier.py` | send_report()에 요약 섹션 조립 | +10줄 |
+
+### 16.4 DB 스키마 (common.db)
+
+```sql
+-- COMMON_SCHEMA에 추가
+CREATE TABLE IF NOT EXISTS ai_summaries (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    store_id TEXT NOT NULL,
+    summary_type TEXT NOT NULL,   -- 'order' | 'integrity'
+    report_text TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_ai_summaries_store_type
+    ON ai_summaries(store_id, summary_type, created_at);
+```
+
+### 16.5 SummaryReportService 클래스 설계
+
+```python
+# src/notification/summary_report_service.py
+
+from typing import Dict, List, Optional, Any
+from src.utils.logger import get_logger
+
+logger = get_logger(__name__)
+
+
+class SummaryReportService:
+    """발주 결과 + 이상 감지 요약 생성 (규칙 기반 템플릿)
+
+    Week 3: 인터페이스 + 저장 구조 확보
+    Week 4+: action_proposals 연동, 매장 간 비교
+    """
+
+    def __init__(self, store_id: str):
+        self.store_id = store_id
+
+    def build_order_summary(self, order_results: Dict[str, Any]) -> str:
+        """항상 표시. 1~2줄 발주 결과 요약.
+
+        Args:
+            order_results: {
+                "total_items": int,         # 총 발주 품목 수
+                "total_amount": int,        # 총 발주 금액
+                "normal_count": int,        # 정상 발주 품목 수
+                "warning_items": [          # 주의 품목 (과발주 의심 등)
+                    {"item_nm": str, "reason": str, "rule_qty": int, "final_qty": int},
+                    ...
+                ],
+            }
+
+        Returns:
+            "✅ 정상 21품목 | ⚠️ 주의 2품목 (컵라면 외 1건)"
+        """
+
+    def build_integrity_summary(
+        self,
+        integrity_results: Dict[str, Any],
+        action_proposals: Optional[List[Dict]] = None,  # Week 4+ 확장용
+    ) -> Optional[str]:
+        """이상 있을 때만 반환. 없으면 None.
+
+        Args:
+            integrity_results: {
+                "checks": {
+                    "expired_batch_remaining": {"count": int, "severity": str},
+                    "food_ghost_stock": {"count": int, "severity": str},
+                    "expiry_time_mismatch": {"count": int, "severity": str},
+                    "missing_delivery_type": {"count": int, "severity": str},
+                    "past_expiry_active": {"count": int, "severity": str},
+                    "unavailable_with_sales": {"count": int, "severity": str},
+                },
+                "dangerous_skips": [
+                    {"item_cd": str, "item_nm": str, "skip_reason": str, "skip_detail": str},
+                    ...
+                ],
+                "skip_stats": {
+                    "SKIP_LOW_POPULARITY": int,
+                    "SKIP_UNAVAILABLE": int,
+                    "PASS_STOCK_SUFFICIENT": int,
+                    "PASS_DATA_INSUFFICIENT": int,
+                },
+            }
+            action_proposals: None (Week 3) | [{"action_type": str, "count": int}] (Week 4+)
+
+        Returns:
+            None (이상 없음) 또는 "[주의]\n🔴 ghost_inventory 3건\n🟡 zero_stock 1건"
+        """
+
+    def compose(
+        self,
+        order_results: Dict[str, Any],
+        integrity_results: Dict[str, Any],
+    ) -> str:
+        """최종 문자열 조립. send_report()에서 이것만 호출.
+
+        Returns:
+            발주 요약 (항상) + [주의] 이상 감지 (조건부)
+        """
+        order_part = self.build_order_summary(order_results)
+        integrity_part = self.build_integrity_summary(integrity_results)
+
+        sections = [order_part]
+        if integrity_part:
+            sections.append(integrity_part)
+
+        return "\n\n".join(sections)
+
+    def save_summary(self, summary_type: str, report_text: str) -> None:
+        """common.db ai_summaries에 INSERT (조회/비교는 Week 5+)"""
+```
+
+### 16.6 카카오톡 메시지 포맷
+
+#### 정상 발주 (이상 없음)
+```
+[기존 리포트 내용]
+...
+
+📊 발주 요약
+✅ 정상 21품목 / 147,800원
+식품 8 | 음료 9 | 기타 4
+```
+
+#### 이상 발주 (주의품목 + integrity 이상)
+```
+[기존 리포트 내용]
+...
+
+📊 발주 요약
+✅ 정상 19품목 | ⚠️ 주의 2품목 (컵라면 외 1건)
+
+[주의] 이상 감지
+🔴 ghost_inventory: 3건
+🟡 unavailable_with_sales: 1건
+→ 대시보드에서 상세 확인
+```
+
+### 16.7 daily_job.py 연동
+
+```python
+# Phase 3: send_report() 내부
+def send_report(self):
+    # 기존 리포트 생성
+    existing_report = self._build_existing_report()
+
+    # AI 요약 섹션 추가 (fail-safe)
+    try:
+        from src.notification.summary_report_service import SummaryReportService
+        summary_svc = SummaryReportService(store_id=self.store_id)
+        summary_text = summary_svc.compose(
+            order_results=self._order_results,
+            integrity_results=self._integrity_results,
+        )
+        full_report = f"{existing_report}\n\n{summary_text}"
+
+        # common.db에 저장 (Week 3: INSERT만)
+        summary_svc.save_summary("order", summary_text)
+    except Exception as e:
+        logger.warning(f"요약 생성 실패 (기존 리포트 유지): {e}")
+        full_report = existing_report  # fallback
+
+    self._send_kakao(full_report)
+```
+
+### 16.8 테스트 시나리오 (~10개)
+
+```python
+class TestSummaryReportService:
+    """AI 요약 서비스 단위 테스트"""
+
+    # ── build_order_summary() ──
+    def test_order_summary_normal_only(self):
+        """전체 정상 → ✅ 정상 N품목 / 금액"""
+
+    def test_order_summary_with_warnings(self):
+        """주의품목 2건 → ✅ 정상 N | ⚠️ 주의 2 (이름 외 1건)"""
+
+    def test_order_summary_warnings_max_3(self):
+        """주의품목 5건 → 최대 3개 표시 + 외 2건"""
+
+    def test_order_summary_empty_results(self):
+        """빈 결과 → 기본 메시지"""
+
+    # ── build_integrity_summary() ──
+    def test_integrity_no_issues_returns_none(self):
+        """이상 없음 → None 반환"""
+
+    def test_integrity_with_issues(self):
+        """ghost 3건 + unavailable 1건 → [주의] 포맷"""
+
+    def test_integrity_severity_ordering(self):
+        """🔴 > 🟡 > 🟢 순서 정렬"""
+
+    # ── compose() ──
+    def test_compose_normal(self):
+        """정상 → 발주 요약만 포함, [주의] 없음"""
+
+    def test_compose_with_integrity(self):
+        """이상 있음 → 발주 요약 + [주의] 모두 포함"""
+
+    # ── save_summary() ──
+    def test_save_summary_inserts_to_common_db(self):
+        """common.db ai_summaries에 INSERT 확인"""
+
+    # ── fail-safe ──
+    def test_compose_exception_returns_empty(self):
+        """내부 예외 시 빈 문자열 (daily_job fallback 가능)"""
+```
+
+### 16.9 구현 순서 (Week 3 체크리스트)
+
+- [ ] W3-1: `schema.py` COMMON_SCHEMA에 ai_summaries DDL 추가
+- [ ] W3-2: 3매장 + common.db 마이그레이션 실행
+- [ ] W3-3: `summary_report_service.py` 생성
+  - [ ] W3-3a: `build_order_summary()` 구현
+  - [ ] W3-3b: `build_integrity_summary()` 구현
+  - [ ] W3-3c: `compose()` 조립
+  - [ ] W3-3d: `save_summary()` common.db INSERT
+- [ ] W3-4: `daily_job.py` Phase 3 send_report() 연동 + fallback
+- [ ] W3-5: `kakao_notifier.py` 요약 섹션 조립
+- [ ] W3-6: 테스트 작성 (~10개)
+- [ ] W3-7: 전체 테스트 스위트 통과 확인
+
+### 16.10 향후 확장 (Week 4+)
+
+| Week | 내용 | 비고 |
+|------|------|------|
+| Week 4 | action_proposals 연동 | compose()에 proposals 파라미터 전달 |
+| Week 4 | BGF 외부전송 계약 확인 → api_based_summary | AI_SUMMARY_ENABLED 토글 |
+| Week 5 | 매장 간 비교 요약 | ai_summaries 조회 로직 |
+| Week 5 | 대시보드 AI 요약 패널 | /api/ai/summaries 엔드포인트 |
