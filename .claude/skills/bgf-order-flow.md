@@ -25,6 +25,12 @@
 - ❌ 드라이버를 모듈별로 새로 생성 → 중복 로그인, 세션 충돌
 - ✅ `SalesAnalyzer.login()` 1회 후 드라이버 공유
 
+- ❌ realtime_inventory의 stale 데이터를 신뢰 → 3일 경과 시 중회전 상품 +1~+6 불일치
+- ✅ prefetch가 발주 대상만 갱신. 비발주 상품의 stock_qty는 며칠~수주 전 값일 수 있음
+
+- ❌ preserve_stock_if_zero가 재고 소진을 반영 못함 → DB에 유령 재고 잔존
+- ✅ BGF stock=0이면 기존 DB값 보존하는 의도적 설계. 직배 상품 보호용
+
 ## Troubleshooting
 
 | 증상 | 원인 | 해결 |
@@ -35,6 +41,9 @@
 | 담배 30개 초과 발주 | 상한선 체크 누락 | `tobacco.py`의 `skip_order` 로직 확인 |
 | 발주 실행 시 화면 오류 | 이전 메뉴 탭 미닫힘 | `_ensure_clean_screen_state()` 호출 확인 |
 | 행사 상품 발주량 이상 | 행사 배율 미적용 | `promotion_adjuster.py` 연동 확인 |
+| 과자/음료 불필요한 추가 발주 | stale DB stock < 실제 재고 | prefetch 대상 확대 또는 stale 상품 재조회 필요 |
+| 1차 CUT 재조회 0/100 실패 | 07시 프레임 미안정 | 정상 동작 — 2차 본발주에서 CUT 감지됨 |
+| prefetch 조회 완료: 0/N건 | 날짜 선택 팝업 타임아웃 | 넥사크로 프레임 로드 대기 부족. 재시도 시 성공 |
 
 ---
 
@@ -408,16 +417,126 @@ system.execute(dry_run=False)
 ## AutoOrderSystem.execute() 흐름
 
 ```python
-def execute(order_list=None, dry_run=True, prefetch_pending=True):
+def execute(order_list=None, dry_run=True, prefetch_pending=True, max_pending_items=0):
+    # 0. load_unavailable/cut_items_from_db() - DB에서 미취급/CUT 목록
+    # 0.5. CUT 의심 상품 우선 재조회 (stale_days 초과분)
+    # 0.7. load_auto_order_items() - 자동/스마트발주 목록 (중복 방지)
     # 1. get_recommendations() - 1회만 호출
     #    └─ ImprovedPredictor.predict() per item
     #    └─ apply_food_daily_cap() 1차 적용
-    # 2. prefetch_pending_quantities() - 미입고/재고 조회
+    # 2. prefetch_pending_quantities() - 미입고/재고 전수 조회 (max_pending_items=0)
+    #    └─ OrderPrepCollector.collect_for_items() → DirectAPI 배치 or Selenium
+    #    └─ RealtimeInventoryRepository.save() → realtime_inventory UPSERT
     # 3. _apply_pending_and_stock_to_order_list() - 직접 반영
+    #    └─ confirmed_pending 병합 (order_tracking)
+    #    └─ expired_stock_overrides (오늘 만료 배치)
     #    └─ apply_food_daily_cap() 2차 적용
     # 4. _exclude_filtered_items() - 미취급/CUT/자동발주/스마트발주 제외
     # 5. _ensure_clean_screen_state() - 화면 초기화
     # 6. executor.execute_orders() - 실제 발주
+```
+
+## 재고 동기화 (Inventory Sync) — 실측 검증 결과 (2026-03-28)
+
+### 동기화 아키텍처
+
+```
+realtime_inventory 테이블에 재고를 기록하는 경로 2개:
+
+경로 1: Phase 1 판매 수집 (SalesCollector)
+  매출분석 화면 NOW_QTY → realtime_inventory.stock_qty
+  ★ 07:00 수집 시 해당 중분류 상품만 갱신
+
+경로 2: Phase 2 prefetch (OrderPrepCollector)
+  단품별발주 화면 NOW_QTY → realtime_inventory.stock_qty
+  ★ 발주 대상 상품만 조회 (get_recommendations 결과)
+  ★ preserve_stock_if_zero=True: BGF stock=0이면 기존 DB값 보존
+```
+
+### 동기화 성공률 (4일 로그 실측)
+
+| 단계 | 시도 | 결과 | 원인 |
+|------|------|------|------|
+| 1차 CUT 의심 재조회 (100개) | 매일 07:03 | **항상 0/100 실패** | 날짜 선택 팝업 타임아웃 (넥사크로 프레임 미안정) |
+| 2차 본발주 prefetch (발주 대상) | 매일 07:07~10 | **100% 성공** (230~371개) | 1차가 프레임 워밍업 역할 |
+| 야간 전체 배치 (03:01) | 비정기 | **100% 성공** (200개×17배치) | 세션 안정 상태 |
+
+### DB 갱신 범위 (46513 기준)
+
+```
+전체 취급 상품: 5,314개
+├─ 오늘 갱신: ~633개 (12%) ← 발주 대상만
+├─ 어제: ~409개 (8%)
+└─ 2일 이상 경과 (stale): ~4,272개 (80%) ← 비발주 상품
+```
+
+### BGF 사이트 vs DB 실측 비교 (크롬 DirectAPI 직접 호출)
+
+| 분류 | DB 경과일 | 비교 결과 | 불일치 크기 |
+|------|---------|---------|-----------|
+| **오늘 갱신 상품** | 0일 | **3/3 완전 일치** | 0 |
+| **stale 저회전** (담배/라이터) | 3일 | **3/3 완전 일치** | 0 |
+| **stale 중회전** (과자/음료) | 3일 | **5/5 전부 불일치** | +1 ~ +6개 |
+
+### 불일치 패턴 분석
+
+```
+불일치 방향: 항상 BGF(실제) > DB(기록) — 입고로 재고 증가했으나 DB 미갱신
+영향: DB stock이 실제보다 낮음 → need_qty 과대계산 → 불필요한 추가 발주 가능
+
+불일치 규모 (중회전 상품):
+  해태)초코홈런볼128g: BGF=3, DB=2 (차이 +1)
+  티오피)배럴에이지드: BGF=7, DB=1 (차이 +6) ★ 큰 불일치
+  매일)페레로누텔라:   BGF=4, DB=2 (차이 +2)
+  동서)리츠샌드치즈:   BGF=5, DB=1 (차이 +4)
+  행복)메추리알쏙쏙:   BGF=4, DB=2 (차이 +2)
+```
+
+### 신뢰도 등급
+
+| 데이터 범위 | 신뢰도 | 근거 |
+|-----------|--------|------|
+| 오늘 prefetch된 상품 (~300개) | **높음** | BGF와 100% 일치 |
+| stale 저회전 (담배, 잡화 등) | **중간** | 재고 변동 적어 일치하지만 보장 불가 |
+| stale 중회전 (과자, 음료 등) | **낮음** | 3일만에 +1~6 불일치 발생 |
+| stale 고회전 (푸드 001~005) | N/A | 매일 발주 → stale 발생 안 함 |
+
+### preserve_stock_if_zero 역효과
+
+```python
+# inventory_repo.py:64-77
+if preserve_stock_if_zero and stock_qty == 0:
+    existing = cursor.fetchone()
+    if existing and existing[0] > 0:
+        stock_qty = existing[0]  # 기존 재고 유지
+```
+
+**의도**: 직배 상품 등 단품발주조회에서 NOW_QTY=0이지만 매장 진열 재고는 있는 경우 보호
+**역효과**: 실제 재고 소진(stock→0)된 상품도 DB에 이전 값이 남아 과대평가 가능
+
+### DirectAPI 배치 성능
+
+```
+배치 크기: 200개/배치
+배치당 소요: ~3초
+1,500개 전수 조회: ~23초 (max_pending_items=0 변경 후)
+API 성공률: 100% (Selenium 폴백 0건, 야간/2차 발주 기준)
+```
+
+### 1차 CUT 재조회 실패 문제
+
+```
+매일 07:03~04 (3매장 병렬)
+  → DirectAPI 템플릿 캡처 시도 (Selenium 1건 검색)
+  → 캡처 실패 (2/2 시도)
+  → Selenium 폴백 시도
+  → 날짜 선택 팝업 대기 타임아웃 (ERROR)
+  → 조회 완료: 0/100건
+
+원인: execute() 진입 시 load_unavailable/cut → CUT 의심 재조회가
+      메인 발주보다 먼저 실행되는데, 이 시점에 넥사크로 프레임이
+      아직 완전히 로드되지 않아 날짜 선택 팝업이 나타나지 않음.
+      2차 본발주 prefetch 시점에는 프레임이 안정화되어 100% 성공.
 ```
 
 ## 사전 평가 + 사후 보정 (피드백 루프)

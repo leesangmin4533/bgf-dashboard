@@ -33,6 +33,9 @@
 | `dict(row)` 에서 KeyError | 컬럼명 오타 | `sqlite3.Row` 반환값의 키 확인 |
 | 빈 결과 반환 | 날짜 포맷 불일치 | `YYYY-MM-DD` 형식 확인 (TEXT 타입) |
 | 행사 변경 감지 안됨 | `save_monthly_promo()` 미호출 | `OrderPrepCollector`에서 수집 시 자동 저장 확인 |
+| realtime_inventory 재고 불일치 | stale 데이터 (80%가 2일+) | prefetch가 발주 대상만 갱신, 비발주 상품은 stale 유지 |
+| stock_qty가 0으로 안 바뀜 | `preserve_stock_if_zero=True` | 의도적 보호: 직배 상품 NOW_QTY=0 방어. 역효과 주의 |
+| CUT 재조회 항상 0/100 실패 | 07시 넥사크로 프레임 미안정 | 날짜 선택 팝업 타임아웃. 본발주 prefetch는 정상 |
 
 ---
 
@@ -122,12 +125,57 @@
 
 | 컬럼 | 타입 | 설명 |
 |------|------|------|
-| item_cd | TEXT | 상품코드 (UNIQUE) |
-| stock_qty | INTEGER | 현재재고 (NOW_QTY) |
+| store_id | TEXT | 점포 코드 |
+| item_cd | TEXT | 상품코드 |
+| item_nm | TEXT | 상품명 |
+| stock_qty | INTEGER | 현재재고 (BGF NOW_QTY) |
 | pending_qty | INTEGER | 미입고수량 |
-| order_unit_qty | INTEGER | 입수 |
+| order_unit_qty | INTEGER | 입수 (최소 1) |
 | is_available | INTEGER | 점포취급여부 (0/1) |
-| queried_at | TEXT | 조회시점 |
+| is_cut_item | INTEGER | 발주중지(CUT) 여부 (0/1) |
+| query_fail_count | INTEGER | 연속 조회 실패 횟수 (v51, 3회 연속 시 미취급 마킹) |
+| unavail_reason | TEXT | 미취급 사유 (query_fail/manual/bulk_import) |
+| queried_at | TEXT | 마지막 조회 시각 (ISO 8601) |
+| created_at | TEXT | 최초 생성 시각 |
+| stop_plan_ymd | TEXT | 발주 정지 예정일 (v67) |
+| cut_reason | TEXT | CUT 사유 (v67) |
+
+- `UNIQUE(store_id, item_cd)`
+
+#### 데이터 갱신 경로 (2개)
+
+| 경로 | 시점 | 소스 | 범위 |
+|------|------|------|------|
+| Phase 1 SalesCollector | 07:00 수집 시 | 매출분석 화면 NOW_QTY | 해당 중분류 상품만 |
+| Phase 2 prefetch | 발주 직전 | 단품별발주 화면 NOW_QTY (DirectAPI) | 발주 대상 상품만 (~300개) |
+
+#### 데이터 신뢰도 (2026-03-28 실측)
+
+| queried_at 경과일 | 대상 | 신뢰도 | BGF 실측 비교 |
+|-----------------|------|--------|-------------|
+| 0일 (오늘) | 발주 대상 ~300개 | **높음** | 3/3 완전 일치 |
+| 1~2일 | 직전 발주 대상 | 중간~높음 | 저회전 일치, 중회전 불일치 가능 |
+| 3일+ | 비발주 상품 ~4,200개 | **낮음** | 중회전 5/5 전부 불일치 (+1~+6) |
+
+#### preserve_stock_if_zero 동작
+
+```python
+# inventory_repo.py save() — prefetch에서 stock=0 반환 시 기존값 보존
+# 의도: 직배 상품 NOW_QTY=0이지만 매장 진열 재고 있는 경우 보호
+# 역효과: 실제 재고 소진 상품도 DB에 이전 값이 남을 수 있음
+if preserve_stock_if_zero and stock_qty == 0:
+    existing = cursor.fetchone()
+    if existing and existing[0] > 0:
+        stock_qty = existing[0]  # 기존 재고 유지 (0 덮어쓰기 방지)
+```
+
+#### staleness 체크 (조회 시)
+
+```python
+# inventory_repo.py _is_stale() — 유통기한 기반 TTL
+# 유통기한 1일 → 18h, 2일 → 36h, 3일 → 54h, 4일+ → 36h (기본)
+# 주의: 조회 시 _stale 플래그만 붙이고, 발주 시에는 stale 여부 미체크
+```
 
 ### order_tracking (발주 추적 - 폐기 관리)
 
