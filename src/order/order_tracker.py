@@ -60,10 +60,33 @@ class OrderTracker:
             order_date = res.get('order_date')
             actual_qty = res.get('actual_qty', 0)
 
-            if not item_cd or actual_qty <= 0:
+            if not item_cd:
                 continue
 
             order_info = order_dict.get(item_cd, {})
+
+            # cancel_smart(qty=0)도 tracking에 기록 (추적 가능하도록)
+            if actual_qty <= 0:
+                if order_info.get('cancel_smart'):
+                    try:
+                        self.tracking_repo.save_order(
+                            order_date=order_date,
+                            item_cd=item_cd,
+                            item_nm=order_info.get('item_nm', item_cd),
+                            mid_cd=order_info.get('mid_cd', ''),
+                            delivery_type='스마트취소',
+                            order_qty=0,
+                            arrival_time=None,
+                            expiry_time=None,
+                            store_id=self.store_id,
+                            order_source='smart_cancel'
+                        )
+                        saved_count += 1
+                        logger.info(f"Tracking: {order_info.get('item_nm', item_cd)[:15]} → 스마트취소(qty=0)")
+                    except Exception as e:
+                        logger.warning(f"cancel_smart tracking 저장 실패: {e}")
+                continue
+
             item_nm = order_info.get('item_nm', item_cd)
             mid_cd = order_info.get('mid_cd', '')
 
@@ -115,7 +138,7 @@ class OrderTracker:
                     arrival_time=arrival_time.strftime("%Y-%m-%d %H:%M"),
                     expiry_time=expiry_time.strftime("%Y-%m-%d %H:%M"),
                     store_id=self.store_id,
-                    order_source='auto'
+                    order_source=order_info.get('source', 'auto')
                 )
                 saved_count += 1
                 if arrival_time and expiry_time:
