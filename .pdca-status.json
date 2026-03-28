@@ -1,1 +1,8 @@
-{}
+{
+  "ml-harness": {
+    "phase": "plan",
+    "matchRate": null,
+    "iterationCount": 0,
+    "startedAt": "2026-03-28T12:30:00Z"
+  }
+}
