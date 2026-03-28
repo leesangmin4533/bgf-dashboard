@@ -2083,15 +2083,8 @@ class OrderExecutor:
                     time.sleep(1)
                 if not nav_success:
                     logger.error("메뉴 이동 3회 실패, 해당 날짜 건너뜀")
-                    for item in items:
-                        results.append({
-                            "item_cd": item.get("item_cd"),
-                            "qty": item.get("final_order_qty", 0),
-                            "order_date": order_date,
-                            "success": False,
-                            "message": "menu navigation failed (3 retries)"
-                        })
-                        total_fail += 1
+                    results.extend(self._mark_all_failed(items, order_date, "menu navigation failed (3 retries)"))
+                    total_fail += len(items)
                     continue
                 is_first_date = False
             else:
@@ -2111,15 +2104,8 @@ class OrderExecutor:
                         logger.warning(f"메뉴 재이동 실패 (시도 {nav_attempt + 1}/3)")
                     if not nav_success:
                         logger.error("메뉴 재이동 3회 실패, 해당 날짜 건너뜀")
-                        for item in items:
-                            results.append({
-                                "item_cd": item.get("item_cd"),
-                                "qty": item.get("final_order_qty", 0),
-                                "order_date": order_date,
-                                "success": False,
-                                "message": "date button click failed (3 retries)"
-                            })
-                            total_fail += 1
+                        results.extend(self._mark_all_failed(items, order_date, "date button click failed (3 retries)"))
+                        total_fail += len(items)
                         continue
 
             time.sleep(ORDER_DATE_BUTTON_AFTER)
@@ -2143,28 +2129,7 @@ class OrderExecutor:
                 if api_result and api_result.success:
                     logger.info(f"[{order_date}] Direct API 저장 성공: {api_result.saved_count}건, {api_result.elapsed_ms:.0f}ms")
                     for item in items:
-                        qty = item.get("final_order_qty", 0)
-                        unit = item.get("order_unit_qty", 1) or 1
-                        # _calc_multiplier와 동일한 계산: ceil(qty / unit)
-                        mult = max(1, (qty + unit - 1) // unit) if qty > 0 else 0
-                        actual = mult * unit
-                        # 발주 감사 로그: BGF에 실제 전송된 배수/총발주량
-                        logger.info(
-                            f"[AUDIT] {item.get('item_cd')} "
-                            f"PYUN_QTY={mult} ORD_UNIT_QTY={unit} "
-                            f"TOT_QTY={actual} (need={qty}) "
-                            f"method=direct_api"
-                        )
-                        results.append({
-                            "item_cd": item.get("item_cd"),
-                            "target_qty": qty,
-                            "actual_qty": actual,
-                            "multiplier": mult,
-                            "order_unit_qty": unit,
-                            "order_date": order_date,
-                            "success": True,
-                            "method": "direct_api",
-                        })
+                        results.append(self._calc_order_result(item, order_date, "direct_api"))
                         total_success += 1
                     continue
                 else:
@@ -2183,14 +2148,7 @@ class OrderExecutor:
             # ── Level 2: Hybrid 배치 그리드 입력 시도 ──
             if form_not_available:
                 logger.warning(f"[{order_date}] L1 전략1+2 모두 실패 (saved=0) → L2/L3 스킵, 전체 {len(items)}건 실패 처리")
-                for item in items:
-                    results.append({
-                        "item_cd": item.get("item_cd"),
-                        "target_qty": item.get("final_order_qty", 0),
-                        "order_date": order_date,
-                        "success": False,
-                        "method": "blocked_form_not_available",
-                    })
+                results.extend(self._mark_all_failed(items, order_date, "form not available", method="blocked_form_not_available"))
                 total_fail += len(items)
                 continue
 
@@ -2199,28 +2157,7 @@ class OrderExecutor:
                 if batch_result and batch_result.success:
                     logger.info(f"[{order_date}] Batch Grid 저장 성공: {batch_result.saved_count}건, {batch_result.elapsed_ms:.0f}ms")
                     for item in items:
-                        qty = item.get("final_order_qty", 0)
-                        unit = item.get("order_unit_qty", 1) or 1
-                        # _calc_multiplier와 동일한 계산: ceil(qty / unit)
-                        mult = max(1, (qty + unit - 1) // unit) if qty > 0 else 0
-                        actual = mult * unit
-                        # 발주 감사 로그: BGF에 실제 전송된 배수/총발주량
-                        logger.info(
-                            f"[AUDIT] {item.get('item_cd')} "
-                            f"PYUN_QTY={mult} ORD_UNIT_QTY={unit} "
-                            f"TOT_QTY={actual} (need={qty}) "
-                            f"method=batch_grid"
-                        )
-                        results.append({
-                            "item_cd": item.get("item_cd"),
-                            "target_qty": qty,
-                            "actual_qty": actual,
-                            "multiplier": mult,
-                            "order_unit_qty": unit,
-                            "order_date": order_date,
-                            "success": True,
-                            "method": "batch_grid",
-                        })
+                        results.append(self._calc_order_result(item, order_date, "batch_grid"))
                         total_success += 1
                     continue
                 else:
@@ -2386,6 +2323,68 @@ class OrderExecutor:
             "results": results,
             "grouped_by_date": {date: len(items) for date, items in grouped_orders.items()}
         }
+
+    # ─────────────────────────────────────────
+    # 발주 결과 헬퍼 메서드
+    # ─────────────────────────────────────────
+
+    def _calc_order_result(
+        self,
+        item: Dict[str, Any],
+        order_date: str,
+        method: str,
+    ) -> Dict[str, Any]:
+        """
+        L1(Direct API) / L2(Batch Grid) 성공 시 AUDIT 로그 + 결과 dict 생성
+
+        주의: L3(Selenium)에서는 사용 금지 — BGF 그리드가 반환한 실제 배수를
+              Python 계산값으로 덮어쓰는 "후행 덮어쓰기" 문제 발생
+        """
+        qty = item.get("final_order_qty", 0)
+        unit = item.get("order_unit_qty", 1) or 1
+        # _calc_multiplier와 동일한 계산: ceil(qty / unit)
+        mult = max(1, (qty + unit - 1) // unit) if qty > 0 else 0
+        actual = mult * unit
+
+        # 발주 감사 로그: BGF에 실제 전송된 배수/총발주량
+        logger.info(
+            f"[AUDIT] {item.get('item_cd')} "
+            f"PYUN_QTY={mult} ORD_UNIT_QTY={unit} "
+            f"TOT_QTY={actual} (need={qty}) "
+            f"method={method}"
+        )
+        return {
+            "item_cd": item.get("item_cd"),
+            "target_qty": qty,
+            "actual_qty": actual,
+            "multiplier": mult,
+            "order_unit_qty": unit,
+            "order_date": order_date,
+            "success": True,
+            "method": method,
+        }
+
+    def _mark_all_failed(
+        self,
+        items: List[Dict[str, Any]],
+        order_date: str,
+        message: str,
+        method: str = "",
+    ) -> List[Dict[str, Any]]:
+        """날짜 그룹 전체를 실패로 기록, 결과 리스트 반환"""
+        failed = []
+        for item in items:
+            result = {
+                "item_cd": item.get("item_cd"),
+                "target_qty": item.get("final_order_qty", 0),
+                "order_date": order_date,
+                "success": False,
+                "message": message,
+            }
+            if method:
+                result["method"] = method
+            failed.append(result)
+        return failed
 
     # ─────────────────────────────────────────
     # Direct API / Batch Grid 통합 메서드
