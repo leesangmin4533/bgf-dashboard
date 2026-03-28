@@ -185,9 +185,14 @@ class OrderDataLoader:
         self,
         pending_collector,
         item_codes: List[str],
-        max_items: int = 500,
+        max_items: int = 0,
     ) -> tuple:
         """미입고 수량 및 실시간 재고 사전 조회
+
+        Args:
+            pending_collector: OrderPrepCollector 인스턴스
+            item_codes: 조회할 상품코드 목록
+            max_items: 최대 조회 수 (0=제한 없음, 전수 조회)
 
         Returns:
             (pending_data, stock_data, new_cut_items, new_unavailable, new_exclusions)
@@ -196,9 +201,9 @@ class OrderDataLoader:
             logger.warning("드라이버 없음 - 미입고 수량 조회 건너뜀")
             return {}, {}, set(), set(), []
 
-        # 제한된 수만 조회
-        if len(item_codes) > max_items:
-            logger.info(f"{len(item_codes)}개 중 {max_items}개만 조회")
+        # max_items > 0이면 제한 적용 (0이면 전수 조회)
+        if max_items > 0 and len(item_codes) > max_items:
+            logger.info(f"{len(item_codes)}개 중 {max_items}개만 조회 (제한)")
             item_codes = item_codes[:max_items]
 
         logger.info(f"미입고 수량 및 실시간 재고 조회: {len(item_codes)}개 상품...")

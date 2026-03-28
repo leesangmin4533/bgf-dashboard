@@ -68,7 +68,7 @@ class DailyOrderFlow:
         min_order_qty: int = 1,
         max_items: Optional[int] = None,
         prefetch_pending: bool = True,
-        max_pending_items: int = 200,
+        max_pending_items: int = 0,
         collect_fail_reasons: bool = True,
         skip_exclusion_fetch: bool = False,
         target_dates: Optional[List[str]] = None,
@@ -85,7 +85,7 @@ class DailyOrderFlow:
             min_order_qty: 최소 발주 수량
             max_items: 최대 발주 항목 수 (None=제한없음)
             prefetch_pending: True면 미입고 수량 사전 조회 (중복 발주 방지)
-            max_pending_items: 미입고 조회 최대 상품 수
+            max_pending_items: 미입고 조회 최대 상품 수 (0=제한 없음, 전수 조회)
             collect_fail_reasons: True면 실패 건 발생 시 사유 수집
             skip_exclusion_fetch: True면 자동/스마트발주 목록 사이트 재조회 건너뜀
             target_dates: 발주할 날짜 목록 (YYYY-MM-DD). None이면 전체 발주
@@ -239,7 +239,7 @@ class DailyOrderFlow:
         min_order_qty: int = 1,
         max_items: Optional[int] = None,
         prefetch_pending: bool = True,
-        max_pending_items: int = 200,
+        max_pending_items: int = 0,
         skip_exclusion_fetch: bool = False,
         target_dates: Optional[List[str]] = None,
     ) -> Dict[str, Any]:

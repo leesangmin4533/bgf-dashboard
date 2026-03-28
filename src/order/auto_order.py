@@ -877,9 +877,14 @@ class AutoOrderSystem:
     def prefetch_pending_quantities(
         self,
         item_codes: List[str],
-        max_items: int = 500
+        max_items: int = 0
     ) -> Dict[str, int]:
-        """미입고 수량 및 실시간 재고 사전 조회 (중복 발주 방지용)"""
+        """미입고 수량 및 실시간 재고 사전 조회 (중복 발주 방지용)
+
+        Args:
+            item_codes: 조회할 상품코드 목록
+            max_items: 최대 조회 수 (0=제한 없음, 발주 대상 전수 조회)
+        """
         try:
             pending_data, stock_data, new_cut_items, new_unavailable, new_exclusions = \
                 self._loader.prefetch_pending(
@@ -1512,7 +1517,7 @@ class AutoOrderSystem:
         target_date: Optional[str] = None,
         dry_run: bool = True,
         prefetch_pending: bool = True,
-        max_pending_items: int = 500,
+        max_pending_items: int = 0,
         margin_collect_categories: Optional[Set[str]] = None,
         skip_exclusion_fetch: bool = False,
         target_dates: Optional[List[str]] = None,
@@ -1527,7 +1532,7 @@ class AutoOrderSystem:
             target_date: 발주 날짜 (YYYY-MM-DD, None이면 상품별 자동 선택)
             dry_run: True면 실제 발주 안함 (테스트용)
             prefetch_pending: True면 발주 전 미입고 수량 사전 조회 (중복 발주 방지)
-            max_pending_items: 미입고 조회 최대 상품 수
+            max_pending_items: 미입고 조회 최대 상품 수 (0=제한 없음, 전수 조회)
             margin_collect_categories: 매가/이익율 수집 대상 카테고리 (부분 발주 시)
             skip_exclusion_fetch: True면 자동/스마트발주 목록 사이트 조회 건너뛰고 DB 캐시 사용
             target_dates: 발주할 날짜 목록 (YYYY-MM-DD). None이면 전체 발주
@@ -1592,10 +1597,11 @@ class AutoOrderSystem:
                     candidate_items.extend(extra)
                     logger.info(f"매가 미수집 {len(margin_missing)}개 중 {len(extra)}개 추가 조회")
 
-            effective_max_pending = min(max_pending_items, len(candidate_items))
+            # max_pending_items=0이면 전수 조회, >0이면 제한 적용
+            effective_max = max_pending_items if max_pending_items > 0 else 0
             pending_data = self.prefetch_pending_quantities(
                 item_codes=candidate_items,
-                max_items=effective_max_pending
+                max_items=effective_max
             )
 
             # [CUT 순서 정정] prefetch에서 실시간 감지된 CUT 상품을 메인 필터로 재적용
@@ -1641,13 +1647,11 @@ class AutoOrderSystem:
             candidate_items = [item.get('item_cd') for item in order_list if item.get('item_cd')]
             logger.info(f"2단계: 발주 대상 {len(candidate_items)}개 상품의 미입고 조회...")
 
-            # max_pending_items를 실제 발주 대상 수에 맞춤
-            effective_max_pending = min(max_pending_items, len(candidate_items))
-
-            # 3단계: 미입고 수량 및 실시간 재고 조회
+            # 3단계: 미입고 수량 및 실시간 재고 조회 (전수)
+            effective_max = max_pending_items if max_pending_items > 0 else 0
             pending_data = self.prefetch_pending_quantities(
                 item_codes=candidate_items,
-                max_items=effective_max_pending
+                max_items=effective_max
             )
 
             # [CUT 순서 정정] prefetch에서 실시간 감지된 CUT 상품을 메인 필터로 재적용

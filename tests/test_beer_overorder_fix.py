@@ -254,17 +254,17 @@ class TestBeerWithCorrectStock:
 class TestPrefetchLimit:
     """prefetch 한도 기본값 확인"""
 
-    def test_default_max_pending_items_500(self):
-        """execute() 기본 max_pending_items=500"""
+    def test_default_max_pending_items_unlimited(self):
+        """execute() 기본 max_pending_items=0 (전수 조회)"""
         import inspect
         from src.order.auto_order import AutoOrderSystem
 
         sig = inspect.signature(AutoOrderSystem.execute)
         param = sig.parameters['max_pending_items']
-        assert param.default == 500, f"Expected 500, got {param.default}"
+        assert param.default == 0, f"Expected 0 (unlimited), got {param.default}"
 
-    def test_prefetch_respects_limit(self):
-        """prefetch_pending_quantities는 max_items 이하만 조회"""
+    def test_prefetch_unlimited_by_default(self):
+        """prefetch_pending_quantities는 기본값(0)이면 전수 조회"""
         from src.order.auto_order import AutoOrderSystem
 
         with patch.object(AutoOrderSystem, '__init__', return_value=None):
@@ -272,7 +272,6 @@ class TestPrefetchLimit:
             executor.pending_collector = MagicMock()
             executor.pending_collector._menu_navigated = True
             executor.pending_collector._date_selected = True
-            # collect_for_items()가 빈 결과를 반환하도록 모킹
             executor.pending_collector.collect_for_items = MagicMock(return_value={})
             executor._unavailable_items = set()
             executor._cut_items = set()
@@ -280,8 +279,29 @@ class TestPrefetchLimit:
             executor._last_stock_data = {}
 
             items = [f"ITEM{i:04d}" for i in range(600)]
-            executor.prefetch_pending_quantities(item_codes=items, max_items=500)
+            # max_items=0 (기본값): 전수 조회
+            executor.prefetch_pending_quantities(item_codes=items)
 
-            # collect_for_items가 500개로 잘린 리스트로 호출되었는지 확인
             call_args = executor.pending_collector.collect_for_items.call_args
-            assert len(call_args[0][0]) == 500
+            assert len(call_args[0][0]) == 600, "기본값이면 전체 600개 조회해야 함"
+
+    def test_prefetch_respects_explicit_limit(self):
+        """prefetch_pending_quantities는 명시적 max_items > 0 이면 제한"""
+        from src.order.auto_order import AutoOrderSystem
+
+        with patch.object(AutoOrderSystem, '__init__', return_value=None):
+            executor = AutoOrderSystem.__new__(AutoOrderSystem)
+            executor.pending_collector = MagicMock()
+            executor.pending_collector._menu_navigated = True
+            executor.pending_collector._date_selected = True
+            executor.pending_collector.collect_for_items = MagicMock(return_value={})
+            executor._unavailable_items = set()
+            executor._cut_items = set()
+            executor._exclusion_records = []
+            executor._last_stock_data = {}
+
+            items = [f"ITEM{i:04d}" for i in range(600)]
+            executor.prefetch_pending_quantities(item_codes=items, max_items=300)
+
+            call_args = executor.pending_collector.collect_for_items.call_args
+            assert len(call_args[0][0]) == 300, "명시적 300 제한 적용"
