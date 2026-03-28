@@ -335,4 +335,33 @@ def run_collection_phases(ctx: Dict[str, Any], job: Any) -> Dict[str, Any]:
         except Exception as e:
             logger.warning(f"신제품 모니터링 실패 (발주 플로우 계속): {e}")
 
+    # ★ Phase 1.36: 데이터 보존 정책 (오래된 기록 자동 삭제)
+    try:
+        from src.infrastructure.database.connection import DBRouter
+        from datetime import timedelta
+
+        retention_rules = {
+            "eval_outcomes": ("eval_date", 90),
+            "prediction_logs": ("prediction_date", 60),
+            "hourly_sales_detail": ("sales_date", 90),
+            "calibration_history": ("calibration_date", 120),
+        }
+
+        purge_conn = DBRouter.get_store_connection(job.store_id)
+        purge_results = {}
+        for table, (date_col, days) in retention_rules.items():
+            cutoff = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+            cursor = purge_conn.execute(
+                f"DELETE FROM {table} WHERE {date_col} < ?", (cutoff,)
+            )
+            if cursor.rowcount > 0:
+                purge_results[table] = cursor.rowcount
+        purge_conn.commit()
+        purge_conn.close()
+
+        if purge_results:
+            logger.info(f"[Phase 1.36] 데이터 정리: {purge_results}")
+    except Exception as e:
+        logger.warning(f"[Phase 1.36] 데이터 정리 실패 (무시): {e}")
+
     return ctx
