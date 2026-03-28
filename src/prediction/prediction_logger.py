@@ -56,41 +56,84 @@ class PredictionLogger:
 
             if 'weekday_coef' in columns:
                 if has_stock_source:
+                    # stage_trace: 파이프라인 단계별 중간값 JSON
+                    import json as _json
+                    _snapshot = getattr(result, 'snapshot_stages', None)
+                    _stage_trace = _json.dumps(_snapshot, ensure_ascii=False) if _snapshot else None
+                    _has_stage_trace = 'stage_trace' in columns
+
                     if has_ml_weight:
-                        cursor.execute("""
-                            INSERT INTO prediction_logs (
-                                prediction_date, item_cd, mid_cd, target_date,
-                                predicted_qty, adjusted_qty,
-                                weekday_coef, confidence, current_stock, safety_stock,
-                                order_qty, model_type, store_id,
-                                stock_source, pending_source, is_stock_stale,
-                                rule_order_qty, ml_order_qty, ml_weight_used,
-                                association_boost,
-                                created_at
-                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        """, (
-                            prediction_date,
-                            result.item_cd,
-                            result.mid_cd,
-                            result.target_date,
-                            result.predicted_qty,
-                            result.adjusted_qty,
-                            result.weekday_coef,
-                            result.confidence,
-                            result.current_stock,
-                            result.safety_stock,
-                            result.order_qty,
-                            result.model_type,
-                            self.store_id,
-                            getattr(result, 'stock_source', ''),
-                            getattr(result, 'pending_source', ''),
-                            1 if getattr(result, 'is_stock_stale', False) else 0,
-                            _rule_oq,
-                            _ml_oq,
-                            _ml_w,
-                            getattr(result, 'association_boost', 1.0),
-                            now.isoformat()
-                        ))
+                        if _has_stage_trace and _stage_trace:
+                            cursor.execute("""
+                                INSERT INTO prediction_logs (
+                                    prediction_date, item_cd, mid_cd, target_date,
+                                    predicted_qty, adjusted_qty,
+                                    weekday_coef, confidence, current_stock, safety_stock,
+                                    order_qty, model_type, store_id,
+                                    stock_source, pending_source, is_stock_stale,
+                                    rule_order_qty, ml_order_qty, ml_weight_used,
+                                    association_boost, stage_trace,
+                                    created_at
+                                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            """, (
+                                prediction_date,
+                                result.item_cd,
+                                result.mid_cd,
+                                result.target_date,
+                                result.predicted_qty,
+                                result.adjusted_qty,
+                                result.weekday_coef,
+                                result.confidence,
+                                result.current_stock,
+                                result.safety_stock,
+                                result.order_qty,
+                                result.model_type,
+                                self.store_id,
+                                getattr(result, 'stock_source', ''),
+                                getattr(result, 'pending_source', ''),
+                                1 if getattr(result, 'is_stock_stale', False) else 0,
+                                _rule_oq,
+                                _ml_oq,
+                                _ml_w,
+                                getattr(result, 'association_boost', 1.0),
+                                _stage_trace,
+                                now.isoformat()
+                            ))
+                        else:
+                            cursor.execute("""
+                                INSERT INTO prediction_logs (
+                                    prediction_date, item_cd, mid_cd, target_date,
+                                    predicted_qty, adjusted_qty,
+                                    weekday_coef, confidence, current_stock, safety_stock,
+                                    order_qty, model_type, store_id,
+                                    stock_source, pending_source, is_stock_stale,
+                                    rule_order_qty, ml_order_qty, ml_weight_used,
+                                    association_boost,
+                                    created_at
+                                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            """, (
+                                prediction_date,
+                                result.item_cd,
+                                result.mid_cd,
+                                result.target_date,
+                                result.predicted_qty,
+                                result.adjusted_qty,
+                                result.weekday_coef,
+                                result.confidence,
+                                result.current_stock,
+                                result.safety_stock,
+                                result.order_qty,
+                                result.model_type,
+                                self.store_id,
+                                getattr(result, 'stock_source', ''),
+                                getattr(result, 'pending_source', ''),
+                                1 if getattr(result, 'is_stock_stale', False) else 0,
+                                _rule_oq,
+                                _ml_oq,
+                                _ml_w,
+                                getattr(result, 'association_boost', 1.0),
+                                now.isoformat()
+                            ))
                     else:
                         cursor.execute("""
                             INSERT INTO prediction_logs (
