@@ -73,8 +73,10 @@ class EvalOutcomeRepository(BaseRepository):
                 (eval_date, item_cd, mid_cd, decision, exposure_days,
                  popularity_score, daily_avg, current_stock, pending_qty,
                  weekday, delivery_batch, sell_price, margin_rate,
-                 promo_type, trend_score, stockout_freq, store_id, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 promo_type, trend_score, stockout_freq,
+                 reason, skip_reason, skip_detail,
+                 store_id, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(store_id, eval_date, item_cd) DO UPDATE SET
                     decision = excluded.decision,
                     exposure_days = excluded.exposure_days,
@@ -88,12 +90,17 @@ class EvalOutcomeRepository(BaseRepository):
                     margin_rate = excluded.margin_rate,
                     promo_type = excluded.promo_type,
                     trend_score = excluded.trend_score,
-                    stockout_freq = excluded.stockout_freq
+                    stockout_freq = excluded.stockout_freq,
+                    reason = excluded.reason,
+                    skip_reason = excluded.skip_reason,
+                    skip_detail = excluded.skip_detail
                 """,
                 (eval_date, item_cd, mid_cd, decision, exposure_days,
                  popularity_score, daily_avg, current_stock, pending_qty,
                  weekday, delivery_batch, sell_price, margin_rate,
-                 promo_type, trend_score, stockout_freq, store_id, self._now())
+                 promo_type, trend_score, stockout_freq,
+                 None, None, None,
+                 store_id, self._now())
             )
             row_id = cursor.lastrowid
             conn.commit()
@@ -132,8 +139,10 @@ class EvalOutcomeRepository(BaseRepository):
                     (eval_date, item_cd, mid_cd, decision, exposure_days,
                      popularity_score, daily_avg, current_stock, pending_qty,
                      weekday, delivery_batch, sell_price, margin_rate,
-                     promo_type, trend_score, stockout_freq, store_id, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     promo_type, trend_score, stockout_freq,
+                     reason, skip_reason, skip_detail,
+                     store_id, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(store_id, eval_date, item_cd) DO UPDATE SET
                         decision = excluded.decision,
                         exposure_days = excluded.exposure_days,
@@ -147,7 +156,10 @@ class EvalOutcomeRepository(BaseRepository):
                         margin_rate = excluded.margin_rate,
                         promo_type = excluded.promo_type,
                         trend_score = excluded.trend_score,
-                        stockout_freq = excluded.stockout_freq
+                        stockout_freq = excluded.stockout_freq,
+                        reason = excluded.reason,
+                        skip_reason = excluded.skip_reason,
+                        skip_detail = excluded.skip_detail
                     """,
                     (eval_date, r["item_cd"], r.get("mid_cd", ""),
                      r["decision"], r.get("exposure_days", 0),
@@ -156,7 +168,9 @@ class EvalOutcomeRepository(BaseRepository):
                      r.get("weekday"), r.get("delivery_batch"),
                      r.get("sell_price"), r.get("margin_rate"),
                      r.get("promo_type"), r.get("trend_score"),
-                     r.get("stockout_freq"), store_id, now)
+                     r.get("stockout_freq"),
+                     r.get("reason"), r.get("skip_reason"), r.get("skip_detail"),
+                     store_id, now)
                 )
                 count += 1
             conn.commit()
@@ -620,5 +634,66 @@ class EvalOutcomeRepository(BaseRepository):
                     "accuracy": round(correct / total, 4) if total > 0 else 0.0,
                 }
             return {"total_upgraded": 0, "correct": 0, "over_order": 0, "accuracy": 0.0}
+        finally:
+            conn.close()
+
+    # ──────────────────────────────────────────────────────
+    # v68: 하네스 엔지니어링 — SKIP 사유 조회
+    # ──────────────────────────────────────────────────────
+
+    def get_skip_stats_by_reason(
+        self, store_id: str, eval_date: str
+    ) -> List[Dict[str, Any]]:
+        """SKIP/PASS 사유별 통계. AISummaryService에서 호출."""
+        conn = self._get_conn()
+        try:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT
+                    skip_reason,
+                    COUNT(*) AS total_cnt,
+                    SUM(CASE WHEN json_extract(skip_detail, '$.sales_7d') > 0
+                             THEN 1 ELSE 0 END) AS sales_but_skipped
+                FROM eval_outcomes
+                WHERE store_id = ?
+                  AND eval_date = ?
+                  AND decision IN ('SKIP', 'PASS')
+                  AND skip_reason IS NOT NULL
+                GROUP BY skip_reason
+                ORDER BY total_cnt DESC
+                """,
+                (store_id, eval_date),
+            )
+            return [dict(r) for r in cursor.fetchall()]
+        finally:
+            conn.close()
+
+    def get_dangerous_skips(
+        self, store_id: str, eval_date: str
+    ) -> List[Dict[str, Any]]:
+        """판매 중인데 SKIP_UNAVAILABLE된 상품 (위험 케이스)."""
+        conn = self._get_conn()
+        try:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT
+                    item_cd,
+                    skip_reason,
+                    skip_detail,
+                    json_extract(skip_detail, '$.current_stock') AS stock,
+                    json_extract(skip_detail, '$.sales_7d') AS sales_7d
+                FROM eval_outcomes
+                WHERE store_id = ?
+                  AND eval_date = ?
+                  AND skip_reason = 'SKIP_UNAVAILABLE'
+                  AND CAST(json_extract(skip_detail, '$.sales_7d') AS INTEGER) > 0
+                ORDER BY CAST(json_extract(skip_detail, '$.sales_7d') AS INTEGER) DESC
+                LIMIT 20
+                """,
+                (store_id, eval_date),
+            )
+            return [dict(r) for r in cursor.fetchall()]
         finally:
             conn.close()

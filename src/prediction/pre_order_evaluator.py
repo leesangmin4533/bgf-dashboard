@@ -1097,6 +1097,41 @@ class PreOrderEvaluator(BaseRepository):
             sell_day_ratio=sell_day_ratio, last_order_date=last_order_date,
         )
 
+        # v68: SKIP/PASS 사유 기록
+        import json as _json
+        from src.prediction.skip_reason import SkipReason as _SR
+        skip_reason = None
+        skip_detail = None
+        if decision == EvalDecision.SKIP:
+            if "재고충분" in reason and "저인기" in reason:
+                skip_reason = _SR.SKIP_LOW_POPULARITY
+                skip_detail = _json.dumps({
+                    "exposure_days": round(exposure_days, 2),
+                    "popularity_level": popularity_level,
+                    "popularity_score": round(popularity, 4),
+                    "daily_avg": round(daily_avg, 2),
+                }, ensure_ascii=False)
+            elif "CUT" in reason:
+                skip_reason = _SR.SKIP_UNAVAILABLE
+                skip_detail = _json.dumps({
+                    "reason": "CUT(발주중지)",
+                    "daily_avg": round(daily_avg, 2),
+                }, ensure_ascii=False)
+            else:
+                skip_reason = _SR.SKIP_UNAVAILABLE
+                skip_detail = _json.dumps({
+                    "current_stock": current_stock,
+                    "daily_avg": round(daily_avg, 2),
+                }, ensure_ascii=False)
+        elif decision == EvalDecision.PASS:
+            skip_reason = _SR.PASS_STOCK_SUFFICIENT
+            skip_detail = _json.dumps({
+                "exposure_days": round(exposure_days, 2),
+                "current_stock": current_stock,
+                "pending_qty": pending_qty,
+                "daily_avg": round(daily_avg, 2),
+            }, ensure_ascii=False)
+
         return PreOrderEvalResult(
             item_cd=item_cd,
             item_nm=product["item_nm"] or "",
@@ -1109,6 +1144,8 @@ class PreOrderEvaluator(BaseRepository):
             current_stock=current_stock,
             pending_qty=pending_qty,
             daily_avg=round(daily_avg, 2),
+            skip_reason=skip_reason,
+            skip_detail=skip_detail,
         )
 
     def evaluate_all(
@@ -1208,6 +1245,8 @@ class PreOrderEvaluator(BaseRepository):
         if cut_in_candidates:
             for cd in cut_in_candidates:
                 demand_info = cut_demand_map.get(cd, {})
+                import json as _json
+                from src.prediction.skip_reason import SkipReason as _SR
                 results[cd] = PreOrderEvalResult(
                     item_cd=cd,
                     item_nm=demand_info.get("item_nm", ""),
@@ -1219,6 +1258,11 @@ class PreOrderEvaluator(BaseRepository):
                     pending_qty=0,
                     daily_avg=round(demand_info.get("daily_avg", 0), 2),
                     trend_score=0,
+                    skip_reason=_SR.SKIP_UNAVAILABLE,
+                    skip_detail=_json.dumps({
+                        "reason": "CUT(발주중지)",
+                        "daily_avg": round(demand_info.get("daily_avg", 0), 2),
+                    }, ensure_ascii=False),
                 )
             item_codes = [cd for cd in item_codes if cd not in cut_items]
             logger.info(

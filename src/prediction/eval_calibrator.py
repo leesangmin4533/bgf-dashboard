@@ -131,6 +131,10 @@ class EvalCalibrator:
                 "promo_type": promo_map.get(item_cd),
                 "trend_score": r.trend_score,
                 "stockout_freq": r.stockout_frequency,
+                # v68: 하네스 엔지니어링 — SKIP/PASS 사유
+                "reason": r.reason,
+                "skip_reason": getattr(r, "skip_reason", None),
+                "skip_detail": getattr(r, "skip_detail", None),
             })
 
         count = self.outcome_repo.save_eval_results_batch(today, batch, store_id=self.store_id)
