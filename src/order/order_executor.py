@@ -2146,13 +2146,10 @@ class OrderExecutor:
                         )
 
             # ── Level 2: Hybrid 배치 그리드 입력 시도 ──
+            # form_not_available이면 L2(Batch Grid)는 스킵하되, L3(Selenium)은 시도
             if form_not_available:
-                logger.warning(f"[{order_date}] L1 전략1+2 모두 실패 (saved=0) → L2/L3 스킵, 전체 {len(items)}건 실패 처리")
-                results.extend(self._mark_all_failed(items, order_date, "form not available", method="blocked_form_not_available"))
-                total_fail += len(items)
-                continue
-
-            if BATCH_GRID_INPUT_ENABLED and not dry_run and len(items) >= 3:
+                logger.warning(f"[{order_date}] L1 saved=0 → L2(Batch Grid) 스킵, L3(Selenium) 폴백 시도")
+            elif BATCH_GRID_INPUT_ENABLED and not dry_run and len(items) >= 3:
                 batch_result = self._try_batch_grid_input(items, order_date)
                 if batch_result and batch_result.success:
                     logger.info(f"[{order_date}] Batch Grid 저장 성공: {batch_result.saved_count}건, {batch_result.elapsed_ms:.0f}ms")

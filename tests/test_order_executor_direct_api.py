@@ -72,8 +72,8 @@ class TestThreeTierFallback:
     @patch('src.order.order_executor.DIRECT_API_ORDER_ENABLED', True)
     @patch('src.order.order_executor.BATCH_GRID_INPUT_ENABLED', True)
     def test_level1_fail_fallback_to_level2(self, executor, sample_orders):
-        """Level 1 실패 -> Level 2 폴백 (메뉴 탐색 후)"""
-        api_result = SaveResult(success=False, message='no template')
+        """Level 1 부분저장 실패 -> Level 2 폴백 (메뉴 탐색 후)"""
+        api_result = SaveResult(success=False, saved_count=1, message='partial save')
         batch_result = SaveResult(success=True, saved_count=3, elapsed_ms=1000, method='batch_grid')
 
         with patch.object(executor, '_try_direct_api_save', return_value=api_result):
@@ -308,9 +308,9 @@ class TestDirectApiVerifyFallback:
     @patch('src.order.order_executor.DIRECT_API_ORDER_ENABLED', True)
     @patch('src.order.order_executor.BATCH_GRID_INPUT_ENABLED', True)
     def test_verify_failure_triggers_batch_grid_fallback(self, executor, sample_orders):
-        """검증 전체 실패 → Level 2 Batch Grid 폴백 실행"""
+        """검증 실패 (부분저장) → Level 2 Batch Grid 폴백 실행"""
         api_result = SaveResult(
-            success=False, message='verification failed: 0/3 matched',
+            success=False, saved_count=1, message='verification failed: 1/3 matched',
         )
         batch_result = SaveResult(
             success=True, saved_count=3, elapsed_ms=1000, method='batch_grid',
