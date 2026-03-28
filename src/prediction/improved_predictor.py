@@ -1791,14 +1791,30 @@ class ImprovedPredictor:
         }
         ctx["_intermittent_config"] = intermittent_config
 
+        # ── Pipeline: 순서 불변식 ──
+        # Phase A: 기본 수량 결정 (독립 제안 가능 — pipe 원본 기준)
+        #   rule: pipe["need_qty"] 직접 참조
+        #   rop:  pipe + result.qty 조건 참조
+        # Phase B: 감량/보정 (이전 결과 의존 — 순서 중요!)
+        #   promo → ml → new_product → diff → promo_floor → dessert_sub
+        #   ⚠️ diff가 promo 의도를 축소할 수 있음 → promo_floor가 복원
+        # Phase C: 하드 제약 (순서 무관 — 최종값에 적용)
+        #   cap: 절대 상한
+        #   round: 배수 맞춤 (항상 마지막)
+        ctx["_stage_io"] = []
+        ctx["_raw_need_qty"] = pipe.get("need_qty", 0)  # Two-Pass 비교 근거
+
+        # Phase A
         result = self._stage_rule(OrderResult.initial(0, "init"), ctx, proposal, pipe)
         result = self._stage_rop(result, ctx, proposal, pipe)
+        # Phase B
         result = self._stage_promo(result, ctx, proposal, pipe)
         result = self._stage_ml(result, ctx, proposal, pipe)
         result = self._stage_new_product(result, ctx, proposal, pipe)
         result = self._stage_diff(result, ctx, proposal, pipe)
         result = self._stage_promo_floor(result, ctx, proposal, pipe)
         result = self._stage_dessert_sub(result, ctx, proposal, pipe)
+        # Phase C
         result = self._stage_cap(result, ctx, proposal, pipe)
         result = self._stage_round(result, ctx, proposal, pipe)
 
@@ -1832,6 +1848,13 @@ class ImprovedPredictor:
             "after_cap": ctx.get("_order_qty_after_cap", promo_result.qty),
             "after_round": round_result.qty,
             "final": final_order_qty,
+            # Two-Pass 전환 근거 데이터
+            "raw_need_qty": ctx.get("_raw_need_qty", 0),
+            "stage_io": [
+                {"stage": io.get("stage"), "in": io.get("in"), "out": io.get("out"), "reads": io.get("reads")}
+                for io in ctx.get("_stage_io", [])
+            ] if ctx.get("_stage_io") else [],
+            "shadow": ctx.get("_shadow", {}),
         }
 
         # proposal 이력 로그 + stock_gate 요약
@@ -1898,7 +1921,15 @@ class ImprovedPredictor:
     # ── 발주 파이프라인 _stage_* 메서드 (OrderResult 기반) ──
 
     def _stage_rule(self, result, ctx, proposal, pipe):
-        """Stage 1: 발주 조정 규칙 적용"""
+        """Stage 1: 발주 조정 규칙 적용
+
+        [Phase A: 독립 제안] pipe["need_qty"] 직접 참조, 이전 stage 불참조.
+        pre: pipe에 need_qty, product, weekday 등 존재
+        post: 과다재고 시 qty=0 가능
+        overwrites: 없음 (첫 단계)
+        [Two-Pass] Pass-1 독립 실행 가능.
+        """
+        _in = result.qty
         rule_result = self._apply_order_rules(
             need_qty=pipe["need_qty"], product=pipe["product"], weekday=pipe["weekday"],
             current_stock=pipe["effective_stock_for_need"], daily_avg=pipe["daily_avg"],
@@ -1909,6 +1940,7 @@ class ImprovedPredictor:
         if rule_result.stage == "rules_overstock":
             proposal.set(0, "stock_gate_overstock", rule_result.reason)
         ctx["_rule_result"] = rule_result
+        ctx["_stage_io"].append({"stage": "rule", "in": _in, "out": order_qty, "reads": "pipe"})
         return OrderResult.initial(order_qty, "after_rule")
 
     def _stage_rop(self, result, ctx, proposal, pipe):
@@ -2037,11 +2069,23 @@ class ImprovedPredictor:
         return result.with_qty(order_qty, "after_new_product")
 
     def _stage_diff(self, result, ctx, proposal, pipe):
-        """Stage 6: 발주 차이 피드백 페널티"""
+        """Stage 6: 발주 차이 피드백 페널티
+
+        [Phase B: 변환] result.qty * penalty. 이전 결과에 의존.
+        pre: ML 이후의 qty
+        post: qty를 감소시킴 (0으로는 안 만듦, max(1,...))
+        overwrites: ⚠️ 행사 보정(Stage 3)을 축소할 수 있음 → Stage 7(promo_floor)에서 복원
+        [Two-Pass] Pass-2 합의 단계에서 multiplier로 적용.
+        """
+        _in = result.qty
         order_qty = result.qty
         product = pipe["product"]
         item_cd = pipe["item_cd"]
         mid_cd = pipe["mid_cd"]
+
+        # shadow: 원본 기준이었으면?
+        raw_need = ctx.get("_raw_need_qty", 0)
+        shadow_qty = None
 
         if self._diff_feedback and self._diff_feedback.enabled and order_qty > 0:
             penalty = self._diff_feedback.get_removal_penalty(item_cd, mid_cd=mid_cd)
@@ -2054,8 +2098,14 @@ class ImprovedPredictor:
                     f"{old_qty}→{order_qty} (penalty={penalty}, "
                     f"제거 {self._diff_feedback._removal_cache.get(item_cd, {}).get('removal_count', 0)}회)"
                 )
+                # shadow: 원본 기준이었으면? (Two-Pass 비교 데이터)
+                if raw_need > 0:
+                    shadow_qty = max(1, int(raw_need * penalty))
 
         ctx["_order_qty_after_diff"] = order_qty
+        ctx["_stage_io"].append({"stage": "diff", "in": _in, "out": order_qty, "reads": "prev"})
+        if shadow_qty is not None:
+            ctx.setdefault("_shadow", {})["diff_from_raw"] = shadow_qty
         return result.with_qty(order_qty, "after_diff")
 
     def _stage_promo_floor(self, result, ctx, proposal, pipe):
@@ -2127,12 +2177,23 @@ class ImprovedPredictor:
         return result.with_qty(order_qty, "after_sub")
 
     def _stage_cap(self, result, ctx, proposal, pipe):
-        """Stage 9: 카테고리별 최대 발주량 상한"""
+        """Stage 9: 카테고리별 최대 발주량 상한
+
+        [Phase C: 하드 제약] 순서 무관. 최종값에 절대 상한 적용.
+        pre: 없음 (독립)
+        post: order_qty <= max_qty (보장)
+        overwrites: ⚠️ 모든 이전 단계의 증가분을 잘라낼 수 있음
+        [Two-Pass] Pass-2 이후 constraint(max_qty)로 적용.
+        """
+        _in = result.qty
         order_qty = result.qty
         product = pipe["product"]
         item_cd = pipe["item_cd"]
 
+        # shadow: 원본 기준이었으면? (Two-Pass 비교 데이터)
+        raw_need = ctx.get("_raw_need_qty", 0)
         max_qty = MAX_ORDER_QTY_BY_CATEGORY.get(product["mid_cd"])
+
         if max_qty and order_qty > max_qty:
             logger.warning(
                 f"[{item_cd}] 최대 발주량 초과: {order_qty}개 → {max_qty}개로 제한 "
@@ -2141,7 +2202,12 @@ class ImprovedPredictor:
             order_qty = max_qty
             proposal.set(order_qty, "category_cap", f"max={max_qty}")
 
+        # shadow: 원본도 cap에 걸렸을까?
+        if max_qty and raw_need > max_qty:
+            ctx.setdefault("_shadow", {})["cap_from_raw"] = max_qty
+
         ctx["_order_qty_after_cap"] = order_qty
+        ctx["_stage_io"].append({"stage": "cap", "in": _in, "out": order_qty, "reads": "prev"})
         return result.with_qty(order_qty, "after_cap")
 
     def _stage_round(self, result, ctx, proposal, pipe):
