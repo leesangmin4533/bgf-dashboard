@@ -343,6 +343,9 @@ class ImprovedPredictor:
         # 입고 패턴 통계 배치 캐시 (receiving-pattern)
         self._receiving_stats_cache: Dict[str, Dict[str, float]] = {}
 
+        # QW-1: Rolling Bias 캐시 (mid_cd → bias_ratio)
+        self._bias_cache: Dict[str, float] = {}
+
         # 그룹 컨텍스트 캐시 (food-ml-dual-model)
         self._smallcd_peer_cache: Dict[str, float] = {}
         self._item_smallcd_map: Dict[str, str] = {}
@@ -2756,6 +2759,16 @@ class ImprovedPredictor:
                         blended = _sr.final_pred
                     else:
                         blended = (1 - ml_weight) * rule_order + ml_weight * ml_order
+
+                    # QW-1: Rolling Bias 보정 (매장×카테고리 편향)
+                    _bias = self._get_rolling_bias(mid_cd)
+                    if _bias != 1.0:
+                        blended *= _bias
+
+                    # 합산 clamp: 어떤 보정 조합이든 원래 예측의 2배 초과 방지
+                    _base_ref = max(rule_order, 1)
+                    blended = min(blended, _base_ref * 2.0)
+
                     order_qty = max(0, round(blended))
 
                     # ML 기여도 로깅 (ml-improvement Phase A)
@@ -3891,6 +3904,66 @@ class ImprovedPredictor:
 
         # 발주량 있는 것만 필터링
         return [r for r in results if r.order_qty >= min_order_qty]
+
+    def _get_rolling_bias(self, mid_cd: str, window: int = 14) -> float:
+        """QW-1: 매장×카테고리별 최근 N일 예측 편향 비율
+
+        품절일(sale_qty=0)과 행사기간은 제외.
+        bias > 1.0 → 과소예측 경향, bias < 1.0 → 과다예측 경향
+
+        Returns:
+            median 기반 bias ratio (clamp 0.7~1.5, 데이터 부족 시 1.0)
+        """
+        try:
+            from src.settings.constants import ROLLING_BIAS_ENABLED
+            if not ROLLING_BIAS_ENABLED:
+                return 1.0
+        except ImportError:
+            return 1.0
+
+        if mid_cd in self._bias_cache:
+            return self._bias_cache[mid_cd]
+
+        try:
+            from src.infrastructure.database.connection import DBRouter
+            conn = DBRouter.get_store_connection(self.store_id)
+            cutoff = (datetime.now() - timedelta(days=window)).strftime("%Y-%m-%d")
+
+            rows = conn.execute("""
+                SELECT ds.sale_qty, pl.predicted_qty
+                FROM prediction_logs pl
+                JOIN daily_sales ds
+                  ON pl.item_cd = ds.item_cd
+                  AND pl.target_date = ds.sales_date
+                LEFT JOIN promotions pr
+                  ON pl.item_cd = pr.item_cd
+                  AND pl.target_date BETWEEN pr.start_date AND pr.end_date
+                WHERE pl.prediction_date >= ?
+                  AND pl.mid_cd = ?
+                  AND pl.predicted_qty > 0.1
+                  AND ds.sale_qty > 0
+                  AND pr.item_cd IS NULL
+            """, (cutoff, mid_cd)).fetchall()
+            conn.close()
+
+            if len(rows) < 10:
+                self._bias_cache[mid_cd] = 1.0
+                return 1.0
+
+            import statistics
+            ratios = [float(r[0]) / float(r[1]) for r in rows if r[1] > 0.1]
+            if not ratios:
+                self._bias_cache[mid_cd] = 1.0
+                return 1.0
+
+            bias = statistics.median(ratios)
+            bias = max(0.7, min(1.5, bias))
+            self._bias_cache[mid_cd] = bias
+            return bias
+
+        except Exception:
+            self._bias_cache[mid_cd] = 1.0
+            return 1.0
 
     def predict_and_log(self, target_date: Optional[datetime] = None) -> int:
         """전체 활성 상품 예측 수행 + prediction_logs 저장 (자동발주와 독립)

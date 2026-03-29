@@ -347,17 +347,36 @@ class CoefficientAdjuster:
             if temp is None:
                 return 1.0
 
-            # 1. 절대 기온 임계값 계수
-            for rule_name, rule in self.WEATHER_COEFFICIENTS.items():
-                if mid_cd in rule["categories"]:
-                    if rule.get("below", False):
-                        if temp <= rule["temp_threshold"]:
-                            coef = rule["coefficient"]
-                            break
-                    else:
-                        if temp >= rule["temp_threshold"]:
-                            coef = rule["coefficient"]
-                            break
+            # 1. QW-3: 음료 기온 우선 분기 (25도+ 구간, Flag 제어)
+            _bev_applied = False
+            try:
+                from src.settings.constants import (
+                    BEVERAGE_TEMP_PRIORITY_ENABLED,
+                    BEVERAGE_TEMP_SENSITIVITY,
+                )
+                if BEVERAGE_TEMP_PRIORITY_ENABLED and mid_cd in BEVERAGE_TEMP_SENSITIVITY:
+                    sens = BEVERAGE_TEMP_SENSITIVITY[mid_cd]
+                    if temp >= 30:
+                        coef = sens.get("30_plus", 1.15)
+                        _bev_applied = True
+                    elif temp >= 25:
+                        coef = sens.get("25_30", 1.10)
+                        _bev_applied = True
+            except ImportError:
+                pass
+
+            # 1-1. 기존 절대 기온 임계값 계수 (음료 우선 분기 미적용 시)
+            if not _bev_applied:
+                for rule_name, rule in self.WEATHER_COEFFICIENTS.items():
+                    if mid_cd in rule["categories"]:
+                        if rule.get("below", False):
+                            if temp <= rule["temp_threshold"]:
+                                coef = rule["coefficient"]
+                                break
+                        else:
+                            if temp >= rule["temp_threshold"]:
+                                coef = rule["coefficient"]
+                                break
 
             # 2. 기온 급변 계수 (전일 대비 변화량)
             delta = self.get_temperature_delta(date_str)

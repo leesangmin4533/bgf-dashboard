@@ -45,7 +45,7 @@ from src.utils.logger import get_logger
 logger = get_logger(__name__)
 
 # ── 상수 ───────────────────────────────────────────────────────────
-MIN_TRAIN_SAMPLES  = 200   # 학습에 필요한 최소 (상품×날짜) 행 수
+MIN_TRAIN_SAMPLES  = 100   # 학습에 필요한 최소 (200→100, QW-2)
 HOLDOUT_DAYS       = 7     # 검증용 holdout 기간
 TRAIN_LOOKBACK     = 60    # 학습에 사용할 최대 일수
 MAE_DEGRADATION_THRESHOLD = 1.20   # MAE 20% 이상 악화 시 폴백
@@ -163,7 +163,7 @@ def _load_training_data(store_id: str) -> Tuple[Optional[np.ndarray], Optional[n
         rows = conn.execute("""
             SELECT
                 pl.predicted_qty,
-                pl.ml_order_qty,
+                COALESCE(pl.ml_order_qty, pl.predicted_qty) AS ml_order_qty,
                 pl.mid_cd,
                 pl.target_date,
                 pl.ml_weight_used,
@@ -176,9 +176,8 @@ def _load_training_data(store_id: str) -> Tuple[Optional[np.ndarray], Optional[n
              AND pl.target_date = ds.sales_date
             WHERE pl.prediction_date >= ?
               AND pl.predicted_qty   IS NOT NULL
-              AND pl.ml_order_qty    IS NOT NULL
-              AND pl.ml_order_qty    > 0
               AND pl.predicted_qty   > 0
+              AND COALESCE(pl.ml_order_qty, pl.predicted_qty) > 0
             ORDER BY pl.target_date ASC
         """, (cutoff,)).fetchall()
         conn.close()

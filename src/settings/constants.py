@@ -376,6 +376,20 @@ DESSERT_CONFIRMED_STOP_WASTE_DAYS = 14  # 폐기율 기준 CONFIRMED_STOP 판단
 DESSERT_2WEEK_EVALUATION_ENABLED = True  # False → 기존 보호기간(4주/3주) 복구
 DESSERT_PROMO_PROTECTION_ENABLED = True  # 프로모션 진행 중 상품 보호기간 리셋
 
+# 예측 Quick Win (prediction-quick-wins)
+ROLLING_BIAS_ENABLED = True              # QW-1: 매장×카테고리 편향 자동보정
+BEVERAGE_TEMP_PRIORITY_ENABLED = True    # QW-3: 음료 기온 계수 강화 (25도+)
+
+# 음료 기온 민감도 (QW-3)
+# mid_cd: {temp_range: multiplier} — 25도 이상 구간만 적용
+BEVERAGE_TEMP_SENSITIVITY = {
+    "010": {"25_30": 1.15, "30_plus": 1.30},  # 제조음료
+    "039": {"25_30": 1.10, "30_plus": 1.25},  # 과일야채음료
+    "043": {"25_30": 1.10, "30_plus": 1.20},  # 차음료
+    "046": {"25_30": 1.10, "30_plus": 1.20},  # 요구르트
+    "049": {"25_30": 1.20, "30_plus": 1.40},  # 맥주 (가장 민감)
+}
+
 # =====================================================================
 # 스마트발주 오버라이드 (스마트→수동 전환)
 # =====================================================================
