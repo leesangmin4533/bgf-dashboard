@@ -7,7 +7,9 @@
       "type": "일반점",
       "is_active": true,
       "description": "본점",
-      "added_date": "2026-02-06"
+      "added_date": "2026-02-06",
+      "commercial_type": "residential",
+      "commercial_group": "A"
     },
     {
       "store_id": "46704",
@@ -16,7 +18,9 @@
       "type": "일반점",
       "is_active": true,
       "description": "2호점",
-      "added_date": "2026-02-06"
+      "added_date": "2026-02-06",
+      "commercial_type": "residential",
+      "commercial_group": "A"
     },
     {
       "store_id": "47863",
@@ -25,14 +29,54 @@
       "type": "일반점",
       "is_active": true,
       "description": "",
-      "added_date": "2026-03-04"
+      "added_date": "2026-03-04",
+      "commercial_type": "road",
+      "commercial_group": "B"
+    },
+    {
+      "store_id": "49965",
+      "store_name": "원삼휴게소점",
+      "location": "경기 이천시",
+      "type": "일반점",
+      "is_active": true,
+      "description": "",
+      "added_date": "2026-03-28",
+      "commercial_type": "highway_rest",
+      "commercial_group": "B"
     }
   ],
+  "_commercial_groups": {
+    "A": {
+      "name": "배후인구형",
+      "types": ["residential", "industrial"],
+      "traits": "안정적, 계획구매, 요일패턴 뚜렷, WMA 정확도 높음"
+    },
+    "B": {
+      "name": "유동인구형",
+      "types": ["road", "highway_rest", "transit", "tourist"],
+      "traits": "변동적, 충동구매, 기온·날씨·이벤트 민감, 기온계수 강화 필요"
+    },
+    "C": {
+      "name": "시간집중형",
+      "types": ["office", "school", "nightlife"],
+      "traits": "평일/주말 극차, 시간대별 수요 분리 필요"
+    }
+  },
+  "_commercial_types": {
+    "residential": "주거형 (아파트/빌라)",
+    "office": "오피스형 (업무지구)",
+    "transit": "역세권형 (지하철/버스)",
+    "nightlife": "유흥형 (번화가)",
+    "school": "학교형 (대학가/학원가)",
+    "road": "로드형 (도로변)",
+    "highway_rest": "관광/특수형 (휴게소/관광지)",
+    "industrial": "공단형 (산업단지)"
+  },
   "_metadata": {
-    "version": "1.0",
-    "last_updated": "2026-03-04T21:53:50.261232",
-    "total_stores": 3,
-    "active_stores": 2,
+    "version": "2.0",
+    "last_updated": "2026-03-30T00:00:00",
+    "total_stores": 4,
+    "active_stores": 4,
     "note": "인증 정보는 .env 파일의 BGF_USER_ID_{store_id}, BGF_PASSWORD_{store_id} 환경변수에서 로드됩니다"
   }
 }

@@ -46,6 +46,8 @@ class StoreContext:
     bgf_password: str = ""
     description: str = ""
     added_date: str = ""
+    commercial_type: str = "residential"   # 상권 유형 (8종)
+    commercial_group: str = "A"            # 상권 그룹 (A:배후인구 B:유동인구 C:시간집중)
 
     @property
     def eval_params_path(self) -> Path:
@@ -109,6 +111,8 @@ class StoreContext:
             bgf_password=bgf_password,
             description=store_data.get("description", ""),
             added_date=store_data.get("added_date", ""),
+            commercial_type=store_data.get("commercial_type", "residential"),
+            commercial_group=store_data.get("commercial_group", "A"),
         )
 
     @classmethod
