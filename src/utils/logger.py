@@ -13,8 +13,10 @@
 import logging
 import sys
 import io
+import time
 import threading
 import uuid
+from contextlib import contextmanager
 from pathlib import Path
 from datetime import datetime, timedelta
 from logging.handlers import RotatingFileHandler
@@ -307,6 +309,41 @@ def log_with_context(
 
     log_fn = getattr(_logger, level, None) or _logger.info
     log_fn(msg, exc_info=exc_info)
+
+
+@contextmanager
+def phase_timer(phase_id: str, phase_name: str, store_id: str = "",
+                _logger: logging.Logger = None, timings: dict = None):
+    """Phase 소요시간 측정 컨텍스트매니저.
+
+    Usage:
+        with phase_timer("1.04", "Hourly Sales Collection",
+                         store_id=store_id, _logger=logger,
+                         timings=phase_timings):
+            # Phase 로직
+            ...
+
+    로그 출력:
+        시작: [Phase 1.04] Hourly Sales Collection [store=46513]
+        종료: [Phase 1.04] Completed (12.3s) [store=46513]
+        실패: [Phase 1.04] FAILED (5.1s) [store=46513]
+    """
+    log = _logger or get_logger("bgf_auto.phase")
+    store_tag = f" [store={store_id}]" if store_id else ""
+
+    t0 = time.time()
+    try:
+        yield
+        elapsed = round(time.time() - t0, 1)
+        log.info(f"[Phase {phase_id}] {phase_name} — Completed ({elapsed}s){store_tag}")
+        if timings is not None:
+            timings[f"phase_{phase_id}"] = elapsed
+    except Exception:
+        elapsed = round(time.time() - t0, 1)
+        log.warning(f"[Phase {phase_id}] {phase_name} — FAILED ({elapsed}s){store_tag}")
+        if timings is not None:
+            timings[f"phase_{phase_id}"] = -elapsed
+        raise
 
 
 def log_function_call(func: Callable) -> Callable:

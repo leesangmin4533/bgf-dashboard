@@ -183,7 +183,7 @@ class DailyCollectionJob:
 
         sid = set_session_id()
         logger.info(LOG_SEPARATOR_WIDE)
-        logger.info(f"Optimized flow started | session={sid}")
+        logger.info(f"Optimized flow started | store={self.store_id} | session={sid}")
         logger.info(f"Dates: {yesterday_str}, {today_str}")
         logger.info(f"Auto-order: {run_auto_order}")
         logger.info(f"Predictor: {'Improved (31-day)' if use_improved_predictor else 'Legacy'}")
@@ -216,6 +216,7 @@ class DailyCollectionJob:
             "order_result": None,
             "fail_reason_result": None,
             "new_product_stats": None,
+            "_phase_timings": {},  # sub-phase별 소요시간 수집
         }
 
         try:
@@ -255,6 +256,34 @@ class DailyCollectionJob:
                 if r.get("success")
             )
 
+            # ★ 전체 타이밍 리포트
+            total_elapsed = round(time.time() - start_time, 1)
+            sub_timings = ctx.get("_phase_timings", {})
+
+            logger.info(LOG_SEPARATOR_THIN)
+            logger.info(
+                f"=== Timing Report [store={self.store_id}] | "
+                f"Total={total_elapsed}s | "
+                f"Collection={phase_timings.get('collection', 0)}s | "
+                f"Calibration={phase_timings.get('calibration', 0)}s | "
+                f"Preparation={phase_timings.get('preparation', 0)}s | "
+                f"Execution={phase_timings.get('execution', 0)}s"
+            )
+
+            if sub_timings:
+                sorted_phases = sorted(
+                    sub_timings.items(),
+                    key=lambda x: abs(x[1]),
+                    reverse=True
+                )[:5]
+                slow_parts = ", ".join(
+                    f"{k}={'FAIL ' if v < 0 else ''}{abs(v)}s"
+                    for k, v in sorted_phases
+                )
+                logger.info(f"=== Slowest Phases: {slow_parts}")
+
+            logger.info(LOG_SEPARATOR_THIN)
+
             return {
                 "success": ctx["collection_success"],
                 "collection": collection_results,
@@ -264,7 +293,7 @@ class DailyCollectionJob:
                 "fail_reasons": ctx["fail_reason_result"],
                 "dates_collected": ctx.get("dates_to_collect", [yesterday_str, today_str]),
                 "total_items": total_items,
-                "duration": time.time() - start_time,
+                "duration": total_elapsed,
                 "phase_timings": phase_timings
             }
 
