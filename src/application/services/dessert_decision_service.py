@@ -459,7 +459,8 @@ class DessertDecisionService:
     def _has_active_promotion(self, item_cd: str) -> bool:
         """promotions 테이블에서 현재 활성 행사가 있는지 확인"""
         try:
-            conn = self._get_store_connection()
+            from src.infrastructure.database.connection import DBRouter
+            conn = DBRouter.get_store_connection(self.store_id)
             cursor = conn.cursor()
             today = datetime.now().strftime("%Y-%m-%d")
             row = cursor.execute(
