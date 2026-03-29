@@ -5,6 +5,7 @@
 - 메뉴/서브메뉴 클릭
 """
 
+import time
 from typing import Any, Optional
 
 
