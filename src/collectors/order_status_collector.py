@@ -1630,24 +1630,22 @@ class OrderStatusCollector:
 
     def close_menu(self) -> bool:
         """
-        발주 현황 조회 메뉴 탭 닫기
+        발주 현황 조회 메뉴 탭 닫기 (verified — DOM 소멸 검증)
 
         Returns:
             탭 닫기 성공 여부
         """
-        for attempt in range(3):
-            try:
-                closed = close_tab_by_frame_id(self.driver, self.FRAME_ID)
-                if closed:
-                    time.sleep(OS_MENU_CLOSE_WAIT)
-                    logger.info(f"발주 현황 조회 탭 닫기 성공 (시도 {attempt + 1})")
-                    return True
-                logger.warning(f"발주 현황 조회 탭 닫기 실패 (시도 {attempt + 1}/3)")
-            except Exception as e:
-                logger.warning(f"발주 현황 조회 탭 닫기 예외 (시도 {attempt + 1}/3): {e}")
-            time.sleep(0.5)
-        logger.error("발주 현황 조회 탭 닫기 3회 실패")
-        return False
+        from src.utils.nexacro_helpers import close_tab_verified
+        result = close_tab_verified(
+            self.driver, self.FRAME_ID,
+            max_retries=3, poll_timeout=3.0,
+        )
+        if result:
+            time.sleep(OS_MENU_CLOSE_WAIT)
+            logger.info("발주 현황 조회 탭 닫기 성공 (verified)")
+        else:
+            logger.error("발주 현황 조회 탭 닫기 최종 실패 (verified)")
+        return result
 
     def sync_pending_to_order_tracking(self, days_back: int = 7) -> Dict[str, Any]:
         """

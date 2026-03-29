@@ -107,23 +107,24 @@ class OrderDataLoader:
                     else:
                         logger.warning("스마트발주 상품 사이트 조회 실패")
 
-                    # 발주현황조회 탭 닫기
+                    # 발주현황조회 탭 닫기 (verified — DOM 소멸 검증)
                     if not collector.close_menu():
-                        logger.warning("collector.close_menu() 실패 - 직접 탭 닫기 시도")
-                        from src.utils.nexacro_helpers import close_tab_by_frame_id
+                        logger.warning("collector.close_menu() 실패 - close_tab_verified 시도")
+                        from src.utils.nexacro_helpers import close_tab_verified
                         from src.settings.ui_config import FRAME_IDS
-                        close_tab_by_frame_id(driver, FRAME_IDS["ORDER_STATUS"])
-                        time.sleep(0.5)
+                        if not close_tab_verified(driver, FRAME_IDS["ORDER_STATUS"]):
+                            logger.error("ORDER_STATUS 탭 강제 닫기도 실패")
+                        time.sleep(0.3)
 
             except Exception as e:
                 logger.warning(f"발주 제외 상품 사이트 조회 실패: {e}")
                 try:
-                    from src.utils.nexacro_helpers import close_tab_by_frame_id
+                    from src.utils.nexacro_helpers import close_tab_verified
                     from src.settings.ui_config import FRAME_IDS
-                    close_tab_by_frame_id(driver, FRAME_IDS["ORDER_STATUS"])
-                    time.sleep(0.5)
-                except Exception as e:
-                    logger.warning(f"발주 현황 탭 닫기 실패: {e}")
+                    close_tab_verified(driver, FRAME_IDS["ORDER_STATUS"])
+                    time.sleep(0.3)
+                except Exception as e2:
+                    logger.warning(f"발주 현황 탭 닫기 실패: {e2}")
 
         # --- DB 캐시 fallback (자동) ---
         if not auto_site_ok:

@@ -2122,6 +2122,10 @@ class OrderExecutor:
                 logger.info(f"발주일자 보정: {order_date} → {actual_date}")
                 order_date = actual_date
 
+            # ── 발주 전 잔여 탭 검증 (tab-switch-fix) ──
+            if not self._verify_no_stale_tabs():
+                logger.warning("[verify_tabs] 잔여 탭 정리 불완전, 계속 시도")
+
             # ── Level 1: Direct API 발주 저장 시도 (폼이 열린 상태에서) ──
             form_not_available = False  # L1에서 발주 불가 감지 시 L2/L3도 차단
             if DIRECT_API_ORDER_ENABLED and not dry_run:
@@ -2395,6 +2399,157 @@ class OrderExecutor:
                 result["method"] = method
             failed.append(result)
         return failed
+
+    # ─────────────────────────────────────────
+    # 탭 상태 검증 (tab-switch-fix)
+    # ─────────────────────────────────────────
+
+    def _verify_no_stale_tabs(self) -> bool:
+        """
+        Direct API 발주 시작 직전 잔여 탭 확인 및 정리
+
+        단품별발주(STBJ030_M0) 외의 넥사크로 프레임이 열려있으면
+        close_tab_verified()로 닫고, 현재 활성 프레임이
+        단품별발주인지 검증한다.
+
+        Returns:
+            True: 안전 (단품별발주만 열려있거나, 잔여 탭 정리 완료)
+            False: 위험 (잔여 탭 정리 실패 또는 활성 프레임 불일치)
+        """
+        from src.utils.nexacro_helpers import close_tab_verified
+
+        # 1. FrameSet 내 열린 프레임 목록 조회
+        try:
+            open_frames = self.driver.execute_script("""
+                try {
+                    var app = nexacro.getApplication();
+                    var frameSet = app.mainframe.HFrameSet00.VFrameSet00.FrameSet;
+                    var result = [];
+                    var keys = Object.keys(frameSet);
+                    for (var i = 0; i < keys.length; i++) {
+                        var key = keys[i];
+                        try {
+                            if (frameSet[key] && frameSet[key].form) {
+                                result.push(key);
+                            }
+                        } catch(e) {}
+                    }
+                    return result;
+                } catch(e) {
+                    return [];
+                }
+            """)
+        except Exception as e:
+            logger.warning(f"[verify_tabs] FrameSet 조회 예외: {e}")
+            return True  # 조회 실패 시 차단하지 않음
+
+        if not open_frames or not isinstance(open_frames, list):
+            logger.debug("[verify_tabs] FrameSet 조회 결과 없음 또는 비정상")
+            return True
+
+        # 2. STBJ030_M0 이외의 프레임 닫기
+        stale_frames = [f for f in open_frames if f != self.ORDER_FRAME_ID]
+        if stale_frames:
+            logger.warning(f"[verify_tabs] 잔여 탭 발견: {stale_frames}")
+            for fid in stale_frames:
+                if not close_tab_verified(self.driver, fid, max_retries=2, poll_timeout=2.0):
+                    logger.error(f"[verify_tabs] 잔여 탭 닫기 실패: {fid}")
+            time.sleep(0.5)
+
+        # 3. STBJ030_M0이 열려있는지 확인
+        try:
+            order_frame_alive = self.driver.execute_script("""
+                try {
+                    var app = nexacro.getApplication();
+                    var frameSet = app.mainframe.HFrameSet00.VFrameSet00.FrameSet;
+                    var f = frameSet.STBJ030_M0;
+                    if (f && f.form && f.form.div_workForm) return true;
+                    return false;
+                } catch(e) { return false; }
+            """)
+        except Exception:
+            order_frame_alive = False
+
+        if not order_frame_alive:
+            logger.error("[verify_tabs] STBJ030_M0 프레임이 없음!")
+            return False
+
+        # 4. 현재 활성 탭 검증
+        active_ok = self._verify_active_frame_is_order()
+        if not active_ok:
+            logger.warning("[verify_tabs] 활성 탭이 단품별발주가 아님, 탭 클릭으로 활성화 시도")
+            active_ok = self._activate_order_tab()
+
+        return active_ok
+
+    def _verify_active_frame_is_order(self) -> bool:
+        """현재 활성 프레임이 단품별발주(STBJ030_M0)인지 검증"""
+        try:
+            result = self.driver.execute_script("""
+                try {
+                    // 방법 1: tab_openList에서 선택된 탭 확인
+                    var tabs = document.querySelectorAll('[id*="tab_openList"] [class*="selected"]');
+                    for (var i = 0; i < tabs.length; i++) {
+                        var tabId = tabs[i].id || '';
+                        if (tabId.indexOf('STBJ030_M0') >= 0) {
+                            return {active: true, method: 'selected_tab'};
+                        }
+                    }
+
+                    // 방법 2: STBJ030_M0 프레임의 visible 상태 확인
+                    var app = nexacro.getApplication();
+                    var frameSet = app.mainframe.HFrameSet00.VFrameSet00.FrameSet;
+                    var orderFrame = frameSet.STBJ030_M0;
+                    if (orderFrame && orderFrame.visible !== false) {
+                        return {active: true, method: 'frame_visible'};
+                    }
+
+                    return {active: false};
+                } catch(e) {
+                    return {active: false, error: e.message};
+                }
+            """)
+            return bool(result and result.get('active'))
+        except Exception:
+            return False
+
+    def _activate_order_tab(self) -> bool:
+        """단품별발주 탭을 클릭하여 활성화"""
+        try:
+            result = self.driver.execute_script("""
+                try {
+                    // tab_openList에서 STBJ030_M0 탭 찾아 클릭
+                    var tab = document.querySelector(
+                        '[id*="tab_openList"][id$=".STBJ030_M0"]'
+                    );
+                    if (tab) {
+                        tab.click();
+                        return {clicked: true};
+                    }
+
+                    // 폴백: tabbutton 텍스트에서 "단품별" 찾기
+                    var buttons = document.querySelectorAll(
+                        '[id*="tab_openList"][id*="tabbutton_"]'
+                    );
+                    for (var i = 0; i < buttons.length; i++) {
+                        var text = (buttons[i].textContent || '').trim();
+                        if (text.indexOf('단품별') >= 0) {
+                            buttons[i].click();
+                            return {clicked: true, method: 'text_match'};
+                        }
+                    }
+
+                    return {clicked: false};
+                } catch(e) {
+                    return {clicked: false, error: e.message};
+                }
+            """)
+            if result and result.get('clicked'):
+                time.sleep(0.5)  # 탭 전환 대기
+                return True
+            return False
+        except Exception:
+            return False
 
     # ─────────────────────────────────────────
     # Direct API / Batch Grid 통합 메서드

@@ -25,6 +25,8 @@ DATA_STABILITY_WAIT = 0.5      # 데이터 안정화 확인 대기 (초)
 MENU_CLICK_DELAY = 1.0         # 메뉴 클릭 후 대기 (초)
 SUBMENU_CLICK_DELAY = 2.0      # 서브메뉴 클릭 후 대기 (초)
 TAB_CLOSE_DELAY = 1.0          # 탭 닫기 후 대기 (초)
+VERIFIED_TAB_CLOSE_POLL_TIMEOUT = 3.0   # 탭 닫기 DOM 폴링 최대 대기 (초)
+VERIFIED_TAB_CLOSE_POLL_INTERVAL = 0.3  # 탭 닫기 DOM 폴링 간격 (초)
 
 # =====================================================================
 # 상품 입력/조회

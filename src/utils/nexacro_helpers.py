@@ -186,6 +186,125 @@ def close_tab_by_frame_id(driver: Any, frame_id: str) -> bool:
     return bool(result and result.get('success'))
 
 
+def _is_frame_alive(driver: Any, frame_id: str) -> bool:
+    """프레임이 아직 DOM/넥사크로 객체에 존재하는지 확인
+
+    2단계 확인:
+    1. tab_openList DOM에 탭 버튼 존재 여부
+    2. FrameSet 넥사크로 객체에 프레임 존재 여부
+    """
+    try:
+        result = driver.execute_script("""
+            try {
+                // 1차: tab_openList DOM 확인
+                var tabEl = document.querySelector(
+                    '[id*="tab_openList"][id$=".' + arguments[0] + '"]'
+                );
+                if (tabEl) return {alive: true, reason: 'tab_dom'};
+
+                // 2차: FrameSet 객체 확인
+                var app = nexacro.getApplication();
+                var frameSet = app.mainframe.HFrameSet00.VFrameSet00.FrameSet;
+                if (frameSet[arguments[0]] && frameSet[arguments[0]].form) {
+                    return {alive: true, reason: 'frameset_obj'};
+                }
+
+                return {alive: false};
+            } catch(e) {
+                // 예외 = 객체 접근 불가 = 이미 없음으로 간주
+                return {alive: false, error: e.message};
+            }
+        """, frame_id)
+        return bool(result and result.get('alive'))
+    except Exception:
+        return False
+
+
+def close_tab_verified(
+    driver: Any,
+    frame_id: str,
+    max_retries: int = 3,
+    poll_timeout: float = None,
+    poll_interval: float = None,
+) -> bool:
+    """
+    프레임 ID로 탭 닫기 + DOM 폴링으로 소멸 검증
+
+    기존 close_tab_by_frame_id()를 래핑하여, JS 실행 후
+    실제로 프레임이 DOM에서 사라졌는지 폴링 확인한다.
+
+    Args:
+        driver: Selenium WebDriver
+        frame_id: 프레임 ID (예: 'STBJ070_M0')
+        max_retries: 닫기 재시도 횟수 (기본 3)
+        poll_timeout: 소멸 폴링 최대 대기 시간(초) (기본 VERIFIED_TAB_CLOSE_POLL_TIMEOUT)
+        poll_interval: 폴링 간격(초) (기본 VERIFIED_TAB_CLOSE_POLL_INTERVAL)
+
+    Returns:
+        True: 탭이 확실히 닫혔음 (DOM에서 소멸 확인)
+        False: max_retries 후에도 탭이 남아있음
+    """
+    from src.utils.logger import get_logger
+    from src.settings.timing import (
+        VERIFIED_TAB_CLOSE_POLL_TIMEOUT,
+        VERIFIED_TAB_CLOSE_POLL_INTERVAL,
+    )
+    logger = get_logger(__name__)
+
+    if poll_timeout is None:
+        poll_timeout = VERIFIED_TAB_CLOSE_POLL_TIMEOUT
+    if poll_interval is None:
+        poll_interval = VERIFIED_TAB_CLOSE_POLL_INTERVAL
+
+    # 사전검사: 이미 없으면 즉시 성공
+    if not _is_frame_alive(driver, frame_id):
+        logger.debug(f"[close_tab_verified] {frame_id} 이미 없음")
+        return True
+
+    for attempt in range(max_retries):
+        # 재시도 시 팝업/Alert 정리 (2차 이후)
+        if attempt > 0:
+            try:
+                from src.utils.popup_manager import close_all_popups, close_alerts
+                close_alerts(driver, max_attempts=3, silent=True)
+                close_all_popups(driver, silent=True)
+            except Exception:
+                pass
+            time.sleep(0.5)
+
+        # 닫기 JS 실행
+        try:
+            close_result = close_tab_by_frame_id(driver, frame_id)
+        except Exception as e:
+            logger.warning(f"[close_tab_verified] {frame_id} 닫기 예외: {e}")
+            continue
+
+        logger.debug(
+            f"[close_tab_verified] {frame_id} 닫기 시도 {attempt+1}/{max_retries}, "
+            f"result={close_result}"
+        )
+
+        # DOM 폴링: 소멸 확인
+        elapsed = 0.0
+        while elapsed < poll_timeout:
+            time.sleep(poll_interval)
+            elapsed += poll_interval
+            if not _is_frame_alive(driver, frame_id):
+                logger.info(
+                    f"[close_tab_verified] {frame_id} 닫기 확인 "
+                    f"(시도 {attempt+1}, {elapsed:.1f}초)"
+                )
+                return True
+
+        logger.warning(
+            f"[close_tab_verified] {frame_id} 폴링 타임아웃 "
+            f"(시도 {attempt+1}/{max_retries}, {poll_timeout}초)"
+        )
+
+    logger.error(f"[close_tab_verified] {frame_id} 닫기 최종 실패 ({max_retries}회)")
+    return False
+
+
 def get_dataset_value(driver: Any, frame_id: str, ds_path: str, dataset_name: str, row: int, col: str) -> Any:
     """
     넥사크로 데이터셋에서 값 조회
