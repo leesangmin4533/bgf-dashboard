@@ -101,15 +101,25 @@ class ExpiryChecker:
                 ORDER BY p.mid_cd, p.item_nm
             """, category_codes + store_params + store_params)
 
+            rows = cursor.fetchall()
+
+            # 배치로 delivery_type 조회 (N+1 문제 해결)
+            from src.alert.delivery_utils import get_delivery_types_batch
+            all_item_cds = [row['item_cd'] for row in rows if row['item_cd']]
+            delivery_type_map = get_delivery_types_batch(all_item_cds, conn)
+
             items = []
-            for row in cursor.fetchall():
+            for row in rows:
                 item_cd = row['item_cd']
                 item_nm = row['item_nm']
                 mid_cd = row['mid_cd']
                 current_stock = row['current_stock']
 
-                # 배송 차수 판별 (order_tracking 우선 → 상품명 끝자리 폴백)
-                delivery_type = get_delivery_type(item_nm, item_cd=item_cd) or "1차"
+                # 배치 결과에서 조회, 없으면 상품명 끝자리 폴백
+                delivery_type = delivery_type_map.get(item_cd)
+                if not delivery_type:
+                    last_char = item_nm.strip()[-1] if item_nm else ""
+                    delivery_type = "2차" if last_char == "2" else "1차"
 
                 # 실제 입고 기반 유통기한 조회 (inventory_batches → order_tracking → receiving_history)
                 actual_expiry = self._get_actual_expiry_time(item_cd, mid_cd, item_nm=item_nm)
@@ -582,15 +592,28 @@ class ExpiryChecker:
             ORDER BY p.mid_cd, p.item_nm
         """, category_codes + store_params + store_params)
 
+        rows = cursor.fetchall()
+        if not rows:
+            return []
+
+        # 배치로 delivery_type 조회 (N+1 문제 해결)
+        from src.alert.delivery_utils import get_delivery_types_batch
+        all_item_cds = [row['item_cd'] for row in rows if row['item_cd']]
+        delivery_type_map = get_delivery_types_batch(all_item_cds, conn)
+
         items = []
-        for row in cursor.fetchall():
+        for row in rows:
             item_nm = row['item_nm']
             mid_cd = row['mid_cd']
             last_date = row['last_date']
-
-            # sales_date = 발주일(데이터 수집일), 도착은 익일(D+1)
             item_cd = row['item_cd'] if 'item_cd' in row.keys() else None
-            delivery_type = get_delivery_type(item_nm, item_cd=item_cd) or "1차"
+
+            # 배치 결과에서 조회, 없으면 상품명 끝자리 폴백
+            delivery_type = delivery_type_map.get(item_cd)
+            if not delivery_type:
+                last_char = item_nm.strip()[-1] if item_nm else ""
+                delivery_type = "2차" if last_char == "2" else "1차"
+
             try:
                 order_date = datetime.strptime(last_date, "%Y-%m-%d")
             except (ValueError, TypeError):

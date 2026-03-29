@@ -16,7 +16,7 @@
 """
 
 from datetime import datetime, timedelta
-from typing import List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 import sys
 from pathlib import Path
 
@@ -24,6 +24,73 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from src.alert.config import ALERT_CATEGORIES, DELIVERY_CONFIG
+
+
+def get_delivery_types_batch(
+    item_cds: List[str], conn: Any
+) -> Dict[str, str]:
+    """order_tracking에서 배치로 delivery_type 조회 (단일 연결 재사용)
+
+    개별 get_delivery_type()의 N+1 문제를 해결.
+    conn은 store DB 연결(ATTACH 포함 가능)을 그대로 재사용.
+
+    Args:
+        item_cds: 상품코드 리스트
+        conn: 재사용할 DB 연결 (store DB)
+
+    Returns:
+        {item_cd: "1차"/"2차"} 딕셔너리 (없는 상품은 미포함)
+    """
+    if not item_cds:
+        return {}
+
+    result = {}
+    cursor = conn.cursor()
+
+    # 1순위: remaining_qty > 0 인 가장 최근 레코드
+    placeholders = ','.join('?' * len(item_cds))
+    try:
+        rows = cursor.execute(f"""
+            SELECT item_cd, delivery_type
+            FROM (
+                SELECT item_cd, delivery_type,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY item_cd ORDER BY order_date DESC
+                       ) AS rn
+                FROM order_tracking
+                WHERE item_cd IN ({placeholders})
+                  AND delivery_type IN ('1차', '2차')
+                  AND remaining_qty > 0
+            ) t WHERE rn = 1
+        """, item_cds).fetchall()
+        for row in rows:
+            result[row[0]] = row[1]
+    except Exception:
+        pass
+
+    # 2순위: remaining_qty 무관, 최근 레코드 (1순위에서 못 찾은 것만)
+    missing = [ic for ic in item_cds if ic not in result]
+    if missing:
+        placeholders2 = ','.join('?' * len(missing))
+        try:
+            rows2 = cursor.execute(f"""
+                SELECT item_cd, delivery_type
+                FROM (
+                    SELECT item_cd, delivery_type,
+                           ROW_NUMBER() OVER (
+                               PARTITION BY item_cd ORDER BY order_date DESC
+                           ) AS rn
+                    FROM order_tracking
+                    WHERE item_cd IN ({placeholders2})
+                      AND delivery_type IN ('1차', '2차')
+                ) t WHERE rn = 1
+            """, missing).fetchall()
+            for row in rows2:
+                result[row[0]] = row[1]
+        except Exception:
+            pass
+
+    return result
 
 
 def get_delivery_type(

@@ -104,6 +104,19 @@ class DessertDecisionService:
                 first_date, ref_date, category, source,
             )
 
+            # v2w 프로모션 보호: 활성 프로모션 상품은 NEW 유지
+            try:
+                from src.settings.constants import DESSERT_PROMO_PROTECTION_ENABLED
+                if DESSERT_PROMO_PROTECTION_ENABLED and lifecycle != DessertLifecycle.NEW:
+                    if self._has_active_promotion(ctx.item_cd):
+                        logger.info(
+                            "[디저트판단][프로모션보호] %s (%s): 활성 행사 → NEW 유지",
+                            ctx.item_cd, ctx.item_nm,
+                        )
+                        lifecycle = DessertLifecycle.NEW
+            except ImportError:
+                pass
+
             # SKIP: 생애주기 판별 불가
             if lifecycle is None:
                 logger.info(
@@ -442,6 +455,24 @@ class DessertDecisionService:
         )
         row = cursor.fetchone()
         return row[0] if row and row[0] else None
+
+    def _has_active_promotion(self, item_cd: str) -> bool:
+        """promotions 테이블에서 현재 활성 행사가 있는지 확인"""
+        try:
+            conn = self._get_store_connection()
+            cursor = conn.cursor()
+            today = datetime.now().strftime("%Y-%m-%d")
+            row = cursor.execute(
+                """
+                SELECT 1 FROM promotions
+                WHERE item_cd = ? AND start_date <= ? AND end_date >= ?
+                LIMIT 1
+                """,
+                (item_cd, today, today),
+            ).fetchone()
+            return row is not None
+        except Exception:
+            return False
 
     def _get_judgment_period(
         self,

@@ -191,13 +191,21 @@ def judge_category_b(
         )
 
     consec = count_consecutive_low_weeks(metrics.weekly_sale_rates, 0.4)
-    if consec >= 3:
+
+    # v2w: 2주 연속 저조 시 STOP (기존 3주 → 2주 단축)
+    try:
+        from src.settings.constants import DESSERT_2WEEK_EVALUATION_ENABLED
+        stop_threshold = 2 if DESSERT_2WEEK_EVALUATION_ENABLED else 3
+    except ImportError:
+        stop_threshold = 3
+
+    if consec >= stop_threshold:
         return (
             DessertDecisionType.STOP_RECOMMEND,
             f"판매율 40% 미만 {consec}주 연속",
             False,
         )
-    if consec >= 2:
+    if consec >= 1:
         return (
             DessertDecisionType.WATCH,
             f"판매율 40% 미만 {consec}주 연속 — 주시 필요",

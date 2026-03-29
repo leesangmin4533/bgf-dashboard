@@ -957,6 +957,12 @@ STORE_SCHEMA = [
         updated_at TEXT,
         PRIMARY KEY (store_id, mid_cd)
     )""",
+
+    # schema_version (매장 DB 스키마 버전 추적)
+    """CREATE TABLE IF NOT EXISTS schema_version (
+        version INTEGER PRIMARY KEY,
+        applied_at TEXT DEFAULT (datetime('now', 'localtime'))
+    )""",
 ]
 
 STORE_INDEXES = [
@@ -965,8 +971,10 @@ STORE_INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_daily_sales_item ON daily_sales(item_cd)",
     "CREATE INDEX IF NOT EXISTS idx_daily_sales_mid ON daily_sales(mid_cd)",
     "CREATE INDEX IF NOT EXISTS idx_daily_sales_promo ON daily_sales(promo_type)",
+    "CREATE INDEX IF NOT EXISTS idx_daily_sales_item_date ON daily_sales(item_cd, sales_date DESC)",
     # order_tracking
     "CREATE INDEX IF NOT EXISTS idx_order_tracking_date ON order_tracking(order_date)",
+    "CREATE INDEX IF NOT EXISTS idx_order_tracking_item ON order_tracking(item_cd, order_date DESC)",
     # order_history
     "CREATE INDEX IF NOT EXISTS idx_order_history_date ON order_history(order_date)",
     "CREATE INDEX IF NOT EXISTS idx_order_history_item ON order_history(item_cd)",
@@ -1111,8 +1119,15 @@ def init_store_db(store_id: str, db_path: Optional[Path] = None) -> None:
         # 3) 인덱스 생성 (컬럼 보정 후 실행해야 에러 방지)
         for sql in STORE_INDEXES:
             cursor.execute(sql)
+        # 4) schema_version 기록 (현재 버전)
+        from src.settings.constants import DB_SCHEMA_VERSION
+        cursor.execute(
+            "INSERT OR REPLACE INTO schema_version (version, applied_at) "
+            "VALUES (?, datetime('now', 'localtime'))",
+            (DB_SCHEMA_VERSION,)
+        )
         conn.commit()
-        logger.info(f"매장 DB 초기화 완료: {store_id} → {db_path}")
+        logger.info(f"매장 DB 초기화 완료: {store_id} → {db_path} (v{DB_SCHEMA_VERSION})")
     finally:
         conn.close()
 

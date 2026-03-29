@@ -3,7 +3,7 @@
 첫 입고일 기준으로 신상품/성장하락기/정착기를 판별합니다.
 
 생애주기:
-    NEW:             카테고리 A=4주, B=3주, C/D=4주
+    NEW:             카테고리 A=2주, B=2주, C/D=4주 (v2w 활성 시)
     GROWTH_DECLINE:  ~8주
     ESTABLISHED:     8주 초과
 
@@ -18,13 +18,36 @@ from typing import Optional, Tuple
 from .enums import DessertCategory, DessertLifecycle, FirstReceivingSource
 
 
-# 카테고리별 신상품 보호 기간 (주)
-NEW_PRODUCT_WEEKS = {
+# 카테고리별 신상품 보호 기간 (주) — 기본값 (v2w OFF 시)
+_NEW_PRODUCT_WEEKS_DEFAULT = {
     DessertCategory.A: 4,
     DessertCategory.B: 3,
     DessertCategory.C: 4,
     DessertCategory.D: 4,
 }
+
+# v2w (2주 평가) 활성 시 보호 기간
+_NEW_PRODUCT_WEEKS_V2W = {
+    DessertCategory.A: 2,  # 냉장디저트 (유통기한 2~5일, 2주=4~7사이클)
+    DessertCategory.B: 2,  # 상온단기 (유통기한 9~20일, 2주=1~2사이클)
+    DessertCategory.C: 4,  # 상온장기 (유지)
+    DessertCategory.D: 4,  # 냉장젤리/냉동 (유지)
+}
+
+
+def _get_new_product_weeks():
+    """Feature Flag에 따라 보호기간 dict 반환"""
+    try:
+        from src.settings.constants import DESSERT_2WEEK_EVALUATION_ENABLED
+        if DESSERT_2WEEK_EVALUATION_ENABLED:
+            return _NEW_PRODUCT_WEEKS_V2W
+    except ImportError:
+        pass
+    return _NEW_PRODUCT_WEEKS_DEFAULT
+
+
+# 외부 참조용 (테스트 호환)
+NEW_PRODUCT_WEEKS = _get_new_product_weeks()
 
 # 성장/하락기 종료 시점 (주)
 GROWTH_DECLINE_END_WEEKS = 8
@@ -82,7 +105,7 @@ def determine_lifecycle(
 
     weeks_since_intro = delta_days // 7
 
-    new_weeks = NEW_PRODUCT_WEEKS.get(category, 4)
+    new_weeks = _get_new_product_weeks().get(category, 4)
 
     if weeks_since_intro < new_weeks:
         return DessertLifecycle.NEW, weeks_since_intro

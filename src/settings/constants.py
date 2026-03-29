@@ -372,6 +372,10 @@ DESSERT_WASTE_RATE_STOP_THRESHOLD = 1.5  # 폐기율 150% 이상 → STOP_RECOMM
 DESSERT_CONFIRMED_STOP_WASTE_WEEKS = 2  # 폐기율 기준 CONFIRMED_STOP 연속 주 수
 DESSERT_CONFIRMED_STOP_WASTE_DAYS = 14  # 폐기율 기준 CONFIRMED_STOP 판단 기간 (일)
 
+# 디저트 2주 평가 시스템 (v2w)
+DESSERT_2WEEK_EVALUATION_ENABLED = True  # False → 기존 보호기간(4주/3주) 복구
+DESSERT_PROMO_PROTECTION_ENABLED = True  # 프로모션 진행 중 상품 보호기간 리셋
+
 # =====================================================================
 # 스마트발주 오버라이드 (스마트→수동 전환)
 # =====================================================================

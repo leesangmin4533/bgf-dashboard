@@ -246,9 +246,9 @@ class TestLifecycle:
         assert weeks == 8
 
     def test_new_product_weeks_config(self):
-        """NEW_PRODUCT_WEEKS 설정값 확인"""
-        assert NEW_PRODUCT_WEEKS[DessertCategory.A] == 4
-        assert NEW_PRODUCT_WEEKS[DessertCategory.B] == 3
+        """NEW_PRODUCT_WEEKS 설정값 확인 (v2w: A=2, B=2)"""
+        assert NEW_PRODUCT_WEEKS[DessertCategory.A] == 2  # v2w: 4→2
+        assert NEW_PRODUCT_WEEKS[DessertCategory.B] == 2  # v2w: 3→2
         assert NEW_PRODUCT_WEEKS[DessertCategory.C] == 4
         assert NEW_PRODUCT_WEEKS[DessertCategory.D] == 4
 
@@ -477,10 +477,11 @@ class TestJudgeCategoryB:
         decision, _, _ = judge_category_b(DessertLifecycle.ESTABLISHED, m)
         assert decision == DessertDecisionType.STOP_RECOMMEND
 
-    def test_2week_low_watch(self):
+    def test_2week_low_stop_v2w(self):
+        """v2w: 2주 연속 저조 → STOP_RECOMMEND (기존 3주→2주 단축)"""
         m = self._metrics(weekly_sale_rates=[0.2, 0.3, 0.5])
         decision, _, _ = judge_category_b(DessertLifecycle.ESTABLISHED, m)
-        assert decision == DessertDecisionType.WATCH
+        assert decision == DessertDecisionType.STOP_RECOMMEND
 
     def test_normal_keep(self):
         m = self._metrics(weekly_sale_rates=[0.5, 0.6, 0.7])
