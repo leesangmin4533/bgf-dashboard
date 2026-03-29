@@ -11,11 +11,18 @@
 """
 
 import math
+from datetime import datetime
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from src.infrastructure.database.connection import DBRouter
 from src.prediction.prediction_config import PREDICTION_PARAMS
-from src.settings.constants import LARGE_CD_TO_MID_CD
+from src.settings.constants import (
+    LARGE_CD_TO_MID_CD,
+    WEEKDAY_KR_TO_NUM,
+    SNACK_DEFAULT_ORDERABLE_DAYS,
+    RAMEN_DEFAULT_ORDERABLE_DAYS,
+    DEFAULT_ORDERABLE_DAYS,
+)
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -244,15 +251,16 @@ class LargeCategoryForecaster:
             )
 
             # order_list에 병합
+            # (★ add_qty는 _distribute_shortage에서 배수 올림 완료된 값)
             existing_item_map = {
                 item.get("item_cd"): item for item in order_list
             }
             for sup in supplements:
                 item_cd = sup["item_cd"]
-                add_qty = sup["add_qty"]
+                add_qty = sup["add_qty"]  # 이미 배수 올림 반영됨
                 order_unit = sup.get("order_unit_qty", 1) or 1
                 if item_cd in existing_item_map:
-                    # 기존 항목 수량 증가 + 배수 재정렬
+                    # 기존 항목 수량 증가
                     prev_qty = existing_item_map[item_cd].get(
                         "final_order_qty", 0
                     )
@@ -268,39 +276,35 @@ class LargeCategoryForecaster:
                             f"(unit={order_unit})"
                         )
                 else:
-                    # 새 항목: 배수 정렬 적용
-                    aligned_qty = add_qty
-                    if order_unit > 1:
-                        aligned_qty = math.ceil(
-                            add_qty / order_unit
-                        ) * order_unit
-                    aligned_qty = max(1, aligned_qty)  # qty=0 방지
+                    # 새 항목: add_qty는 이미 배수 올림 완료
+                    final_qty = max(1, add_qty)
                     order_list.append({
                         "item_cd": item_cd,
                         "item_nm": sup.get("item_nm", ""),
                         "mid_cd": mid_cd,
-                        "final_order_qty": aligned_qty,
+                        "final_order_qty": final_qty,
                         "predicted_qty": 0,
-                        "order_qty": aligned_qty,
+                        "order_qty": final_qty,
                         "current_stock": 0,
                         "data_days": sup.get("data_days", 0),
                         "order_unit_qty": order_unit,
+                        "orderable_day": sup.get("orderable_day", ""),
                         "source": "large_category_floor",
                         "model_type": "large_category_floor",
                     })
                     existing_items.add(item_cd)
-                    actual_add = aligned_qty
+                    actual_add = final_qty
 
                 total_supplemented += actual_add
 
-            # 보충 후 existing_by_mid 업데이트
+            # 보충 후 existing_by_mid 업데이트 (배수 올림 반영된 실제 수량)
             added = sum(s["add_qty"] for s in supplements)
             existing_by_mid[mid_cd] = existing_by_mid.get(mid_cd, 0) + added
 
             logger.info(
                 f"[LargeCatFloor] {mid_cd}: target={target:.1f}, "
                 f"현재={current_sum}, floor={floor_qty:.1f}, "
-                f"보충={added}개 ({len(supplements)}품목)"
+                f"부족={shortage}→보충={added}개 ({len(supplements)}품목)"
             )
 
         return total_supplemented
@@ -400,6 +404,25 @@ class LargeCategoryForecaster:
 
         return round(wma, 2)
 
+    @staticmethod
+    def _get_default_orderable_day(mid_cd: str) -> str:
+        """mid_cd에 따른 기본 발주가능요일 반환"""
+        mid_int = int(mid_cd) if mid_cd.isdigit() else 0
+        # 스낵/제과류 (015~030): 일요일 제외
+        if 15 <= mid_int <= 30:
+            return SNACK_DEFAULT_ORDERABLE_DAYS
+        # 라면류 (006, 032): 일요일 제외
+        if mid_cd in ("006", "032"):
+            return RAMEN_DEFAULT_ORDERABLE_DAYS
+        return DEFAULT_ORDERABLE_DAYS
+
+    @staticmethod
+    def _is_orderable_today(orderable_day: str) -> bool:
+        """오늘 발주 가능한지 확인"""
+        today_weekday = datetime.now().weekday()
+        available = {WEEKDAY_KR_TO_NUM[c] for c in orderable_day if c in WEEKDAY_KR_TO_NUM}
+        return not available or today_weekday in available
+
     def _get_supplement_candidates(
         self,
         mid_cd: str,
@@ -407,7 +430,7 @@ class LargeCategoryForecaster:
         eval_results: Optional[Dict[str, Any]] = None,
         cut_items: Optional[Set[str]] = None,
     ) -> List[Dict[str, Any]]:
-        """보충 대상 품목 선정 (최근 판매 빈도순, 재고 0 우선)"""
+        """보충 대상 품목 선정 (최근 판매 빈도순, 재고 0 우선, 발주가능요일 체크)"""
         min_sell_days = self._config.get("min_candidate_sell_days", 2)
         try:
             conn = DBRouter.get_store_connection(self.store_id)
@@ -474,7 +497,7 @@ class LargeCategoryForecaster:
             finally:
                 conn.close()
 
-            # 상품명 + 발주배수 조회 (common.db)
+            # 상품명 + 발주배수 + 발주가능요일 조회 (common.db)
             if candidates:
                 try:
                     item_cds = [c["item_cd"] for c in candidates]
@@ -488,13 +511,15 @@ class LargeCategoryForecaster:
                             item_cds
                         ).fetchall()
                         name_map = {r[0]: r[1] for r in rows}
-                        unit_rows = common_cursor.execute(
-                            f"SELECT item_cd, COALESCE(order_unit_qty, 1) "
+                        detail_rows = common_cursor.execute(
+                            f"SELECT item_cd, COALESCE(order_unit_qty, 1), "
+                            f"       COALESCE(orderable_day, '') "
                             f"FROM product_details "
                             f"WHERE item_cd IN ({placeholders})",
                             item_cds
                         ).fetchall()
-                        unit_map = {r[0]: r[1] for r in unit_rows}
+                        unit_map = {r[0]: r[1] for r in detail_rows}
+                        orderable_map = {r[0]: r[2] for r in detail_rows}
                         for cand in candidates:
                             cand["item_nm"] = name_map.get(
                                 cand["item_cd"], ""
@@ -502,10 +527,28 @@ class LargeCategoryForecaster:
                             cand["order_unit_qty"] = unit_map.get(
                                 cand["item_cd"], 1
                             ) or 1
+                            # 발주가능요일: DB 값 우선, 없으면 mid_cd 기본값
+                            cand["orderable_day"] = (
+                                orderable_map.get(cand["item_cd"], "")
+                                or self._get_default_orderable_day(mid_cd)
+                            )
                     finally:
                         common_conn.close()
                 except Exception:
                     pass
+
+            # ★ 발주가능요일 필터: 오늘 발주 불가한 상품 제외
+            before_count = len(candidates)
+            candidates = [
+                c for c in candidates
+                if self._is_orderable_today(c.get("orderable_day", DEFAULT_ORDERABLE_DAYS))
+            ]
+            filtered = before_count - len(candidates)
+            if filtered > 0:
+                logger.info(
+                    f"[LargeFloor] {mid_cd} 발주불가요일 필터: "
+                    f"{filtered}개 제외 (잔여 {len(candidates)}개)"
+                )
 
             return candidates
         except Exception as e:
@@ -518,21 +561,39 @@ class LargeCategoryForecaster:
         candidates: List[Dict[str, Any]],
         max_per_item: int = 2,
     ) -> List[Dict[str, Any]]:
-        """부족분을 후보 품목에 분배 (판매 빈도순)"""
+        """부족분을 후보 품목에 분배 (판매 빈도순, 배수 올림 반영)"""
         result = []
         remaining = shortage
 
         for cand in candidates:
             if remaining <= 0:
                 break
+            order_unit = cand.get("order_unit_qty", 1) or 1
             add_qty = min(max_per_item, remaining)
+
+            # 배수 올림 후 실제 발주량 계산
+            if order_unit > 1:
+                aligned_qty = math.ceil(add_qty / order_unit) * order_unit
+            else:
+                aligned_qty = add_qty
+
+            # 과다 발주 방지: 배수 올림 결과가 잔여 부족분을 크게 초과하면 스킵
+            if aligned_qty > remaining and order_unit > max_per_item:
+                logger.info(
+                    f"[LargeCatFloor] {cand.get('item_nm', cand['item_cd'])} 스킵: "
+                    f"배수={order_unit}, 올림={aligned_qty} > 잔여부족={remaining}"
+                )
+                continue
+
             result.append({
                 "item_cd": cand["item_cd"],
                 "item_nm": cand.get("item_nm", ""),
-                "add_qty": add_qty,
+                "add_qty": aligned_qty,
                 "data_days": cand.get("appear_days", 0),
-                "order_unit_qty": cand.get("order_unit_qty", 1),
+                "order_unit_qty": order_unit,
+                "orderable_day": cand.get("orderable_day", ""),
             })
-            remaining -= add_qty
+            # 배수 올림된 실제 수량으로 차감 (과다 루프 방지)
+            remaining -= aligned_qty
 
         return result
