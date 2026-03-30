@@ -257,6 +257,8 @@ class CategoryDemandForecaster:
             except Exception:
                 pass
 
+            # ★ sell_days 정의: "판매 발생일" (stock_qty 무관 — 보충 대상 선정용)
+            # demand_classifier와 의도적으로 다름. 변경 시 주의
             cursor.execute("""
                 SELECT ds.item_cd,
                        COUNT(DISTINCT ds.sales_date) as appear_days,

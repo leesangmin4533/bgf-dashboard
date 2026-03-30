@@ -451,6 +451,8 @@ class BasePredictor:
         cursor = conn.cursor()
         try:
             days = PREDICTION_PARAMS["moving_avg_days"]
+            # ★ sell_days 정의: "재고 보유일 중 판매 발생일" (demand_classifier와 동일)
+            # stock_qty > 0 조건 포함 — 품절일 제외 의도. 변경 시 demand_classifier와 동기화 필수
             cursor.execute("""
                 SELECT
                     SUM(CASE WHEN stock_qty > 0 AND sale_qty > 0 THEN 1 ELSE 0 END) as sell_days,

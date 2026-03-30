@@ -451,6 +451,7 @@ class LargeCategoryForecaster:
                 except Exception:
                     pass
 
+                # ★ sell_days: "판매 발생일" (stock_qty 무관 — 보충 대상 선정용, 의도적)
                 cursor.execute("""
                     SELECT ds.item_cd,
                            COUNT(DISTINCT ds.sales_date) as appear_days,

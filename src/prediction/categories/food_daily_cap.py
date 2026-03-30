@@ -187,6 +187,7 @@ def get_explore_failed_items(
         conn = sqlite3.connect(db_path, timeout=30)
         cursor = conn.cursor()
 
+        # ★ sell_days: "판매 발생일" (stock_qty 무관 — cap 판정용, 의도적으로 demand_classifier와 다름)
         placeholders = ','.join('?' * len(item_codes))
         if store_id:
             cursor.execute(f"""

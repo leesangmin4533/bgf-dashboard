@@ -517,6 +517,20 @@ Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
 6. LEFT JOIN 시 NULL 처리: `COALESCE(ri.is_available, 1)` 패턴 사용
 7. site_order_counts와의 단위 일치 확인 (COUNT vs SUM)
 
+### 수정 시 (추가)
+11. 반환/비교값이 **"품목수(count)"인지 "수량합(sum qty)"인지** 변수명으로 명시
+    → 잘못: `len(selected) >= cap` (cap이 qty 기준인데 count로 비교)
+    → 올바름: `total_qty >= cap_qty` (변수명에 단위 포함)
+    참고: food-cap-qty-fix — count→sum(qty) 혼동으로 과다발주
+12. **sell_qty=0을 수요=0으로 단정하기 전에 stock_qty=0(품절)인지 확인**
+    → 품절로 못 판 것 ≠ 수요 없음. `if sell_qty == 0 and stock_qty > 0`일 때만 무수요
+    → 위반 시 SLOW 오분류 → 발주 0 → 연속 품절 악순환
+    참고: food-stockout-misclassify, milk-demand-classifier-fix
+13. **행사 종료 임박 상품**이 정상 발주량으로 포함되어 있지 않은가?
+    → promo_end_date - today <= 5일이면 발주량 감소 또는 0
+    → 위반 시 행사 종료 후 재고 폐기
+    참고: 냉장고 사진 토론(2026-03-30) — "1+1 종료 5일 전 감소" 교훈
+
 ### 수정 후
 8. 관련 테스트 전체 실행 (`pytest tests/ -k "관련키워드"`)
 9. 파이프라인 16단계 중 영향받는 단계 목록 기록

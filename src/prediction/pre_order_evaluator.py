@@ -257,6 +257,7 @@ class PreOrderEvaluator(BaseRepository):
             store_filter = "AND store_id = ?" if self.store_id else ""
             store_params = (self.store_id,) if self.store_id else ()
             cursor.execute(
+                # ★ sell_days: "판매 발생일" (stock_qty 무관 — 사전평가용, 의도적)
                 f"""
                 SELECT
                     COUNT(*) as total_days,
