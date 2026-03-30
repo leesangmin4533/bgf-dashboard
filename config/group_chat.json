@@ -1,0 +1,10 @@
+{
+  "enabled": true,
+  "room_names": ["CU동양점"],
+  "_description": "카카오톡 PC 단톡방 동시 발송 설정. room_names는 채팅방 윈도우 타이틀에 포함되는 문자열.",
+  "_requirements": [
+    "카카오톡 PC 앱이 로그인된 상태여야 함",
+    "해당 채팅방 창이 열려있어야 함 (최소화 OK, 닫힘 X)",
+    "pywin32 패키지 필요"
+  ]
+}

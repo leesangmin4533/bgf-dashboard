@@ -24,6 +24,7 @@ logger = get_logger(__name__)
 # 설정
 CONFIG_DIR = Path(__file__).parent.parent.parent / "config"
 TOKEN_FILE = CONFIG_DIR / "kakao_token.json"
+GROUP_CHAT_CONFIG_FILE = CONFIG_DIR / "group_chat.json"
 
 # API 엔드포인트
 KAKAO_AUTH_URL = "https://kauth.kakao.com/oauth/authorize"
@@ -54,6 +55,25 @@ class KakaoNotifier:
 
         # 저장된 토큰 로드
         self._load_token()
+
+        # 단톡방 전송기 초기화
+        self._group_sender = None
+        self._init_group_sender()
+
+    def _init_group_sender(self) -> None:
+        """단톡방 전송기 초기화 (config/group_chat.json에서 설정 로드)"""
+        try:
+            if GROUP_CHAT_CONFIG_FILE.exists():
+                with open(GROUP_CHAT_CONFIG_FILE, "r", encoding="utf-8") as f:
+                    config = json.load(f)
+                if config.get("enabled", False):
+                    from src.notification.kakao_group_sender import KakaoGroupSender
+                    room_names = config.get("room_names", [])
+                    if room_names:
+                        self._group_sender = KakaoGroupSender(room_names)
+                        logger.info(f"단톡방 전송 활성화: {room_names}")
+        except Exception as e:
+            logger.warning(f"단톡방 설정 로드 실패: {e}")
 
     def _load_token(self) -> None:
         """저장된 토큰 로드"""
@@ -454,6 +474,8 @@ class KakaoNotifier:
 
             if response.status_code == 200:
                 logger.info("Message sent successfully")
+                # 단톡방 동시 발송
+                self._send_to_group(text)
                 return True
             elif response.status_code == 401:
                 # 토큰 만료 - 갱신 → Selenium 재인증 순서 시도
@@ -470,6 +492,19 @@ class KakaoNotifier:
         except Exception as e:
             logger.error(f"Message send error: {e}")
             return False
+
+    def _send_to_group(self, text: str) -> None:
+        """단톡방에 메시지 전송 (실패해도 예외 전파 안 함)"""
+        if not self._group_sender or not self._group_sender.enabled:
+            return
+        try:
+            result = self._group_sender.send(text)
+            if result["not_found"]:
+                logger.warning(f"단톡방 미발견 (창이 닫힘?): {result['not_found']}")
+            if result["failed"]:
+                logger.warning(f"단톡방 전송 실패: {result['failed']}")
+        except Exception as e:
+            logger.warning(f"단톡방 전송 중 오류 (무시): {e}")
 
     def send_report(self, report: Dict[str, Any]) -> bool:
         """
@@ -490,7 +525,7 @@ class KakaoNotifier:
         lines = [
             f"[BGF 일일 리포트] {report['date']}",
             "",
-            f"[요약]",
+            "[요약]",
             f"- 상품수: {s.get('total_items', 0):,}개",
             f"- 판매량: {s.get('total_sales', 0):,}",
             f"- 발주량: {s.get('total_orders', 0):,}",
