@@ -126,7 +126,7 @@ def acquire_lock() -> bool:
                     return False
                 else:
                     # 프로세스가 없으면 오래된 락 파일 삭제
-                    print(f"[WARN] 오래된 락 파일 발견. 삭제합니다.")
+                    print("[WARN] 오래된 락 파일 발견. 삭제합니다.")
                     LOCK_FILE.unlink()
             except (ValueError, FileNotFoundError):
                 LOCK_FILE.unlink()
@@ -274,7 +274,7 @@ def _try_cloud_sync() -> None:
         elif sync_result.get("success"):
             logger.info("[CloudSync] PythonAnywhere DB 동기화 완료")
         else:
-            logger.warning(f"[CloudSync] 동기화 실패 (발주 결과에 영향 없음)")
+            logger.warning("[CloudSync] 동기화 실패 (발주 결과에 영향 없음)")
     except Exception as e:
         logger.warning(f"[CloudSync] 동기화 오류 (무시됨): {e}")
 
@@ -364,18 +364,20 @@ _expiry_judge_results: Dict[int, Dict[str, list]] = {}
 
 
 def expiry_pre_collect_wrapper(expiry_hour: int) -> Callable[[], None]:
-    """[1단계] 폐기 10분 전 판매 수집
+    """[1단계] 폐기 10분 전: 판매 수집 + 예고 알림 발송
 
-    폐기 시점 직전의 최신 stock을 확보하여
-    판정 시 정확한 remaining_qty를 만든다.
+    폐기 시점 직전의 최신 stock을 확보하고,
+    수집 직후 최신 데이터로 예고 알림을 발송한다.
+    (기존 PRE_ALERT_COLLECTION + EXPIRY_ALERT 합류)
     """
     def wrapper() -> None:
         logger.info("=" * 60)
-        logger.info(f"[정밀폐기 1/3] Pre-collect ({expiry_hour:02d}:00 폐기용) "
+        logger.info(f"[정밀폐기 1/3] Pre-collect + Alert ({expiry_hour:02d}:00 폐기용) "
                     f"at {datetime.now().isoformat()}")
         logger.info("=" * 60)
 
-        def collect_task(ctx):
+        def collect_and_alert_task(ctx):
+            # 1) BGF 사이트 수집 (기존)
             try:
                 from src.scheduler.daily_job import DailyCollectionJob
 
@@ -391,9 +393,55 @@ def expiry_pre_collect_wrapper(expiry_hour: int) -> Callable[[], None]:
             except Exception as e:
                 logger.error(f"[{ctx.store_id}] 폐기 전 수집 error: {e}")
 
+            # 2) order_tracking 상태 전이
+            try:
+                from src.infrastructure.database.repos import OrderTrackingRepository
+
+                tracking_repo = OrderTrackingRepository()
+                status_result = tracking_repo.auto_update_statuses(store_id=ctx.store_id)
+                logger.info(f"[{ctx.store_id}] order_tracking 상태 전이: "
+                            f"arrived={status_result.get('arrived', 0)}, "
+                            f"expired={status_result.get('expired', 0)}")
+            except Exception as e:
+                logger.warning(f"[{ctx.store_id}] order_tracking 상태 전이 실패: {e}")
+
+            # 3) 배치 FIFO 재동기화 + 만료 처리
+            try:
+                from src.infrastructure.database.repos import InventoryBatchRepository
+
+                batch_repo = InventoryBatchRepository(store_id=ctx.store_id)
+                sync_result = batch_repo.sync_remaining_with_stock(store_id=ctx.store_id)
+                adj = sync_result.get("adjusted", 0)
+                ghost = sync_result.get("ghost_cleared", 0)
+                if adj > 0 or ghost > 0:
+                    logger.info(f"[{ctx.store_id}] 배치 FIFO 재동기화: "
+                                f"보정 {adj}건, consumed {sync_result.get('consumed', 0)}건, "
+                                f"푸드 유령재고 {ghost}건 정리")
+                expired = batch_repo.check_and_expire_batches(store_id=ctx.store_id)
+                if expired:
+                    logger.info(f"[{ctx.store_id}] pre-alert 만료 배치: {len(expired)}건")
+            except Exception as e:
+                logger.warning(f"[{ctx.store_id}] 배치 동기화/만료 실패: {e}")
+
+            # 4) 예고 알림 발송 (수집 직후, 최신 데이터)
+            try:
+                from src.alert.expiry_checker import ExpiryChecker
+
+                checker = ExpiryChecker(store_id=ctx.store_id, store_name=ctx.store_name)
+                try:
+                    alert_result = checker.send_expiry_alert(expiry_hour)
+                    if alert_result:
+                        logger.info(f"[{ctx.store_id}] {expiry_hour:02d}:00 예고 알림 발송 완료")
+                    else:
+                        logger.info(f"[{ctx.store_id}] {expiry_hour:02d}:00 폐기 대상 없음")
+                finally:
+                    checker.close()
+            except Exception as e:
+                logger.error(f"[{ctx.store_id}] 예고 알림 발송 실패: {e}")
+
             return {"success": True}
 
-        _run_task(collect_task, f"ExpiryPreCollect({expiry_hour:02d}:00)")
+        _run_task(collect_and_alert_task, f"ExpiryPreCollect+Alert({expiry_hour:02d}:00)")
 
     return wrapper
 
@@ -432,15 +480,16 @@ def expiry_judge_wrapper(expiry_hour: int) -> Callable[[], None]:
 
 
 def expiry_confirm_wrapper(expiry_hour: int) -> Callable[[], None]:
-    """[3단계] 폐기 10분 후 수집 + 확정
+    """[3단계] 폐기 10분 후 수집 + 확정 + 컨펌 알림
 
     1) 판매 수집 (10분간 변동 반영)
     2) 판정 시 stock vs 현재 stock 비교
     3) 10분간 판매분 추가 차감 → 실제 폐기량 결정
+    4) 컨펌 알림 발송 (나에게 + 해당 매장 단톡방)
     """
     def wrapper() -> None:
         logger.info("=" * 60)
-        logger.info(f"[정밀폐기 3/3] Confirm ({expiry_hour:02d}:00) "
+        logger.info(f"[정밀폐기 3/3] Confirm + Alert ({expiry_hour:02d}:00) "
                     f"at {datetime.now().isoformat()}")
         logger.info("=" * 60)
 
@@ -483,14 +532,93 @@ def expiry_confirm_wrapper(expiry_hour: int) -> Callable[[], None]:
                     f"{item.get('adjusted_qty', 0)}개 폐기"
                 )
 
+            # 4) 컨펌 알림 발송 (나에게 + 해당 매장 단톡방)
+            if confirmed:
+                _send_confirm_alert(ctx, expiry_hour, confirmed)
+
             # 판정 결과 정리
             _expiry_judge_results.get(expiry_hour, {}).pop(ctx.store_id, None)
 
             return {"success": True, "expired_count": len(confirmed)}
 
-        _run_task(confirm_task, f"ExpiryConfirm({expiry_hour:02d}:00)")
+        _run_task(confirm_task, f"ExpiryConfirm+Alert({expiry_hour:02d}:00)")
 
     return wrapper
+
+
+def _send_confirm_alert(ctx, expiry_hour: int, confirmed: list) -> None:
+    """폐기 확정 후 컨펌 알림 (나에게 + 해당 매장 단톡방)"""
+    try:
+        from src.alert.expiry_checker import ExpiryChecker
+        from src.notification.kakao_notifier import KakaoNotifier, DEFAULT_REST_API_KEY
+
+        # step1 예고 대상과 비교하여 누락건 식별
+        checker = ExpiryChecker(store_id=ctx.store_id, store_name=ctx.store_name)
+        try:
+            pre_items = checker.get_items_expiring_at(expiry_hour)
+            pre_codes = {item['item_cd'] for item in pre_items}
+        finally:
+            checker.close()
+
+        expected = [i for i in confirmed if i.get('item_cd') in pre_codes]
+        missed = [i for i in confirmed if i.get('item_cd') not in pre_codes]
+
+        # 컨펌 메시지 생성
+        msg = _format_confirm_message(ctx, expiry_hour, expected, missed)
+
+        notifier = KakaoNotifier(DEFAULT_REST_API_KEY)
+        if notifier.access_token:
+            notifier.send_message(msg)
+            notifier.send_to_group(msg, store_id=ctx.store_id)
+            logger.info(f"[{ctx.store_id}] {expiry_hour:02d}:00 컨펌 알림 발송 완료")
+
+    except Exception as e:
+        logger.error(f"[{ctx.store_id}] 컨펌 알림 발송 실패: {e}")
+
+
+def _format_confirm_message(ctx, expiry_hour: int, expected: list, missed: list) -> str:
+    """폐기 확정 컨펌 메시지 포맷"""
+    store_name = ctx.store_name or ctx.store_id
+    now_str = datetime.now().strftime('%m/%d %H:%M')
+
+    lines = [f"[{store_name}] {expiry_hour:02d}:00 폐기 확정 ({now_str})", ""]
+
+    if expected:
+        # 카테고리별 그룹핑
+        by_cat: Dict[str, list] = {}
+        for item in expected:
+            cat = item.get('category_name', item.get('item_nm', '기타')[:4])
+            by_cat.setdefault(cat, []).append(item)
+
+        lines.append(f"[폐기 확정] {len(expected)}개")
+        for cat, items in by_cat.items():
+            lines.append(f"  {cat}:")
+            for item in items[:5]:
+                nm = item.get('item_nm', '')[:15]
+                qty = item.get('adjusted_qty', item.get('remaining_qty', 0))
+                lines.append(f"    {nm}  {qty}개")
+            if len(items) > 5:
+                lines.append(f"    ...외 {len(items) - 5}개")
+        lines.append("")
+
+    if missed:
+        lines.append(f"[누락건 추가] {len(missed)}개 (예고 미포함)")
+        for item in missed[:5]:
+            nm = item.get('item_nm', '')[:15]
+            qty = item.get('adjusted_qty', item.get('remaining_qty', 0))
+            lines.append(f"  {nm}  {qty}개")
+        if len(missed) > 5:
+            lines.append(f"  ...외 {len(missed) - 5}개")
+        lines.append("")
+
+    total = len(expected) + len(missed)
+    total_qty = sum(
+        i.get('adjusted_qty', i.get('remaining_qty', 0))
+        for i in expected + missed
+    )
+    lines.append(f"총 {total}개 상품 {total_qty}개 폐기")
+
+    return "\n".join(lines)
 
 
 def receiving_collect_wrapper(delivery_type: str) -> Callable[[], None]:
@@ -1354,27 +1482,11 @@ def run_scheduler(schedule_time: str = "07:00", multi_store: bool = True) -> Non
         schedule.every().day.at(schedule_time).do(job_wrapper)
         logger.info(f"[Schedule] Daily collection + auto-order: {schedule_time}")
 
-    # 2. 폐기 알림 + 정밀 폐기 3단계 스케줄
-    #    기존 알림: 수집(1시간 전) -> 알림(30분 전) -> 폐기
-    #    정밀 폐기: 수집(10분 전) -> 판정(정시) -> 수집+확정(10분 후)
-    PRE_ALERT_COLLECTION_SCHEDULE = {
-        22: "21:00",  # 22:00 폐기(1차 샌드위치/햄버거) -> 21:00 수집 -> 21:30 알림
-        14: "13:00",  # 14:00 폐기(2차 도시락/주먹밥/김밥) -> 13:00 수집 -> 13:30 알림
-        10: "09:00",  # 10:00 폐기(2차 샌드위치/햄버거) -> 09:00 수집 -> 09:30 알림
-        2: "01:00",   # 02:00 폐기(1차 도시락/주먹밥/김밥) -> 01:00 수집 -> 01:30 알림
-        0: "22:00",   # 00:00 만료(빵) -> 22:00 수집 -> 23:00 알림
-    }
-    logger.info("[Schedule] Pre-alert collection + Expiry alerts:")
-    for expiry_hour, collect_time in PRE_ALERT_COLLECTION_SCHEDULE.items():
-        schedule.every().day.at(collect_time).do(pre_alert_collection_wrapper(expiry_hour))
-        logger.info(f"  - {collect_time} -> {expiry_hour:02d}:00 폐기 전 수집 (알림용)")
-
-    for expiry_hour, alert_time in EXPIRY_ALERT_SCHEDULE.items():
-        schedule.every().day.at(alert_time).do(expiry_alert_wrapper(expiry_hour))
-        logger.info(f"  - {alert_time} -> {expiry_hour:02d}:00 폐기 알림")
-
-    # 2.5 정밀 폐기 3단계 (10분전 수집 → 판정 → 10분후 수집+확정)
-    logger.info("[Schedule] Precise expiry confirmation (3-step):")
+    # 2. 폐기 정밀 3단계 (수집+예고알림 → 판정 → 수집+확정+컨펌알림)
+    #    step1: 10분 전 수집 + 예고 알림 (PRE_ALERT_COLLECTION + EXPIRY_ALERT 합류)
+    #    step2: 정각 판정
+    #    step3: 10분 후 수집 + 폐기 확정 + 컨펌 알림
+    logger.info("[Schedule] Expiry 3-step (collect+alert → judge → confirm+alert):")
     for expiry_hour, times in EXPIRY_CONFIRM_SCHEDULE.items():
         schedule.every().day.at(times["pre_collect"]).do(
             expiry_pre_collect_wrapper(expiry_hour)
@@ -1387,8 +1499,8 @@ def run_scheduler(schedule_time: str = "07:00", multi_store: bool = True) -> Non
         )
         logger.info(
             f"  - {expiry_hour:02d}:00 폐기: "
-            f"{times['pre_collect']} 수집 -> {times['judge']} 판정 -> "
-            f"{times['post_collect']} 수집+확정"
+            f"{times['pre_collect']} 수집+예고알림 -> {times['judge']} 판정 -> "
+            f"{times['post_collect']} 확정+컨펌알림"
         )
 
     # 3. 벌크 상품 상세 수집 (매일 11:00)
@@ -1765,7 +1877,7 @@ if __name__ == "__main__":
                 logger.info(f"[HSD Backfill] Store {sid}: {range_desc}")
                 analyzer = SalesAnalyzer(store_id=sid)
                 try:
-                    logger.info(f"[HSD Backfill] BGF 사이트 로그인 중...")
+                    logger.info("[HSD Backfill] BGF 사이트 로그인 중...")
                     analyzer.setup_driver()
                     analyzer.connect()
                     if not analyzer.do_login():

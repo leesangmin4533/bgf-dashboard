@@ -1,7 +1,13 @@
 {
   "enabled": true,
-  "room_names": ["CU동양점"],
-  "_description": "카카오톡 PC 단톡방 동시 발송 설정. room_names는 채팅방 윈도우 타이틀에 포함되는 문자열.",
+  "rooms": {
+    "46704": {"name": "CU동양점", "enabled": true},
+    "46513": {"name": "CU호반베르디움", "enabled": false},
+    "47863": {"name": "CU마평로드", "enabled": false},
+    "49965": {"name": "CU원삼휴게소", "enabled": false}
+  },
+  "alert_types": ["food_expiry"],
+  "_description": "매장별 카카오톡 PC 단톡방 전송 설정. rooms.{store_id}.enabled=true인 매장만 단톡방 전송.",
   "_requirements": [
     "카카오톡 PC 앱이 로그인된 상태여야 함",
     "해당 채팅방 창이 열려있어야 함 (최소화 OK, 닫힘 X)",

@@ -39,8 +39,9 @@ logger = get_logger(__name__)
 class ExpiryChecker:
     """폐기 위험 상품 감지기"""
 
-    def __init__(self, store_id: Optional[str] = None) -> None:
+    def __init__(self, store_id: Optional[str] = None, store_name: Optional[str] = None) -> None:
         self.store_id = store_id
+        self.store_name = store_name or store_id
         self.conn = None
         self.tracking_repo = OrderTrackingRepository(store_id=self.store_id)
         self.batch_repo = InventoryBatchRepository(store_id=self.store_id)
@@ -678,10 +679,13 @@ class ExpiryChecker:
 
         lines = []
 
+        # 매장명 접두사
+        store_prefix = f"[{self.store_name}] " if self.store_name else ""
+
         # 빵(012) 자정 만료: 별도 메시지 형식
         if expiry_hour == 0:
-            lines.append(f"🍞 빵 유통기한 만료 알림 ({datetime.now().strftime('%m/%d %H:%M')})")
-            lines.append(f"1시간 후 유통기한 만료! 재고 확인 필요")
+            lines.append(f"{store_prefix}🍞 빵 유통기한 만료 알림 ({datetime.now().strftime('%m/%d %H:%M')})")
+            lines.append("1시간 후 유통기한 만료! 재고 확인 필요")
             lines.append("")
 
             lines.append(f"📦 빵 ({len(items)}개)")
@@ -697,8 +701,8 @@ class ExpiryChecker:
             return "\n".join(lines)
 
         # 기존 001-005 폐기 알림
-        lines.append(f"⏰ {expiry_hour:02d}:00 폐기 알림 ({datetime.now().strftime('%m/%d %H:%M')})")
-        lines.append(f"30분 후 폐기 처리 필요!")
+        lines.append(f"{store_prefix}⏰ {expiry_hour:02d}:00 폐기 알림 ({datetime.now().strftime('%m/%d %H:%M')})")
+        lines.append("30분 후 폐기 처리 필요!")
         lines.append("")
 
         # 카테고리별 그룹핑
@@ -751,6 +755,9 @@ class ExpiryChecker:
             result = notifier.send_message(msg)
             if result:
                 logger.info(f"{expiry_hour:02d}:00 폐기 알림 발송 완료!")
+
+                # 해당 매장의 단톡방에도 전송
+                notifier.send_to_group(msg, store_id=self.store_id)
 
                 # 알림 발송 완료 표시 (order_tracking)
                 for order_id in self._pending_alert_ids:
@@ -865,7 +872,8 @@ class ExpiryChecker:
             return None
 
         lines = []
-        lines.append(f"📦 폐기 위험 알림 ({datetime.now().strftime('%m/%d %H:%M')})")
+        store_prefix = f"[{self.store_name}] " if self.store_name else ""
+        lines.append(f"{store_prefix}📦 폐기 위험 알림 ({datetime.now().strftime('%m/%d %H:%M')})")
         lines.append("")
 
         # === 푸드류 (시간 기반) ===
@@ -972,6 +980,7 @@ class ExpiryChecker:
             result = notifier.send_message(msg)
             if result:
                 logger.info("카카오톡 발송 완료!")
+                notifier.send_to_group(msg, store_id=self.store_id)
             return result
 
         except Exception as e:

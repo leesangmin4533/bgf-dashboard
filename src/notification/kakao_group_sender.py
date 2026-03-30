@@ -1,13 +1,13 @@
 """
 카카오톡 PC 단톡방 메시지 전송 모듈
 - Win32API로 카카오톡 PC 앱의 채팅방에 메시지 전송
-- KakaoNotifier와 함께 사용하여 나에게 보내기 + 단톡방 동시 발송
+- 매장별 채팅방 매핑 (rooms dict: {store_id: {name, enabled}})
 """
 
 import time
 import ctypes
 from ctypes import wintypes
-from typing import Optional, List, Tuple
+from typing import Optional, Dict, List, Tuple, Any
 
 from src.utils.logger import get_logger
 
@@ -75,23 +75,28 @@ def _copy_to_clipboard(text: str) -> None:
 
 
 class KakaoGroupSender:
-    """카카오톡 PC 단톡방 메시지 전송기
+    """카카오톡 PC 단톡방 메시지 전송기 (매장별 매핑)
 
     Args:
-        room_names: 전송할 채팅방 이름 목록 (윈도우 타이틀에 포함되면 매칭)
+        rooms: {store_id: {"name": "채팅방이름", "enabled": True/False}}
     """
 
-    def __init__(self, room_names: Optional[List[str]] = None) -> None:
-        self.room_names = room_names or []
-        self.enabled = WIN32_AVAILABLE and len(self.room_names) > 0
+    def __init__(self, rooms: Dict[str, Dict[str, Any]]) -> None:
+        self.rooms = rooms
 
-    def _find_chat_windows(self) -> List[Tuple[int, str]]:
-        """열려있는 카카오톡 채팅방 창 찾기
+    def _get_target_rooms(self, store_id: Optional[str] = None) -> List[str]:
+        """전송 대상 채팅방 이름 목록 반환"""
+        if store_id:
+            room = self.rooms.get(store_id, {})
+            if room.get("enabled", False):
+                return [room["name"]]
+            return []
+        # store_id 미지정: 전체 enabled 채팅방
+        return [r["name"] for r in self.rooms.values() if r.get("enabled", False)]
 
-        Returns:
-            [(hwnd, title), ...] 매칭된 채팅방 목록
-        """
-        if not WIN32_AVAILABLE:
+    def _find_chat_windows(self, target_names: List[str]) -> List[Tuple[int, str]]:
+        """열려있는 카카오톡 채팅방 창 찾기"""
+        if not WIN32_AVAILABLE or not target_names:
             return []
 
         kakao_pids = _get_kakao_pids()
@@ -111,7 +116,7 @@ class KakaoGroupSender:
             title = win32gui.GetWindowText(hwnd)
             if not title:
                 return
-            for room_name in self.room_names:
+            for room_name in target_names:
                 if room_name in title:
                     matched.append((hwnd, title))
                     break
@@ -135,11 +140,9 @@ class KakaoGroupSender:
     def _send_to_window(self, chat_hwnd: int, edit_hwnd: int, text: str) -> bool:
         """특정 채팅방 창에 메시지 전송"""
         try:
-            # 1. 창 복원 + 포그라운드
             _set_foreground_safe(chat_hwnd)
             time.sleep(0.3)
 
-            # 2. 입력창 클릭 (포커스)
             rect = win32gui.GetWindowRect(edit_hwnd)
             cx = (rect[0] + rect[2]) // 2
             cy = (rect[1] + rect[3]) // 2
@@ -149,7 +152,6 @@ class KakaoGroupSender:
             win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, cx, cy, 0, 0)
             time.sleep(0.2)
 
-            # 3. 클립보드에 메시지 복사 + Ctrl+V
             _copy_to_clipboard(text)
             time.sleep(0.1)
             win32api.keybd_event(0x11, 0, 0, 0)  # Ctrl
@@ -158,7 +160,6 @@ class KakaoGroupSender:
             win32api.keybd_event(0x11, 0, win32con.KEYEVENTF_KEYUP, 0)
             time.sleep(0.2)
 
-            # 4. Enter 전송
             win32api.keybd_event(0x0D, 0, 0, 0)
             win32api.keybd_event(0x0D, 0, win32con.KEYEVENTF_KEYUP, 0)
             time.sleep(0.2)
@@ -168,31 +169,35 @@ class KakaoGroupSender:
             logger.error(f"단톡방 메시지 전송 실패: {e}")
             return False
 
-    def send(self, text: str) -> dict:
-        """모든 등록된 단톡방에 메시지 전송
+    def send(self, text: str, store_id: Optional[str] = None) -> dict:
+        """매장별 단톡방에 메시지 전송
 
         Args:
             text: 전송할 메시지
+            store_id: 매장 ID (해당 매장의 enabled=true 채팅방에만 전송)
+                      None이면 전체 enabled 채팅방에 전송
 
         Returns:
-            {"sent": [...성공 채팅방], "failed": [...실패 채팅방], "not_found": [...못찾은 채팅방]}
+            {"sent": [...], "failed": [...], "not_found": [...]}
         """
-        if not self.enabled:
-            return {"sent": [], "failed": [], "not_found": self.room_names[:]}
-
         result = {"sent": [], "failed": [], "not_found": []}
 
-        # 열려있는 채팅방 찾기
-        windows = self._find_chat_windows()
-        found_names = {title for _, title in windows}
+        target_names = self._get_target_rooms(store_id)
+        if not target_names:
+            return result
 
-        # 못 찾은 채팅방
-        for room_name in self.room_names:
-            if not any(room_name in title for title in found_names):
+        if not WIN32_AVAILABLE:
+            result["not_found"] = target_names[:]
+            return result
+
+        windows = self._find_chat_windows(target_names)
+        found_titles = {title for _, title in windows}
+
+        for room_name in target_names:
+            if not any(room_name in title for title in found_titles):
                 result["not_found"].append(room_name)
                 logger.warning(f"채팅방 '{room_name}' 창이 열려있지 않음 (최소화 OK, 닫힘 X)")
 
-        # 전송
         for chat_hwnd, title in windows:
             edit_hwnd = self._find_edit_control(chat_hwnd)
             if not edit_hwnd:

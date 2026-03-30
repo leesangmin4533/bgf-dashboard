@@ -68,10 +68,12 @@ class KakaoNotifier:
                     config = json.load(f)
                 if config.get("enabled", False):
                     from src.notification.kakao_group_sender import KakaoGroupSender
-                    room_names = config.get("room_names", [])
-                    if room_names:
-                        self._group_sender = KakaoGroupSender(room_names)
-                        logger.info(f"단톡방 전송 활성화: {room_names}")
+                    rooms = config.get("rooms", {})
+                    if rooms:
+                        self._group_sender = KakaoGroupSender(rooms)
+                        enabled_rooms = [f"{sid}:{r['name']}" for sid, r in rooms.items()
+                                         if r.get("enabled")]
+                        logger.info(f"단톡방 전송 활성화: {enabled_rooms}")
         except Exception as e:
             logger.warning(f"단톡방 설정 로드 실패: {e}")
 
@@ -474,8 +476,6 @@ class KakaoNotifier:
 
             if response.status_code == 200:
                 logger.info("Message sent successfully")
-                # 단톡방 동시 발송
-                self._send_to_group(text)
                 return True
             elif response.status_code == 401:
                 # 토큰 만료 - 갱신 → Selenium 재인증 순서 시도
@@ -493,18 +493,32 @@ class KakaoNotifier:
             logger.error(f"Message send error: {e}")
             return False
 
-    def _send_to_group(self, text: str) -> None:
-        """단톡방에 메시지 전송 (실패해도 예외 전파 안 함)"""
-        if not self._group_sender or not self._group_sender.enabled:
-            return
+    def send_to_group(self, text: str, store_id: Optional[str] = None) -> dict:
+        """특정 매장의 단톡방에 메시지 전송
+
+        config/group_chat.json의 rooms에서 store_id에 매핑된
+        enabled=true인 채팅방에만 전송. 실패해도 예외 전파 안 함.
+
+        Args:
+            text: 메시지
+            store_id: 매장 ID (rooms에서 채팅방 조회)
+
+        Returns:
+            {"sent": [...], "failed": [...], "not_found": [...]}
+        """
+        empty = {"sent": [], "failed": [], "not_found": []}
+        if not self._group_sender:
+            return empty
         try:
-            result = self._group_sender.send(text)
+            result = self._group_sender.send(text, store_id=store_id)
             if result["not_found"]:
                 logger.warning(f"단톡방 미발견 (창이 닫힘?): {result['not_found']}")
             if result["failed"]:
                 logger.warning(f"단톡방 전송 실패: {result['failed']}")
+            return result
         except Exception as e:
             logger.warning(f"단톡방 전송 중 오류 (무시): {e}")
+            return empty
 
     def send_report(self, report: Dict[str, Any]) -> bool:
         """
