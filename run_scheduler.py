@@ -480,91 +480,96 @@ def expiry_judge_wrapper(expiry_hour: int) -> Callable[[], None]:
 
 
 def expiry_confirm_wrapper(expiry_hour: int) -> Callable[[], None]:
-    """[3단계] 폐기 10분 후 수집 + 확정 + 컨펌 알림
+    """[3단계] 폐기 10분 후: 폐기전표 수집 → 미폐기 상품 경고
 
-    1) 판매 수집 (10분간 변동 반영)
-    2) 판정 시 stock vs 현재 stock 비교
-    3) 10분간 판매분 추가 차감 → 실제 폐기량 결정
-    4) 컨펌 알림 발송 (나에게 + 해당 매장 단톡방)
+    1) 폐기전표 수집 (BGF 통합전표 > 전표구분=폐기)
+    2) step1 예고 대상과 폐기전표 대조
+    3) 폐기전표에 없는 상품 = 미폐기 → 경고 알림
+    4) 폐기전표에 있는 상품 = 폐기 완료 → 확인 알림
     """
     def wrapper() -> None:
         logger.info("=" * 60)
-        logger.info(f"[정밀폐기 3/3] Confirm + Alert ({expiry_hour:02d}:00) "
+        logger.info(f"[정밀폐기 3/3] Confirm + WasteSlip ({expiry_hour:02d}:00) "
                     f"at {datetime.now().isoformat()}")
         logger.info("=" * 60)
 
         def confirm_task(ctx):
-            # 1) 판매 수집 (10분간 변동 반영)
+            # 1) 폐기전표 수집 (BGF 사이트)
+            waste_item_codes = set()
             try:
+                from src.collectors.waste_slip_collector import WasteSlipCollector
                 from src.scheduler.daily_job import DailyCollectionJob
 
                 job = DailyCollectionJob(store_id=ctx.store_id)
-                result = job.run_optimized(run_auto_order=False)
+                driver = job.collector.get_driver()
+                if driver:
+                    today_str = datetime.now().strftime("%Y%m%d")
+                    ws_collector = WasteSlipCollector(driver=driver, store_id=ctx.store_id)
+                    ws_result = ws_collector.collect_waste_slips(
+                        from_date=today_str, to_date=today_str, save_to_db=True
+                    )
+                    logger.info(f"[{ctx.store_id}] 폐기전표 수집: {ws_result.get('count', 0)}건")
 
-                if result["success"]:
-                    logger.info(f"[{ctx.store_id}] 폐기 후 수집 완료: "
-                                f"{result.get('total_items', 0)}건")
+                    # 수집된 폐기전표에서 item_cd 추출
+                    from src.infrastructure.database.repos.waste_slip_repo import WasteSlipRepository
+                    ws_repo = WasteSlipRepository(store_id=ctx.store_id)
+                    today_dash = datetime.now().strftime("%Y-%m-%d")
+                    waste_items = ws_repo.get_waste_slip_items(today_dash, store_id=ctx.store_id)
+                    waste_item_codes = {item.get('item_cd') for item in waste_items if item.get('item_cd')}
+                    logger.info(f"[{ctx.store_id}] 폐기전표 품목: {len(waste_item_codes)}개")
                 else:
-                    logger.warning(f"[{ctx.store_id}] 폐기 후 수집 실패")
+                    logger.warning(f"[{ctx.store_id}] 드라이버 없음, 폐기전표 수집 스킵")
             except Exception as e:
-                logger.error(f"[{ctx.store_id}] 폐기 후 수집 error: {e}")
+                logger.error(f"[{ctx.store_id}] 폐기전표 수집 실패: {e}")
 
-            # 2) 판정 결과 가져오기
+            # 2) step1 예고 대상 조회
+            from src.alert.expiry_checker import ExpiryChecker
+            checker = ExpiryChecker(store_id=ctx.store_id, store_name=ctx.store_name)
+            try:
+                pre_items = checker.get_items_expiring_at(expiry_hour)
+            finally:
+                checker.close()
+
+            if not pre_items:
+                logger.info(f"[{ctx.store_id}] 예고 대상 0건, 스킵")
+                return {"success": True, "disposed": 0, "not_disposed": 0}
+
+            # 3) 폐기전표 대조: 폐기됨 vs 미폐기
+            disposed = [i for i in pre_items if i['item_cd'] in waste_item_codes]
+            not_disposed = [i for i in pre_items if i['item_cd'] not in waste_item_codes]
+
+            logger.info(f"[{ctx.store_id}] 폐기전표 대조: "
+                        f"폐기완료 {len(disposed)}건, 미폐기 {len(not_disposed)}건")
+
+            # 4) 기존 배치 confirm도 실행 (DB 정합성 유지)
             judged = _expiry_judge_results.get(expiry_hour, {}).get(ctx.store_id, [])
+            if judged:
+                from src.infrastructure.database.repos import InventoryBatchRepository
+                batch_repo = InventoryBatchRepository()
+                batch_repo.confirm_expiry_batches(judged_batches=judged, store_id=ctx.store_id)
 
-            if not judged:
-                logger.info(f"[{ctx.store_id}] 폐기 대상 없음 (판정 0건)")
-                return {"success": True, "expired_count": 0}
-
-            # 3) 폐기 확정 (stock 비교 → 판매분 차감 → 최종 폐기)
-            from src.infrastructure.database.repos import InventoryBatchRepository
-
-            batch_repo = InventoryBatchRepository()
-            confirmed = batch_repo.confirm_expiry_batches(
-                judged_batches=judged,
-                store_id=ctx.store_id
-            )
-
-            logger.info(f"[{ctx.store_id}] 폐기 확정: {len(confirmed)}건")
-            for item in confirmed:
-                logger.info(
-                    f"  - {item.get('item_cd', '')} {item.get('item_nm', '')}: "
-                    f"{item.get('adjusted_qty', 0)}개 폐기"
-                )
-
-            # 4) 컨펌 알림 발송 (나에게 + 해당 매장 단톡방)
-            if confirmed:
-                _send_confirm_alert(ctx, expiry_hour, confirmed)
+            # 5) 컨펌 알림 발송
+            _send_confirm_alert(ctx, expiry_hour, disposed, not_disposed)
 
             # 판정 결과 정리
             _expiry_judge_results.get(expiry_hour, {}).pop(ctx.store_id, None)
 
-            return {"success": True, "expired_count": len(confirmed)}
+            return {"success": True, "disposed": len(disposed), "not_disposed": len(not_disposed)}
 
-        _run_task(confirm_task, f"ExpiryConfirm+Alert({expiry_hour:02d}:00)")
+        _run_task(confirm_task, f"ExpiryConfirm+WasteSlip({expiry_hour:02d}:00)")
 
     return wrapper
 
 
-def _send_confirm_alert(ctx, expiry_hour: int, confirmed: list) -> None:
-    """폐기 확정 후 컨펌 알림 (나에게 + 해당 매장 단톡방)"""
+def _send_confirm_alert(ctx, expiry_hour: int, disposed: list, not_disposed: list) -> None:
+    """폐기전표 대조 결과 알림 (나에게 + 해당 매장 단톡방)"""
+    if not disposed and not not_disposed:
+        return
+
     try:
-        from src.alert.expiry_checker import ExpiryChecker
         from src.notification.kakao_notifier import KakaoNotifier, DEFAULT_REST_API_KEY
 
-        # step1 예고 대상과 비교하여 누락건 식별
-        checker = ExpiryChecker(store_id=ctx.store_id, store_name=ctx.store_name)
-        try:
-            pre_items = checker.get_items_expiring_at(expiry_hour)
-            pre_codes = {item['item_cd'] for item in pre_items}
-        finally:
-            checker.close()
-
-        expected = [i for i in confirmed if i.get('item_cd') in pre_codes]
-        missed = [i for i in confirmed if i.get('item_cd') not in pre_codes]
-
-        # 컨펌 메시지 생성
-        msg = _format_confirm_message(ctx, expiry_hour, expected, missed)
+        msg = _format_confirm_message(ctx, expiry_hour, disposed, not_disposed)
 
         notifier = KakaoNotifier(DEFAULT_REST_API_KEY)
         if notifier.access_token:
@@ -576,47 +581,41 @@ def _send_confirm_alert(ctx, expiry_hour: int, confirmed: list) -> None:
         logger.error(f"[{ctx.store_id}] 컨펌 알림 발송 실패: {e}")
 
 
-def _format_confirm_message(ctx, expiry_hour: int, expected: list, missed: list) -> str:
-    """폐기 확정 컨펌 메시지 포맷"""
+def _format_confirm_message(ctx, expiry_hour: int, disposed: list, not_disposed: list) -> str:
+    """폐기전표 대조 결과 메시지 포맷"""
     store_name = ctx.store_name or ctx.store_id
     now_str = datetime.now().strftime('%m/%d %H:%M')
 
-    lines = [f"[{store_name}] {expiry_hour:02d}:00 폐기 확정 ({now_str})", ""]
+    lines = [f"[{store_name}] {expiry_hour:02d}:00 폐기 확인 ({now_str})", ""]
 
-    if expected:
-        # 카테고리별 그룹핑
-        by_cat: Dict[str, list] = {}
-        for item in expected:
-            cat = item.get('category_name', item.get('item_nm', '기타')[:4])
-            by_cat.setdefault(cat, []).append(item)
-
-        lines.append(f"[폐기 확정] {len(expected)}개")
-        for cat, items in by_cat.items():
-            lines.append(f"  {cat}:")
-            for item in items[:5]:
-                nm = item.get('item_nm', '')[:15]
-                qty = item.get('adjusted_qty', item.get('remaining_qty', 0))
-                lines.append(f"    {nm}  {qty}개")
-            if len(items) > 5:
-                lines.append(f"    ...외 {len(items) - 5}개")
-        lines.append("")
-
-    if missed:
-        lines.append(f"[누락건 추가] {len(missed)}개 (예고 미포함)")
-        for item in missed[:5]:
+    # 미폐기 경고 (핵심 - 상단 배치)
+    if not_disposed:
+        lines.append(f"!! 미폐기 {len(not_disposed)}개 - 폐기 처리 필요 !!")
+        for item in not_disposed[:10]:
             nm = item.get('item_nm', '')[:15]
-            qty = item.get('adjusted_qty', item.get('remaining_qty', 0))
-            lines.append(f"  {nm}  {qty}개")
-        if len(missed) > 5:
-            lines.append(f"  ...외 {len(missed) - 5}개")
+            qty = item.get('remaining_qty', 0)
+            cat = item.get('category_name', '')
+            lines.append(f"  {nm}  {qty}개  ({cat})")
+        if len(not_disposed) > 10:
+            lines.append(f"  ...외 {len(not_disposed) - 10}개")
         lines.append("")
 
-    total = len(expected) + len(missed)
-    total_qty = sum(
-        i.get('adjusted_qty', i.get('remaining_qty', 0))
-        for i in expected + missed
-    )
-    lines.append(f"총 {total}개 상품 {total_qty}개 폐기")
+    # 폐기 완료 확인
+    if disposed:
+        lines.append(f"[폐기 완료] {len(disposed)}개")
+        for item in disposed[:5]:
+            nm = item.get('item_nm', '')[:15]
+            qty = item.get('remaining_qty', 0)
+            lines.append(f"  {nm}  {qty}개")
+        if len(disposed) > 5:
+            lines.append(f"  ...외 {len(disposed) - 5}개")
+        lines.append("")
+
+    if not not_disposed:
+        lines.append("전체 폐기 완료")
+    else:
+        total_not = sum(i.get('remaining_qty', 0) for i in not_disposed)
+        lines.append(f"미폐기 {len(not_disposed)}개 ({total_not}개) 즉시 처리 필요")
 
     return "\n".join(lines)
 
