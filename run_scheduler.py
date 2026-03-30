@@ -480,12 +480,11 @@ def expiry_judge_wrapper(expiry_hour: int) -> Callable[[], None]:
 
 
 def expiry_confirm_wrapper(expiry_hour: int) -> Callable[[], None]:
-    """[3단계] 폐기 10분 후: 폐기전표 수집 → 미폐기 상품 경고
+    """[3단계] 폐기 10분 후: 수집(폐기전표 포함) → 대조 → 미폐기 경고
 
-    1) 폐기전표 수집 (BGF 통합전표 > 전표구분=폐기)
-    2) step1 예고 대상과 폐기전표 대조
-    3) 폐기전표에 없는 상품 = 미폐기 → 경고 알림
-    4) 폐기전표에 있는 상품 = 폐기 완료 → 확인 알림
+    1) run_optimized()로 전체 수집 (Phase 1.15에서 폐기전표 자동 수집+DB 저장)
+    2) DB에서 당일 폐기전표 item_cd 조회
+    3) step1 예고 대상과 대조 → 미폐기 상품 경고 알림
     """
     def wrapper() -> None:
         logger.info("=" * 60)
@@ -494,35 +493,34 @@ def expiry_confirm_wrapper(expiry_hour: int) -> Callable[[], None]:
         logger.info("=" * 60)
 
         def confirm_task(ctx):
-            # 1) 폐기전표 수집 (BGF 사이트)
-            waste_item_codes = set()
+            # 1) 전체 수집 (Phase 1.15에서 폐기전표 자동 수집+DB 저장)
             try:
-                from src.collectors.waste_slip_collector import WasteSlipCollector
                 from src.scheduler.daily_job import DailyCollectionJob
 
                 job = DailyCollectionJob(store_id=ctx.store_id)
-                driver = job.collector.get_driver()
-                if driver:
-                    today_str = datetime.now().strftime("%Y%m%d")
-                    ws_collector = WasteSlipCollector(driver=driver, store_id=ctx.store_id)
-                    ws_result = ws_collector.collect_waste_slips(
-                        from_date=today_str, to_date=today_str, save_to_db=True
-                    )
-                    logger.info(f"[{ctx.store_id}] 폐기전표 수집: {ws_result.get('count', 0)}건")
+                result = job.run_optimized(run_auto_order=False)
 
-                    # 수집된 폐기전표에서 item_cd 추출
-                    from src.infrastructure.database.repos.waste_slip_repo import WasteSlipRepository
-                    ws_repo = WasteSlipRepository(store_id=ctx.store_id)
-                    today_dash = datetime.now().strftime("%Y-%m-%d")
-                    waste_items = ws_repo.get_waste_slip_items(today_dash, store_id=ctx.store_id)
-                    waste_item_codes = {item.get('item_cd') for item in waste_items if item.get('item_cd')}
-                    logger.info(f"[{ctx.store_id}] 폐기전표 품목: {len(waste_item_codes)}개")
+                if result["success"]:
+                    logger.info(f"[{ctx.store_id}] 폐기 후 수집 완료: "
+                                f"{result.get('total_items', 0)}건")
                 else:
-                    logger.warning(f"[{ctx.store_id}] 드라이버 없음, 폐기전표 수집 스킵")
+                    logger.warning(f"[{ctx.store_id}] 폐기 후 수집 실패")
             except Exception as e:
-                logger.error(f"[{ctx.store_id}] 폐기전표 수집 실패: {e}")
+                logger.error(f"[{ctx.store_id}] 폐기 후 수집 error: {e}")
 
-            # 2) step1 예고 대상 조회
+            # 2) DB에서 당일 폐기전표 item_cd 조회 (Phase 1.15에서 이미 저장됨)
+            waste_item_codes = set()
+            try:
+                from src.infrastructure.database.repos.waste_slip_repo import WasteSlipRepository
+                ws_repo = WasteSlipRepository(store_id=ctx.store_id)
+                today_dash = datetime.now().strftime("%Y-%m-%d")
+                waste_items = ws_repo.get_waste_slip_items(today_dash, store_id=ctx.store_id)
+                waste_item_codes = {item.get('item_cd') for item in waste_items if item.get('item_cd')}
+                logger.info(f"[{ctx.store_id}] 폐기전표 품목 (DB): {len(waste_item_codes)}개")
+            except Exception as e:
+                logger.warning(f"[{ctx.store_id}] 폐기전표 DB 조회 실패: {e}")
+
+            # 3) step1 예고 대상 조회 (order_tracking 기반)
             from src.alert.expiry_checker import ExpiryChecker
             checker = ExpiryChecker(store_id=ctx.store_id, store_name=ctx.store_name)
             try:
@@ -534,21 +532,21 @@ def expiry_confirm_wrapper(expiry_hour: int) -> Callable[[], None]:
                 logger.info(f"[{ctx.store_id}] 예고 대상 0건, 스킵")
                 return {"success": True, "disposed": 0, "not_disposed": 0}
 
-            # 3) 폐기전표 대조: 폐기됨 vs 미폐기
+            # 4) 폐기전표 대조: 폐기됨 vs 미폐기
             disposed = [i for i in pre_items if i['item_cd'] in waste_item_codes]
             not_disposed = [i for i in pre_items if i['item_cd'] not in waste_item_codes]
 
             logger.info(f"[{ctx.store_id}] 폐기전표 대조: "
                         f"폐기완료 {len(disposed)}건, 미폐기 {len(not_disposed)}건")
 
-            # 4) 기존 배치 confirm도 실행 (DB 정합성 유지)
+            # 5) 기존 배치 confirm (DB 정합성 유지)
             judged = _expiry_judge_results.get(expiry_hour, {}).get(ctx.store_id, [])
             if judged:
                 from src.infrastructure.database.repos import InventoryBatchRepository
                 batch_repo = InventoryBatchRepository()
                 batch_repo.confirm_expiry_batches(judged_batches=judged, store_id=ctx.store_id)
 
-            # 5) 컨펌 알림 발송
+            # 6) 컨펌 알림 발송 (나에게 + 해당 매장 단톡방)
             _send_confirm_alert(ctx, expiry_hour, disposed, not_disposed)
 
             # 판정 결과 정리
