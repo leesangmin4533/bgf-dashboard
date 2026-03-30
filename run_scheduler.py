@@ -564,7 +564,15 @@ def expiry_confirm_wrapper(expiry_hour: int) -> Callable[[], None]:
 
 
 def _send_confirm_alert(ctx, expiry_hour: int, disposed: list, not_disposed: list) -> None:
-    """폐기전표 대조 결과 알림 (나에게 + 해당 매장 단톡방)"""
+    """폐기전표 대조 결과 알림 (나에게 + 해당 매장 단톡방, 푸드 001-005만)"""
+    if not disposed and not not_disposed:
+        return
+
+    # 빵(012), 커피 등 비-푸드 제외 — 푸드만 단톡방 전송
+    FOOD_MIDS = {'001', '002', '003', '004', '005'}
+    disposed = [i for i in disposed if i.get('mid_cd') in FOOD_MIDS]
+    not_disposed = [i for i in not_disposed if i.get('mid_cd') in FOOD_MIDS]
+
     if not disposed and not not_disposed:
         return
 
@@ -576,7 +584,9 @@ def _send_confirm_alert(ctx, expiry_hour: int, disposed: list, not_disposed: lis
         notifier = KakaoNotifier(DEFAULT_REST_API_KEY)
         if notifier.access_token:
             notifier.send_message(msg)
-            notifier.send_to_group(msg, store_id=ctx.store_id)
+            # 단톡방: 빵 자정 만료(00:00) 제외
+            if expiry_hour != 0:
+                notifier.send_to_group(msg, store_id=ctx.store_id)
             logger.info(f"[{ctx.store_id}] {expiry_hour:02d}:00 컨펌 알림 발송 완료")
 
     except Exception as e:

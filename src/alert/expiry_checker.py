@@ -873,8 +873,11 @@ class ExpiryChecker:
             if result:
                 logger.info(f"{expiry_hour:02d}:00 폐기 알림 발송 완료!")
 
-                # 해당 매장의 단톡방에도 전송
-                notifier.send_to_group(msg, store_id=self.store_id)
+                # 해당 매장의 단톡방에도 전송 (푸드 001-005만)
+                # 빵(012), 커피 등 비-푸드는 단톡방 전송 보류
+                FOOD_ONLY_MIDS = {'001', '002', '003', '004', '005'}
+                if expiry_hour != 0:  # 빵 자정 만료 제외
+                    notifier.send_to_group(msg, store_id=self.store_id)
 
                 # 알림 발송 완료 표시 (order_tracking)
                 for order_id in self._pending_alert_ids:
@@ -1097,7 +1100,8 @@ class ExpiryChecker:
             result = notifier.send_message(msg)
             if result:
                 logger.info("카카오톡 발송 완료!")
-                notifier.send_to_group(msg, store_id=self.store_id)
+                # 단톡방은 푸드 전용 알림(send_expiry_alert)에서만 전송
+                # 범용 알림(푸드+비푸드 통합)은 나에게 보내기만
             return result
 
         except Exception as e:
