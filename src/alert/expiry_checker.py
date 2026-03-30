@@ -869,7 +869,7 @@ class ExpiryChecker:
                 logger.warning("카카오 토큰 없음. 알림 스킵.")
                 return False
 
-            result = notifier.send_message(msg)
+            result = notifier.send_message(msg, category="food_expiry")
             if result:
                 logger.info(f"{expiry_hour:02d}:00 폐기 알림 발송 완료!")
 
@@ -1097,11 +1097,9 @@ class ExpiryChecker:
                 logger.warning("카카오 토큰 없음. 알림 스킵.")
                 return False
 
-            result = notifier.send_message(msg)
+            result = notifier.send_message(msg, category="food_expiry")
             if result:
                 logger.info("카카오톡 발송 완료!")
-                # 단톡방은 푸드 전용 알림(send_expiry_alert)에서만 전송
-                # 범용 알림(푸드+비푸드 통합)은 나에게 보내기만
             return result
 
         except Exception as e:

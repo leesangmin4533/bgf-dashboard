@@ -431,7 +431,10 @@ class KakaoNotifier:
         logger.warning("Selenium 자동 재인증 시도...")
         return self.selenium_auto_authorize()
 
-    def send_message(self, text: str, link_title: Optional[str] = None, link_url: Optional[str] = None, _retry: bool = True) -> bool:
+    # 나에게 보내기 허용 카테고리 (이 외의 알림은 차단)
+    ALLOWED_CATEGORIES = {"food_expiry", "promotion", "test"}
+
+    def send_message(self, text: str, link_title: Optional[str] = None, link_url: Optional[str] = None, _retry: bool = True, category: str = "") -> bool:
         """
         카카오톡 메시지 전송 (나에게 보내기)
 
@@ -440,10 +443,16 @@ class KakaoNotifier:
             link_title: 링크 버튼 제목 (선택)
             link_url: 링크 URL (선택)
             _retry: 401 시 토큰 갱신 후 재시도 여부 (내부용, 무한 재귀 방지)
+            category: 알림 카테고리 (food_expiry, promotion, test만 발송)
 
         Returns:
             전송 성공 여부
         """
+        # 카테고리 화이트리스트 필터
+        if category and category not in self.ALLOWED_CATEGORIES:
+            logger.debug(f"알림 차단 (category={category}): {text[:50]}...")
+            return True  # 차단이지만 성공으로 처리 (호출부 에러 방지)
+
         if not self.access_token:
             logger.warning("No access token. Run authorize() first.")
             return False
@@ -576,7 +585,7 @@ class KakaoNotifier:
                 lines.append(f"{i}. {cat['mid_nm']} ({cat['total_sales']})")
 
         text = "\n".join(lines)
-        return self.send_message(text)
+        return self.send_message(text, category="daily_report")
 
 
 def setup_kakao(rest_api_key: str) -> KakaoNotifier:

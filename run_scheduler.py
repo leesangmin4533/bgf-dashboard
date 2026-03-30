@@ -583,7 +583,7 @@ def _send_confirm_alert(ctx, expiry_hour: int, disposed: list, not_disposed: lis
 
         notifier = KakaoNotifier(DEFAULT_REST_API_KEY)
         if notifier.access_token:
-            notifier.send_message(msg)
+            notifier.send_message(msg, category="food_expiry")
             # 단톡방: 빵 자정 만료(00:00) 제외
             if expiry_hour != 0:
                 notifier.send_to_group(msg, store_id=ctx.store_id)
@@ -885,7 +885,7 @@ def promotion_alert_wrapper() -> None:
                 logger.warning(f"[{ctx.store_id}] 카카오 토큰 갱신 실패 — 행사 알림 건너뜀")
                 return {"success": False, "error": "token_failed"}
 
-            alert = PromotionAlert(kakao_notifier=notifier, store_id=ctx.store_id)
+            alert = PromotionAlert(kakao_notifier=notifier, store_id=ctx.store_id, store_name=ctx.store_name)
             daily_msg = alert.send_daily_alert(send_kakao=True)
             critical_msg = alert.send_critical_alert(send_kakao=True)
 
