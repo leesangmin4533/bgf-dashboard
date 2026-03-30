@@ -100,9 +100,9 @@ class OrderTracker:
                 delivery_type = get_delivery_type(item_nm, item_cd=item_cd) or "1차"
                 exp_days = None
                 cat_cfg = ALERT_CATEGORIES.get(mid_cd, {})
-                if cat_cfg.get("use_product_expiry"):
-                    pd_info = self.product_repo.get(item_cd)
-                    exp_days = pd_info.get('expiration_days') if pd_info else None
+                # 유통기한이 카테고리 기본값과 다를 수 있으므로 항상 조회
+                pd_info = self.product_repo.get(item_cd)
+                exp_days = pd_info.get('expiration_days') if pd_info else None
                 shelf_hours, arrival_time, expiry_time = calculate_shelf_life_after_arrival(
                     item_nm, mid_cd, order_datetime, expiration_days=exp_days
                 )

@@ -275,8 +275,14 @@ class ManualOrderDetector:
                 # 2차: 익일 07:00 입고 (receiving_date 기준으로는 당일 07:00)
                 arrival_time = recv_dt.replace(hour=7, minute=0)
 
-            # 폐기시간: 카테고리별 유통시간 적용
-            expiry_time = get_expiry_time_for_delivery(delivery_type, mid_cd, arrival_time)
+            # 폐기시간: 카테고리별 유통시간 적용 (개별 유통기한 반영)
+            exp_days = None
+            product_info = self.product_repo.get(item['item_cd'])
+            if product_info:
+                exp_days = product_info.get('expiration_days')
+            expiry_time = get_expiry_time_for_delivery(
+                delivery_type, mid_cd, arrival_time, expiration_days=exp_days
+            )
             return arrival_time, expiry_time
 
         # 비-푸드류 (일 기반)

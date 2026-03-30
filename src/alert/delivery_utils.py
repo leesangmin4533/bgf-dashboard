@@ -318,10 +318,16 @@ def get_expiry_time_for_delivery(
     category = ALERT_CATEGORIES.get(mid_cd, {})
 
     # shelf_life_hours가 있으면 시간 단위 계산 (001/002/003)
+    # base_hours는 유통기한 1일 기준. 개별 상품 유통기한이 다르면 추가일수 × 24시간 보정
     shelf_hours_map = category.get("shelf_life_hours")
     if shelf_hours_map and delivery_type in shelf_hours_map:
-        shelf_hours = shelf_hours_map[delivery_type]
-        return arrival_time + timedelta(hours=shelf_hours)
+        base_hours = shelf_hours_map[delivery_type]
+        shelf_default = category.get("shelf_life_default", 1)
+        exp = expiration_days or shelf_default
+        if exp > shelf_default:
+            extra_hours = (exp - shelf_default) * 24
+            return arrival_time + timedelta(hours=base_hours + extra_hours)
+        return arrival_time + timedelta(hours=base_hours)
 
     # use_product_expiry (012 빵): B방식 날짜 단위
     # 공식: arrival_date + expiration_days + 1 의 00:00 (자정 만료)

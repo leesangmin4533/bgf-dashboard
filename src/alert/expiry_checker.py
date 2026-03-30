@@ -572,6 +572,7 @@ class ExpiryChecker:
         store_filter = "AND ds.store_id = ?" if self.store_id else ""
         store_filter_sub = "AND store_id = ?" if self.store_id else ""
         store_params = (self.store_id,) if self.store_id else ()
+        pd_prefix = "common." if self.store_id else ""
 
         cursor.execute(f"""
             SELECT
@@ -579,9 +580,11 @@ class ExpiryChecker:
                 p.item_nm,
                 p.mid_cd,
                 ds.stock_qty as current_stock,
-                ds.sales_date as last_date
+                ds.sales_date as last_date,
+                pd.expiration_days
             FROM daily_sales ds
             JOIN products p ON ds.item_cd = p.item_cd
+            LEFT JOIN {pd_prefix}product_details pd ON ds.item_cd = pd.item_cd
             WHERE p.mid_cd IN ({','.join('?' * len(category_codes))})
             {store_filter}
             AND ds.sales_date = (
@@ -621,7 +624,10 @@ class ExpiryChecker:
 
             # 도착시간: 발주일 + 1일의 arrival_hour (DELIVERY_CONFIG 기반)
             arrival_time = get_arrival_time(delivery_type, order_date)
-            expiry_time = get_expiry_time_for_delivery(delivery_type, mid_cd, arrival_time)
+            exp_days = row['expiration_days'] if 'expiration_days' in row.keys() else None
+            expiry_time = get_expiry_time_for_delivery(
+                delivery_type, mid_cd, arrival_time, expiration_days=exp_days
+            )
 
             # 데이터 신선도 체크: 폐기시간이 이미 지난 상품 제외
             if expiry_time < current_time:
