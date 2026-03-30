@@ -1,6 +1,6 @@
 {
-  "currentFeature": null,
-  "phase": null,
+  "currentFeature": "milk-demand-classifier-fix",
+  "phase": "plan",
   "matchRate": null,
-  "lastUpdated": "2026-03-30T01:00:00Z"
+  "lastUpdated": "2026-03-31T00:00:00Z"
 }
