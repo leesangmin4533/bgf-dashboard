@@ -65,7 +65,7 @@ EXPIRY_CONFIRM_SCHEDULE = {
     14: {"pre_collect": "13:50", "judge": "14:00", "post_collect": "14:10"},
     10: {"pre_collect": "09:50", "judge": "10:00", "post_collect": "10:10"},
     2:  {"pre_collect": "01:50", "judge": "02:00", "post_collect": "02:10"},
-    0:  {"pre_collect": "23:50", "judge": "00:00", "post_collect": "00:10"},
+    # 0:  {"pre_collect": "23:50", "judge": "00:00", "post_collect": "00:10"},  # 빵(012) 비활성화 — 추후 테스트 후 활성화
 }
 
 # 알림 시간 설정 (폐기 30분 전)
