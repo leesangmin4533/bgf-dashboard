@@ -22,7 +22,7 @@
     "archivedTo": "docs/archive/2026-03/prediction-quick-wins/"
   },
   "milk-demand-classifier-fix": {
-    "phase": "plan",
+    "phase": "design",
     "matchRate": null,
     "iterationCount": 0,
     "startedAt": "2026-03-31T00:00:00Z"
