@@ -1,0 +1,56 @@
+{
+  "46513": {
+    "date": "2026-03-30",
+    "order_count": 221,
+    "pending_stats": {
+      "ot_fill": {
+        "total": 284,
+        "ordered": 27,
+        "blocked": 257
+      },
+      "ri_fresh": {
+        "total": 443,
+        "ordered": 86,
+        "blocked": 357
+      },
+      "ri_stale_zero": {
+        "total": 956,
+        "ordered": 181,
+        "blocked": 775
+      }
+    }
+  },
+  "46704": {
+    "date": "2026-03-30",
+    "order_count": 222,
+    "pending_stats": {
+      "none": {
+        "total": 1951,
+        "ordered": 409,
+        "blocked": 1542
+      }
+    }
+  },
+  "47863": {
+    "date": "2026-03-30",
+    "order_count": 108,
+    "pending_stats": {
+      "none": {
+        "total": 1630,
+        "ordered": 241,
+        "blocked": 1389
+      }
+    }
+  },
+  "49965": {
+    "date": "2026-03-30",
+    "order_count": 192,
+    "pending_stats": {
+      "none": {
+        "total": 1810,
+        "ordered": 342,
+        "blocked": 1468
+      }
+    }
+  }
+}
