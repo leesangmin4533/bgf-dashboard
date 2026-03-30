@@ -452,6 +452,20 @@ Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
 
 ---
 
+## 고영향 변경 대상 (수정 전 impact_check.py 실행 필수)
+
+> `python scripts/impact_check.py --all` 실행 후 변경사항 없음을 확인한 뒤 수정
+
+| 파일 | 수정하면 뭐가 바뀌나 |
+|------|---------------------|
+| `demand_classifier.py` DEMAND_PATTERN_EXEMPT_MIDS | **전 카테고리** 수요 분류 |
+| `demand_classifier.py` DEMAND_PATTERN_THRESHOLDS | **전 카테고리** 수요 분류 |
+| `demand_classifier.py` sell_days 쿼리 | **전 매장** 판매일 계산 |
+| `constants.py` PREDICTION_PARAMS["moving_avg_days"] | **전체** WMA 예측값 |
+| `base_predictor.py` _get_sell_ratio 쿼리 | sell_day_ratio 전체 |
+
+---
+
 ## 코딩 규칙
 
 ### 기본 규칙

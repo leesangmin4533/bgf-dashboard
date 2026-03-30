@@ -131,6 +131,17 @@ class TestDemandClassifierExempt:
         result = self.classifier.classify_item("BREAD001", mid_cd="012")
         assert result.pattern == DemandPattern.DAILY
 
+    def test_milk_exempt(self):
+        """우유(047) -> DAILY 고정 (당일소진 고회전 SLOW 오분류 방지)"""
+        result = self.classifier.classify_item("MILK001", mid_cd="047")
+        assert result.pattern == DemandPattern.DAILY
+
+    def test_exempt_mids_contains_required(self):
+        """면제 목록 불변 테스트 — 필수 카테고리 삭제 방지"""
+        REQUIRED = {"001", "002", "003", "004", "005", "012", "047"}
+        missing = REQUIRED - DEMAND_PATTERN_EXEMPT_MIDS
+        assert not missing, f"면제에서 빠진 mid_cd: {missing} → 전 카테고리 영향!"
+
     def test_non_exempt_ramen(self):
         """라면(006) -> 면제 아님, DB 조회 필요"""
         assert "006" not in DEMAND_PATTERN_EXEMPT_MIDS
