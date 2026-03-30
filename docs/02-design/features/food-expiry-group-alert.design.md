@@ -337,10 +337,65 @@ def _format_confirm_message(ctx, expiry_hour, expected, missed):
 | 12 | `expiry_confirm_wrapper()`에 컨펌 알림 통합 | run_scheduler.py |
 | 13 | 통합 테스트 (CU동양점 단톡방) | - |
 
-## 8. 테스트 계획
+## 8. 토론 결과 반영 (2026-03-30)
+
+> 전문가 4명 (설계 아키텍트, 악마의 변호인, SRE, 실용주의) 토론 결과
+
+### 8.1 step3 수정: BGF 재접속 → DB 조회
+
+**문제**: step3에서 `DailyCollectionJob` 생성만 하고 `run_optimized()` 미호출 → `collector=None` → 드라이버 NoneType 버그
+**해결**: 기존 `run_optimized(run_auto_order=False)` 복원. Phase 1.15에서 폐기전표가 자동 수집+DB 저장됨. 수집 후 DB 조회만으로 대조.
+
+```
+step3: run_optimized() → Phase 1.15 폐기전표 수집 → DB 저장
+       → waste_slip_repo.get_waste_slip_items(today) → item_cd set
+       → 예고 대상과 대조 → 미폐기/폐기완료 → 알림
+```
+
+### 8.2 미구현 — 복수 배치 + qty 비교 (추후 결정)
+
+**상황**: 같은 item_cd로 신규 입고 + 기존 재고가 공존 (실데이터 10건+ 확인)
+
+```
+배치1: 3/29 입고, 잔여 2개 → 3/30 22:00 폐기 대상
+배치2: 3/30 입고, 잔여 3개 → 3/31 22:00 폐기 (아직 유효)
+```
+
+**현재 대조**: item_cd 존재 여부만 확인 (배치 구분 없음)
+**한계**: 잘못된 배치가 폐기된 경우 감지 불가
+
+**완화안 (미구현, 추후 결정)**:
+```python
+# 예고 qty vs 폐기전표 qty 비교
+pre_qty = item['remaining_qty']       # 배치1 폐기 대상 수량
+waste_qty = waste_qty_map[item_cd]    # 전표 상 폐기 수량
+
+if waste_qty >= pre_qty:
+    status = "폐기 완료"
+elif waste_qty > 0:
+    status = f"부분 폐기 ({waste_qty}/{pre_qty}개)"
+else:
+    status = "미폐기"
+```
+
+**운영 후 결정 사항**:
+- 실제 운영 데이터를 보고 복수 배치 오판 빈도 확인
+- 빈도가 높으면 qty 비교 추가 구현
+- 빈도가 낮으면 현행(item_cd 존재 여부) 유지
+
+### 8.3 참고 — 토론에서 삭제된 항목 (YAGNI)
+
+| 삭제 항목 | 이유 |
+|----------|------|
+| WasteSlipCollector 경량 메서드 신설 | 이미 756줄짜리 존재 |
+| ctx 캐싱 | DB 조회가 더 안정적 |
+| 재시도 로직 (2회, 10초) | run_optimized가 내부에서 처리 |
+| "확인 불가" 알림 분기 | DB 조회 실패 극히 드묾 |
+
+## 9. 테스트 계획
 
 1. **단위**: `send_to_group()` 호출 시 CU동양점 채팅방에만 전송되는지
 2. **통합**: `send_message("일일 리포트")` 호출 시 단톡방에 안 가는지
-3. **E2E**: 14:00 폐기 시뮬레이션
-   - 13:30 예고 → 단톡방 + 나에게 발송 확인
-   - 14:10 컨펌 → 확정 목록 + 누락건 분류 확인
+3. **E2E**: 22:00 폐기 실운영 테스트 (동양점)
+   - 21:50 step1 예고 → 단톡방 + 나에게 발송 확인
+   - 22:10 step3 컨펌 → 폐기전표 대조 + 미폐기 경고 확인
