@@ -429,11 +429,15 @@ def expiry_pre_collect_wrapper(expiry_hour: int) -> Callable[[], None]:
 
                 checker = ExpiryChecker(store_id=ctx.store_id, store_name=ctx.store_name)
                 try:
+                    # 먼저 대상 존재 여부 확인
+                    has_items = bool(checker.get_items_expiring_at(expiry_hour))
                     alert_result = checker.send_expiry_alert(expiry_hour)
-                    if alert_result:
+                    if has_items and alert_result:
                         logger.info(f"[{ctx.store_id}] {expiry_hour:02d}:00 예고 알림 발송 완료")
+                    elif not has_items:
+                        logger.info(f"[{ctx.store_id}] {expiry_hour:02d}:00 폐기 대상 없음 (알림 스킵)")
                     else:
-                        logger.info(f"[{ctx.store_id}] {expiry_hour:02d}:00 폐기 대상 없음")
+                        logger.warning(f"[{ctx.store_id}] {expiry_hour:02d}:00 예고 알림 발송 실패")
                 finally:
                     checker.close()
             except Exception as e:
