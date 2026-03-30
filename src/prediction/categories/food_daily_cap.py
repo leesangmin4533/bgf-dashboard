@@ -24,7 +24,7 @@ logger = get_logger(__name__)
 # =============================================================================
 FOOD_DAILY_CAP_CONFIG = {
     "enabled": True,
-    "target_categories": ['001', '002', '003', '004', '005', '012'],
+    "target_categories": ['001', '002', '003', '004', '005'],  # 012(빵) 제거: 유통기한 3~5일로 Cap 불필요
     "waste_buffer": 3,           # [DEPRECATED] 20%×category_total로 대체됨. 캘리브레이터 호환용 유지
     "lookback_days": 28,         # 요일별 평균 계산 기간 (예측 4주 윈도우와 정합)
     "min_data_weeks": 2,         # 최소 데이터 주 수
