@@ -90,7 +90,7 @@ except ImportError:
     sys.exit(1)
 
 from db.models import init_db
-from alert.config import EXPIRY_ALERT_SCHEDULE, EXPIRY_CONFIRM_SCHEDULE, DELIVERY_CONFIG
+from alert.config import EXPIRY_CONFIRM_SCHEDULE, DELIVERY_CONFIG
 from notification.kakao_notifier import KakaoNotifier, DEFAULT_REST_API_KEY
 from utils.logger import get_logger
 

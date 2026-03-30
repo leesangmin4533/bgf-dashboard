@@ -22,8 +22,8 @@
     "archivedTo": "docs/archive/2026-03/prediction-quick-wins/"
   },
   "food-expiry-group-alert": {
-    "phase": "do",
-    "matchRate": null,
+    "phase": "check",
+    "matchRate": 97,
     "iterationCount": 0,
     "startedAt": "2026-03-30T13:30:00Z"
   },
