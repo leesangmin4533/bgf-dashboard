@@ -213,12 +213,18 @@ class ExpiryChecker:
                         return datetime.strptime(exp_str, fmt)
                     except (ValueError, TypeError):
                         continue
-                # date-only 형식 (YYYY-MM-DD) → 배송차수 기반 시간 보충
+                # date-only 형식 (YYYY-MM-DD) → shelf_life_hours 기반 시간 보충
                 try:
                     exp_date = datetime.strptime(exp_str, '%Y-%m-%d')
-                    del_type = batch_row['delivery_type'] or get_delivery_type(item_nm or '', item_cd)
-                    from src.alert.delivery_utils import get_expiry_hour_for_delivery
-                    exp_hour = get_expiry_hour_for_delivery(del_type or '1차')
+                    del_type = batch_row['delivery_type'] or get_delivery_type(item_nm or '', item_cd) or '1차'
+                    cat = ALERT_CATEGORIES.get(mid_cd, {})
+                    shelf_hours_map = cat.get('shelf_life_hours', {})
+                    if del_type in shelf_hours_map:
+                        arrival_hour = DELIVERY_CONFIG.get(del_type, {}).get('arrival_hour', 20)
+                        exp_hour = (arrival_hour + shelf_hours_map[del_type]) % 24
+                    else:
+                        from src.alert.delivery_utils import get_expiry_hour_for_delivery
+                        exp_hour = get_expiry_hour_for_delivery(del_type)
                     return exp_date.replace(hour=exp_hour, minute=0, second=0)
                 except (ValueError, TypeError):
                     pass
@@ -507,16 +513,33 @@ class ExpiryChecker:
                         continue
 
                 if not expiry_time:
-                    # date-only: 배송차수로 시간 결정
+                    # date-only: shelf_life_hours 기반으로 정확한 폐기 시간 계산
+                    # DELIVERY_CONFIG.expiry_hour는 004/005 1차만 정확하므로 사용하지 않음
                     try:
-                        from src.alert.delivery_utils import get_expiry_hour_for_delivery
-                        del_type = row['delivery_type'] or '1차'
-                        exp_h = get_expiry_hour_for_delivery(del_type)
+                        exp_date = datetime.strptime(exp_str, '%Y-%m-%d')
+                        del_type = row['delivery_type']
+                        if not del_type:
+                            # 상품명 끝자리로 추정
+                            last_char = (row['item_nm'] or '').strip()[-1:] if row['item_nm'] else ''
+                            del_type = '2차' if last_char == '2' else '1차'
+
+                        cat = ALERT_CATEGORIES.get(mid_cd, {})
+                        shelf_hours_map = cat.get('shelf_life_hours', {})
+
+                        if del_type in shelf_hours_map:
+                            # shelf_life_hours 기반: 도착시간 + N시간의 hour
+                            arrival_hour = DELIVERY_CONFIG.get(del_type, {}).get('arrival_hour', 20)
+                            shelf_hours = shelf_hours_map[del_type]
+                            exp_h = (arrival_hour + shelf_hours) % 24
+                        else:
+                            # shelf_life_hours 없는 카테고리: DELIVERY_CONFIG 폴백
+                            from src.alert.delivery_utils import get_expiry_hour_for_delivery
+                            exp_h = get_expiry_hour_for_delivery(del_type)
+
                         if exp_h != expiry_hour:
                             continue  # 이 시간대 대상 아님
-                        exp_date = datetime.strptime(exp_str, '%Y-%m-%d')
                         expiry_time = exp_date.replace(hour=exp_h)
-                    except (ValueError, TypeError):
+                    except (ValueError, TypeError, IndexError):
                         continue
 
                 result.append({
