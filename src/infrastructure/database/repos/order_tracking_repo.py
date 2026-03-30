@@ -240,6 +240,9 @@ class OrderTrackingRepository(BaseRepository):
         """
         입고 정보 업데이트
 
+        remaining_qty는 FIFO 차감 로직(_upsert_daily_sale)만 관리하므로
+        여기서는 건드리지 않는다. actual_receiving_qty에 입고수량 기록.
+
         Args:
             tracking_id: order_tracking 레코드 ID
             receiving_qty: 입고 수량
@@ -252,7 +255,8 @@ class OrderTrackingRepository(BaseRepository):
             cursor.execute(
                 """
                 UPDATE order_tracking
-                SET arrival_time = ?, remaining_qty = ?, updated_at = ?
+                SET arrival_time = ?, actual_receiving_qty = ?,
+                    status = 'arrived', updated_at = ?
                 WHERE id = ?
                 """,
                 (arrival_time, receiving_qty, self._now(), tracking_id)
