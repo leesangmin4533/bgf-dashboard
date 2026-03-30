@@ -172,7 +172,7 @@ class ExpiryChecker:
         """
         실제 입고 기반 유통기한 조회 (4단계 폴백)
 
-        0순위: inventory_batches.expiry_date (datetime 포함된 것만)
+        0순위: inventory_batches.expiry_date (입고 기반, date-only도 허용)
         1순위: order_tracking.expiry_time
         2순위: receiving_history + FOOD_EXPIRY_CONFIG 기반 정밀 계산
         3순위: delivery_utils 계산 (호출자에서 처리)
@@ -193,12 +193,12 @@ class ExpiryChecker:
             store_filter = "AND store_id = ?" if self.store_id else ""
             store_params = (self.store_id,) if self.store_id else ()
 
-            # 0순위: inventory_batches.expiry_date (datetime 포함된 것만)
+            # 0순위: inventory_batches.expiry_date (입고 기반, 가장 정확)
             cursor.execute(f"""
-                SELECT expiry_date FROM inventory_batches
+                SELECT expiry_date, delivery_type FROM inventory_batches
                 WHERE item_cd = ?
                   AND status = 'active'
-                  AND length(expiry_date) > 10
+                  AND expiry_date IS NOT NULL
                 {store_filter}
                 ORDER BY receiving_date DESC
                 LIMIT 1
@@ -206,11 +206,22 @@ class ExpiryChecker:
 
             batch_row = cursor.fetchone()
             if batch_row and batch_row['expiry_date']:
+                exp_str = batch_row['expiry_date']
+                # datetime 형식 (YYYY-MM-DD HH:MM:SS 또는 YYYY-MM-DD HH:MM)
                 for fmt in ('%Y-%m-%d %H:%M:%S', '%Y-%m-%d %H:%M'):
                     try:
-                        return datetime.strptime(batch_row['expiry_date'], fmt)
+                        return datetime.strptime(exp_str, fmt)
                     except (ValueError, TypeError):
                         continue
+                # date-only 형식 (YYYY-MM-DD) → 배송차수 기반 시간 보충
+                try:
+                    exp_date = datetime.strptime(exp_str, '%Y-%m-%d')
+                    del_type = batch_row['delivery_type'] or get_delivery_type(item_nm or '', item_cd)
+                    from src.alert.delivery_utils import get_expiry_hour_for_delivery
+                    exp_hour = get_expiry_hour_for_delivery(del_type or '1차')
+                    return exp_date.replace(hour=exp_hour, minute=0, second=0)
+                except (ValueError, TypeError):
+                    pass
 
             # 1순위: order_tracking에서 최근 입고건 조회 (잔량이 있는 경우)
             cursor.execute(f"""
@@ -398,7 +409,7 @@ class ExpiryChecker:
 
     def get_items_expiring_at(self, expiry_hour: int) -> List[Dict[str, Any]]:
         """
-        특정 폐기 시간에 해당하는 발주 상품 조회 (order_tracking 기반)
+        특정 폐기 시간에 해당하는 상품 조회 (inventory_batches 우선 + order_tracking 보충)
 
         Args:
             expiry_hour: 폐기 시간 (예: 14 = 14:00 폐기)
@@ -408,7 +419,10 @@ class ExpiryChecker:
         """
         today = datetime.now().strftime("%Y-%m-%d")
 
-        # order_tracking에서 조회
+        # ★ 0순위: inventory_batches (입고 기반, 가장 정확)
+        batch_items = self._get_batch_items_expiring_at(expiry_hour, today)
+
+        # 1순위: order_tracking (보충 — 배치에 없는 것만)
         items = self.tracking_repo.get_items_expiring_at(expiry_hour, today, store_id=self.store_id)
 
         # 결과 포맷팅
@@ -437,7 +451,87 @@ class ExpiryChecker:
                 'arrival_time': item.get('arrival_time')
             })
 
+        # ★ 배치 결과 합산 (OT에 없는 것만 추가)
+        ot_codes = {item['item_cd'] for item in result if item.get('item_cd')}
+        for bi in batch_items:
+            if bi['item_cd'] not in ot_codes:
+                result.append(bi)
+
         return result
+
+    def _get_batch_items_expiring_at(self, expiry_hour: int, target_date: str) -> List[Dict[str, Any]]:
+        """inventory_batches에서 특정 폐기 시간 대상 조회 (입고 기반)"""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        store_filter = "AND ib.store_id = ?" if self.store_id else ""
+        store_params = (self.store_id,) if self.store_id else ()
+        pd_prefix = "common." if self.store_id else ""
+
+        try:
+            # expiry_date에 시간이 포함된 경우 (YYYY-MM-DD HH:MM:SS)
+            time_pattern = f"{target_date} {expiry_hour:02d}:%"
+            # expiry_date가 날짜만인 경우 (YYYY-MM-DD) — 배송차수로 시간 매칭
+            date_only = target_date
+
+            cursor.execute(f"""
+                SELECT ib.item_cd, p.item_nm, p.mid_cd, ib.remaining_qty,
+                       ib.expiry_date, ib.delivery_type, ib.receiving_date
+                FROM inventory_batches ib
+                JOIN {pd_prefix}products p ON ib.item_cd = p.item_cd
+                WHERE ib.status = 'active'
+                  AND ib.remaining_qty > 0
+                  AND p.mid_cd IN ('001','002','003','004','005')
+                  AND (
+                      ib.expiry_date LIKE ?
+                      OR (length(ib.expiry_date) = 10 AND ib.expiry_date = ?)
+                  )
+                  {store_filter}
+                ORDER BY p.mid_cd, p.item_nm
+            """, (time_pattern, date_only) + store_params)
+
+            rows = cursor.fetchall()
+            result = []
+
+            for row in rows:
+                mid_cd = row['mid_cd']
+                exp_str = row['expiry_date']
+
+                # 시간 포함 여부에 따라 파싱
+                expiry_time = None
+                for fmt in ('%Y-%m-%d %H:%M:%S', '%Y-%m-%d %H:%M'):
+                    try:
+                        expiry_time = datetime.strptime(exp_str, fmt)
+                        break
+                    except (ValueError, TypeError):
+                        continue
+
+                if not expiry_time:
+                    # date-only: 배송차수로 시간 결정
+                    try:
+                        from src.alert.delivery_utils import get_expiry_hour_for_delivery
+                        del_type = row['delivery_type'] or '1차'
+                        exp_h = get_expiry_hour_for_delivery(del_type)
+                        if exp_h != expiry_hour:
+                            continue  # 이 시간대 대상 아님
+                        exp_date = datetime.strptime(exp_str, '%Y-%m-%d')
+                        expiry_time = exp_date.replace(hour=exp_h)
+                    except (ValueError, TypeError):
+                        continue
+
+                result.append({
+                    'item_cd': row['item_cd'],
+                    'item_nm': row['item_nm'],
+                    'mid_cd': mid_cd,
+                    'category_name': ALERT_CATEGORIES.get(mid_cd, {}).get('name', '기타'),
+                    'remaining_qty': row['remaining_qty'],
+                    'delivery_type': row['delivery_type'] or '',
+                    'expiry_time': expiry_time,
+                })
+
+            return result
+        finally:
+            cursor.close()
 
     def get_bread_items_expiring_today(self) -> List[Dict[str, Any]]:
         """
