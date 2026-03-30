@@ -784,7 +784,7 @@ class OrderTrackingRepository(BaseRepository):
         self,
         order_date: str,
         bgf_confirmed_items: set,
-        store_id: Optional[str] = None,
+        **kwargs,
     ) -> Dict[str, Any]:
         """BGF 발주현황과 order_tracking을 대조하여 정합성 보정
 
@@ -799,8 +799,7 @@ class OrderTrackingRepository(BaseRepository):
         Returns:
             {confirmed: N, invalidated: N, confirmed_items: [{item_cd, order_qty}, ...]}
         """
-        sid = store_id or self.store_id
-        conn = self._get_conn(sid)
+        conn = self._get_conn()
         try:
             cursor = conn.cursor()
 
@@ -871,7 +870,7 @@ class OrderTrackingRepository(BaseRepository):
     def get_confirmed_pending(
         self,
         order_date: str,
-        store_id: Optional[str] = None,
+        **kwargs,
     ) -> Dict[str, int]:
         """BGF 확인된 미입고 수량 조회 (adjuster pending 보정용)
 
@@ -886,8 +885,7 @@ class OrderTrackingRepository(BaseRepository):
         Returns:
             {item_cd: remaining_qty, ...}
         """
-        sid = store_id or self.store_id
-        conn = self._get_conn(sid)
+        conn = self._get_conn()
         try:
             cursor = conn.cursor()
             cursor.execute("""
