@@ -252,7 +252,7 @@ BATCH_EXPIRY_ALERT_DAYS = 1             # 폐기 N일 전 알림
 
 # DB 스키마 버전
 # =====================================================================
-DB_SCHEMA_VERSION = 68  # v68: 하네스 엔지니어링 (eval_outcomes skip_reason/skip_detail + ai_summaries)
+DB_SCHEMA_VERSION = 69  # v69: expiry_management (BGF 상품 유통기한 관리 수집)
 
 # =====================================================================
 # 디저트 판단 시스템

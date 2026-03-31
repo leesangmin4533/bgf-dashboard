@@ -958,6 +958,22 @@ STORE_SCHEMA = [
         PRIMARY KEY (store_id, mid_cd)
     )""",
 
+    # expiry_management (BGF "상품 유통기한 관리" 수집 데이터 — v69)
+    """CREATE TABLE IF NOT EXISTS expiry_management (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        store_id TEXT NOT NULL,
+        item_cd TEXT NOT NULL,
+        item_nm TEXT,
+        large_nm TEXT,
+        mid_nm TEXT,
+        expire_ymd TEXT NOT NULL,
+        now_qty INTEGER DEFAULT 0,
+        collected_month TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT,
+        UNIQUE (store_id, item_cd, expire_ymd)
+    )""",
+
     # schema_version (매장 DB 스키마 버전 추적)
     """CREATE TABLE IF NOT EXISTS schema_version (
         version INTEGER PRIMARY KEY,
@@ -1072,6 +1088,9 @@ STORE_INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_oe_type ON order_exclusions(exclusion_type)",
     # user_order_tendency
     "CREATE INDEX IF NOT EXISTS idx_uot_tendency ON user_order_tendency(tendency)",
+    # expiry_management
+    "CREATE INDEX IF NOT EXISTS idx_em_expire ON expiry_management(store_id, expire_ymd)",
+    "CREATE INDEX IF NOT EXISTS idx_em_item ON expiry_management(item_cd)",
 ]
 
 

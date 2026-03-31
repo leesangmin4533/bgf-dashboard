@@ -1172,7 +1172,8 @@ class ExpiryChecker:
 
             lines.append("")
             total_qty = sum(i['remaining_qty'] for i in items)
-            lines.append(f"총 {len(items)}건 {total_qty}개 — 할인/소진 검토 필요")
+            lines.append(f"총 {len(items)}건 {total_qty}개")
+            lines.append("PDA로 유통기한 전산등록 해주세요")
 
             return "\n".join(lines)
         finally:
@@ -1207,6 +1208,84 @@ class ExpiryChecker:
 
         except Exception as e:
             logger.error(f"과자류 알림 발송 실패: {e}")
+            return False
+
+
+    def generate_withdrawal_alert_message(self, days_ahead: int = 7) -> Optional[str]:
+        """BGF 전산 등록 철수예정일 기반 알림 메시지 생성
+
+        expiry_management 테이블 (직원이 PDA로 등록한 정확한 데이터) 기반.
+
+        Args:
+            days_ahead: N일 이내 철수예정 (기본 7)
+
+        Returns:
+            알림 메시지 (대상 없으면 None)
+        """
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        try:
+            today = datetime.now().strftime("%Y%m%d")
+            future = (datetime.now() + timedelta(days=days_ahead)).strftime("%Y%m%d")
+
+            cursor.execute("""
+                SELECT item_cd, item_nm, large_nm, mid_nm, expire_ymd, now_qty
+                FROM expiry_management
+                WHERE store_id = ?
+                  AND expire_ymd BETWEEN ? AND ?
+                  AND now_qty > 0
+                ORDER BY expire_ymd ASC
+            """, (self.store_id, today, future))
+
+            items = [dict(row) for row in cursor.fetchall()]
+            if not items:
+                return None
+
+            store_prefix = f"[{self.store_name}] " if self.store_name else ""
+            today_str = datetime.now().strftime('%m/%d')
+
+            lines = [f"{store_prefix}철수예정 알림 ({today_str})", ""]
+            lines.append(f"7일 이내 철수예정 {len(items)}건:")
+
+            for item in items[:10]:
+                nm = item['item_nm'][:18]
+                ymd = item['expire_ymd']
+                exp_str = f"{ymd[4:6]}/{ymd[6:8]}"
+                qty = item['now_qty']
+                lines.append(f"  {nm}  철수 {exp_str}  {qty}개")
+
+            if len(items) > 10:
+                lines.append(f"  ...외 {len(items) - 10}건")
+
+            lines.append("")
+            total_qty = sum(i['now_qty'] for i in items)
+            lines.append(f"총 {len(items)}건 {total_qty}개 — 할인/폐기 처리 필요")
+
+            return "\n".join(lines)
+        finally:
+            cursor.close()
+
+    def send_withdrawal_alert(self, days_ahead: int = 7) -> bool:
+        """철수예정일 기반 알림 발송 (나에게 보내기만)"""
+        msg = self.generate_withdrawal_alert_message(days_ahead)
+        if not msg:
+            logger.info(f"철수예정 {days_ahead}일 이내 대상 없음")
+            return True
+
+        try:
+            notifier = KakaoNotifier(DEFAULT_REST_API_KEY)
+            if not notifier.access_token:
+                return False
+
+            result = notifier.send_message(msg, category="food_expiry")
+            if result:
+                logger.info("철수예정 알림 발송 완료")
+            # 단톡방: 비활성 (추후 활성화)
+            # notifier.send_to_group(msg, store_id=self.store_id)
+            return result
+        except Exception as e:
+            logger.error(f"철수예정 알림 실패: {e}")
             return False
 
 

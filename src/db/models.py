@@ -1803,6 +1803,25 @@ CREATE INDEX IF NOT EXISTS idx_uot_tendency ON user_order_tendency(tendency);
 ALTER TABLE order_tracking ADD COLUMN pending_confirmed INTEGER DEFAULT 0;
 ALTER TABLE order_tracking ADD COLUMN pending_confirmed_at TEXT;
     """,
+    69: """
+-- v69: BGF 상품 유통기한 관리 수집 테이블
+CREATE TABLE IF NOT EXISTS expiry_management (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    store_id TEXT NOT NULL,
+    item_cd TEXT NOT NULL,
+    item_nm TEXT,
+    large_nm TEXT,
+    mid_nm TEXT,
+    expire_ymd TEXT NOT NULL,
+    now_qty INTEGER DEFAULT 0,
+    collected_month TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT,
+    UNIQUE (store_id, item_cd, expire_ymd)
+);
+CREATE INDEX IF NOT EXISTS idx_em_expire ON expiry_management(store_id, expire_ymd);
+CREATE INDEX IF NOT EXISTS idx_em_item ON expiry_management(item_cd);
+    """,
 }
 
 

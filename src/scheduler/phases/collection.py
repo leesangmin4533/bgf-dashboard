@@ -289,6 +289,24 @@ def run_collection_phases(ctx: Dict[str, Any], job: Any) -> Dict[str, Any]:
         except Exception as e:
             logger.warning(f"폐기 동기화 실패 (발주 플로우 계속): {e}")
 
+    # ★ Phase 1.17: 상품 유통기한 관리 수집 (BGF STCM130_M0)
+    if collection_success:
+        try:
+            with phase_timer("1.17", "Expiry Management Collection",
+                             store_id=job.store_id, _logger=logger,
+                             timings=ctx.get("_phase_timings")):
+                driver = job.collector.get_driver()
+                if driver:
+                    from src.collectors.expiry_management_collector import ExpiryManagementCollector
+                    em_collector = ExpiryManagementCollector(driver=driver, store_id=job.store_id)
+                    em_result = em_collector.collect()
+                    logger.info(f"유통기한 관리 수집: {em_result.get('count', 0)}건")
+                    em_collector.close_tab()
+                else:
+                    logger.warning("드라이버 없음, 유통기한 관리 수집 건너뜀")
+        except Exception as e:
+            logger.warning(f"유통기한 관리 수집 실패 (발주 플로우 계속): {e}")
+
     # ★ Phase 1.2: 발주 제외 상품 수집 (자동/스마트)
     exclusion_stats = None
     if collection_success:
