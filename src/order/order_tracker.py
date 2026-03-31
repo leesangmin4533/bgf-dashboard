@@ -169,7 +169,38 @@ class OrderTracker:
         if saved_count > 0:
             logger.info(f"발주 추적 등록: {saved_count}건")
 
+        # Phase 2 발주 직후 realtime_inventory.pending_qty 증분 갱신
+        self._sync_pending_to_realtime_inventory(order_list, results)
+
         return saved_count
+
+    def _sync_pending_to_realtime_inventory(
+        self,
+        order_list: List[Dict[str, Any]],
+        results: List[Dict[str, Any]],
+    ) -> None:
+        """Phase 2 발주 직후 realtime_inventory.pending_qty 증분 갱신
+
+        다음날 post_order_pending_sync()가 BGF 기준 full replace로 자동 보정하므로
+        여기서는 additive(+=)로 빠르게 반영만 한다.
+        """
+        try:
+            pending_map: Dict[str, int] = {}
+            for item, res in zip(order_list, results):
+                if res.get("success") and res.get("actual_qty", 0) > 0:
+                    item_cd = item.get("item_cd")
+                    if item_cd:
+                        pending_map[item_cd] = pending_map.get(item_cd, 0) + res["actual_qty"]
+
+            if not pending_map:
+                return
+
+            from src.infrastructure.database.repos.inventory_repo import RealtimeInventoryRepository
+            repo = RealtimeInventoryRepository(store_id=self.store_id)
+            updated = repo.increment_pending_qty_batch(pending_map, self.store_id)
+            logger.info(f"[pending_sync] {self.store_id}: {updated}/{len(pending_map)}건 갱신")
+        except Exception as e:
+            logger.warning(f"[pending_sync] 실패 (발주 결과 무영향): {e}")
 
     @staticmethod
     def update_eval_order_results(

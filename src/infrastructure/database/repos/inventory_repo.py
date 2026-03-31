@@ -1069,3 +1069,39 @@ class RealtimeInventoryRepository(BaseRepository):
             return stats
         finally:
             conn.close()
+
+    def increment_pending_qty_batch(self, pending_map: dict, store_id: str) -> int:
+        """발주 후 pending_qty 증분 갱신 (additive)
+
+        Phase 2 발주 직후 호출. realtime_inventory.pending_qty에 발주 수량을 가산.
+        다음날 post_order_pending_sync()가 BGF 기준 full replace로 자동 보정.
+
+        Args:
+            pending_map: {item_cd: qty_to_add, ...}
+            store_id: 매장 코드
+        Returns:
+            갱신된 행 수
+        """
+        if not pending_map:
+            return 0
+
+        conn = self._get_conn()
+        try:
+            cursor = conn.cursor()
+            updated = 0
+            now_str = self._now()
+            for item_cd, qty in pending_map.items():
+                if qty <= 0:
+                    continue
+                cursor.execute(
+                    """UPDATE realtime_inventory
+                       SET pending_qty = COALESCE(pending_qty, 0) + ?,
+                           queried_at = ?
+                       WHERE item_cd = ? AND store_id = ?""",
+                    (qty, now_str, item_cd, store_id),
+                )
+                updated += cursor.rowcount
+            conn.commit()
+            return updated
+        finally:
+            conn.close()
