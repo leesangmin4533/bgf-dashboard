@@ -800,15 +800,24 @@ class InventoryBatchRepository(BaseRepository):
             store_filter = "AND ib.store_id = ?" if store_id else ""
             store_params = (store_id,) if store_id else ()
 
+            # 비식품/담배/발주불가/9999일/999일 제외
             cursor.execute(
                 f"""
-                SELECT ib.*, pd.expiration_days as product_expiry
+                SELECT ib.*, pd.expiration_days as product_expiry,
+                       pd.orderable_status
                 FROM inventory_batches ib
                 LEFT JOIN product_details pd ON ib.item_cd = pd.item_cd
                 WHERE ib.status = ?
                 AND ib.remaining_qty > 0
                 AND ib.expiry_date <= date('now', '+' || ? || ' days')
                 AND ib.expiry_date > date('now')
+                AND ib.mid_cd NOT IN (
+                    '054','055','056','057','058','059','060','061','062','063',
+                    '064','065','066','067','068','069','070','071',
+                    '072','073','086','900','100','101','300','605'
+                )
+                AND COALESCE(ib.expiration_days, 0) NOT IN (9999, 999)
+                AND COALESCE(pd.orderable_status, '가능') != '불가'
                 {store_filter}
                 ORDER BY ib.expiry_date ASC
                 """,

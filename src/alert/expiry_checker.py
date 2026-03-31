@@ -983,7 +983,7 @@ class ExpiryChecker:
             알림 메시지 (없으면 None)
         """
         alerts = self.get_alert_items()
-        batch_expiring = self.get_batch_expiring_items(days_ahead=1)
+        batch_expiring = self.get_batch_expiring_items(days_ahead=7)
 
         # 알림 대상 없으면 None
         food_total = sum(len(items) for items in alerts.values())
