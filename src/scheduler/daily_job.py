@@ -640,8 +640,9 @@ class DailyCollectionJob:
         except Exception as e:
             logger.error(f"Kakao failed: {e}")
 
-        # 폐기 위험 알림: ���도 프로세스로 실행 (Phase 2 차단 방지)
-        self._send_expiry_alert_async()
+        # 폐기 위험 알림: step1(pre_collect+alert)에서 시간대별 정확한 알림 발송
+        # 기존 subprocess 방식은 중복+store_name 누락 문제로 제거
+        # self._send_expiry_alert_async()
 
     def _send_expiry_alert_async(self) -> None:
         """폐기 위험 알림을 별도 프로세스로 실행 (블로킹 방지)"""
@@ -927,7 +928,7 @@ def run_second_delivery_adjustment(store_id: Optional[str] = None) -> Dict[str, 
                     logger.error(f"[D-1] Selenium 실행 실패 (store={sid}): {e}")
                     all_results[sid] = {"success": False, "error": str(e)}
             else:
-                logger.info(f"[D-1] 부스트 대상 없음 → Selenium 생략")
+                logger.info("[D-1] 부스트 대상 없음 → Selenium 생략")
                 all_results[sid] = {
                     "success": True,
                     "boost_targets": 0,
