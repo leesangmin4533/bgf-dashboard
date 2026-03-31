@@ -448,9 +448,9 @@ class KakaoNotifier:
         Returns:
             전송 성공 여부
         """
-        # 카테고리 화이트리스트 필터
-        if category and category not in self.ALLOWED_CATEGORIES:
-            logger.debug(f"알림 차단 (category={category}): {text[:50]}...")
+        # 카테고리 화이트리스트 필터 (미지정 시에도 차단)
+        if category not in self.ALLOWED_CATEGORIES:
+            logger.debug(f"알림 차단 (category={category or 'none'}): {text[:50]}...")
             return True  # 차단이지만 성공으로 처리 (호출부 에러 방지)
 
         if not self.access_token:
