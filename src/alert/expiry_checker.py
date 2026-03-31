@@ -433,15 +433,39 @@ class ExpiryChecker:
 
         # ★ 0순위: inventory_batches (입고 기반, 가장 정확)
         batch_items = self._get_batch_items_expiring_at(expiry_hour, today)
+        # 배치에서 실물 재고 있는 item_cd (remain > 0, active)
+        batch_active_codes = {bi['item_cd'] for bi in batch_items}
 
         # 1순위: order_tracking (보충 — 배치에 없는 것만)
         items = self.tracking_repo.get_items_expiring_at(expiry_hour, today, store_id=self.store_id)
 
-        # 결과 포맷팅
+        # ★ OT의 remaining_qty가 부정확하므로, 배치 기반으로 실물 존재 여부 검증
+        # daily_sales.stock_qty도 교차 확인하여 이미 판매된 상품 제외
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
         result = []
         for item in items:
+            item_cd = item.get('item_cd')
             mid_cd = item.get('mid_cd', '')
             expiry_time_str = item.get('expiry_time', '')
+
+            # inventory_batches에 active remain > 0 배치가 있는지 확인
+            if item_cd not in batch_active_codes:
+                # 배치에 없으면 daily_sales.stock_qty로 재확인
+                try:
+                    store_filter = "AND store_id = ?" if self.store_id else ""
+                    store_params = (self.store_id,) if self.store_id else ()
+                    cursor.execute(f"""
+                        SELECT stock_qty FROM daily_sales
+                        WHERE item_cd = ? {store_filter}
+                        ORDER BY sales_date DESC LIMIT 1
+                    """, (item_cd,) + store_params)
+                    row = cursor.fetchone()
+                    if row and (row['stock_qty'] or 0) == 0:
+                        continue  # 재고 0 → 이미 판매, 제외
+                except Exception:
+                    pass
 
             # 폐기 시간 파싱
             try:
@@ -451,7 +475,7 @@ class ExpiryChecker:
 
             result.append({
                 'id': item.get('id'),
-                'item_cd': item.get('item_cd'),
+                'item_cd': item_cd,
                 'item_nm': item.get('item_nm'),
                 'mid_cd': mid_cd,
                 'category_name': ALERT_CATEGORIES.get(mid_cd, {}).get('name', '기타'),
