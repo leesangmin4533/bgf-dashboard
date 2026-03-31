@@ -123,7 +123,7 @@ class OrderTrackingRepository(BaseRepository):
                 SELECT *
                 FROM order_tracking
                 WHERE expiry_time LIKE ?
-                AND status IN ('ordered', 'arrived')
+                AND status = 'arrived'
                 AND remaining_qty > 0
                 AND alert_sent = 0
                 {store_filter}

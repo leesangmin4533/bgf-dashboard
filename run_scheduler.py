@@ -932,6 +932,25 @@ def withdrawal_alert_wrapper() -> None:
     _run_task(alert_task, "WithdrawalExpiryAlert")
 
 
+def receiving_mismatch_wrapper() -> None:
+    """발주-입고 불일치 감지 알림 (매일 10:25)"""
+    logger.info("=" * 60)
+    logger.info(f"Receiving mismatch alert at {datetime.now().isoformat()}")
+    logger.info("=" * 60)
+
+    def alert_task(ctx):
+        from src.alert.receiving_matcher import ReceivingMatcher
+        matcher = ReceivingMatcher(store_id=ctx.store_id, store_name=ctx.store_name)
+        try:
+            result = matcher.send_mismatch_alert(lookback_days=7)
+            return {"success": True, "sent": bool(result)}
+        except Exception as e:
+            logger.error(f"[{ctx.store_id}] 입고 불일치 알림 실패: {e}")
+            return {"success": False, "error": str(e)}
+
+    _run_task(alert_task, "ReceivingMismatchAlert")
+
+
 def nonfood_expiry_alert_wrapper() -> None:
     """비푸드 과자류 유통기한 7일 전 PDA 등록 유도 알림 (매일 10:15)
     현재 46513만 테스트, 추후 전 매장 확대
@@ -1605,6 +1624,10 @@ def run_scheduler(schedule_time: str = "07:00", multi_store: bool = True) -> Non
     # 4.7 BGF 전산 철수예정일 기반 폐기 알림 (매일 10:20)
     schedule.every().day.at("10:20").do(withdrawal_alert_wrapper)
     logger.info("[Schedule] Withdrawal expiry alert: 10:20")
+
+    # 4.8 발주-입고 불일치 감지 (매일 10:25)
+    schedule.every().day.at("10:25").do(receiving_mismatch_wrapper)
+    logger.info("[Schedule] Receiving mismatch alert: 10:25")
 
     # 5. 배송 도착 후 배치 동기화
     # 2차 배송 도착(07:00) -> 07:30 배치 체크
