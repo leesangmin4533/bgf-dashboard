@@ -901,7 +901,7 @@ def promotion_alert_wrapper() -> None:
 
 
 # 스낵/철수예정 테스트 대상 매장 (추후 전 매장 확대 시 None으로 변경)
-_NONFOOD_ALERT_TEST_STORES = {"46513"}
+_NONFOOD_ALERT_TEST_STORES = {"46513", "46704"}
 
 
 def withdrawal_alert_wrapper() -> None:
