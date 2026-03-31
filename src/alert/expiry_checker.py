@@ -21,6 +21,12 @@ from src.infrastructure.database.repos import (
     RealtimeInventoryRepository,
 )
 from src.alert.config import ALERT_CATEGORIES, ALERT_LEVELS, EXPIRY_ALERT_SCHEDULE, DELIVERY_CONFIG
+
+# 비푸드 유통기한 알림 대상 카테고리 (확장 시 여기에 추가)
+NONFOOD_ALERT_CATEGORIES = {
+    '015': '비스켓/쿠키',
+    '016': '스낵류',
+}
 from src.notification.kakao_notifier import KakaoNotifier, DEFAULT_REST_API_KEY
 from src.alert.delivery_utils import (
     get_delivery_type,
@@ -1104,6 +1110,103 @@ class ExpiryChecker:
 
         except Exception as e:
             logger.error(f"카카오톡 발송 실패: {e}")
+            return False
+
+
+    def generate_nonfood_expiry_message(self, days_ahead: int = 7) -> Optional[str]:
+        """비푸드 카테고리 유통기한 만료 알림 메시지 생성
+
+        NONFOOD_ALERT_CATEGORIES에 정의된 카테고리 대상.
+        발주불가/9999일/999일 제외.
+
+        Args:
+            days_ahead: N일 이내 만료 (기본 7)
+
+        Returns:
+            알림 메시지 (대상 없으면 None)
+        """
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        store_filter = "AND ib.store_id = ?" if self.store_id else ""
+        store_params = (self.store_id,) if self.store_id else ()
+        mid_codes = tuple(NONFOOD_ALERT_CATEGORIES.keys())
+        pd_prefix = "common." if self.store_id else ""
+
+        try:
+            cursor.execute(f"""
+                SELECT ib.item_cd, p.item_nm, p.mid_cd, ib.remaining_qty,
+                       ib.expiry_date, ib.receiving_date
+                FROM inventory_batches ib
+                JOIN {pd_prefix}products p ON ib.item_cd = p.item_cd
+                LEFT JOIN {pd_prefix}product_details pd ON ib.item_cd = pd.item_cd
+                WHERE ib.status = 'active'
+                  AND ib.remaining_qty > 0
+                  AND p.mid_cd IN ({','.join('?' * len(mid_codes))})
+                  AND ib.expiry_date <= date('now', '+' || ? || ' days')
+                  AND ib.expiry_date > date('now')
+                  AND COALESCE(ib.expiration_days, 0) NOT IN (9999, 999)
+                  AND COALESCE(pd.orderable_status, '가능') != '불가'
+                  {store_filter}
+                ORDER BY ib.expiry_date ASC
+            """, mid_codes + (days_ahead,) + store_params)
+
+            items = [dict(row) for row in cursor.fetchall()]
+            if not items:
+                return None
+
+            store_prefix = f"[{self.store_name}] " if self.store_name else ""
+            today = datetime.now().strftime('%m/%d')
+
+            lines = [f"{store_prefix}과자류 유통기한 알림 ({today})", ""]
+            lines.append(f"D-{days_ahead} 이내 만료 {len(items)}건:")
+
+            for item in items[:10]:
+                nm = item['item_nm'][:18]
+                exp = item['expiry_date'][:10]
+                qty = item['remaining_qty']
+                lines.append(f"  {nm}  만료 {exp[5:]}  {qty}개")
+
+            if len(items) > 10:
+                lines.append(f"  ...외 {len(items) - 10}건")
+
+            lines.append("")
+            total_qty = sum(i['remaining_qty'] for i in items)
+            lines.append(f"총 {len(items)}건 {total_qty}개 — 할인/소진 검토 필요")
+
+            return "\n".join(lines)
+        finally:
+            cursor.close()
+
+    def send_nonfood_expiry_alert(self, days_ahead: int = 7) -> bool:
+        """비푸드 과자류 유통기한 알림 발송 (나에게 보내기만)
+
+        Args:
+            days_ahead: N일 이내 만료 (기본 7)
+
+        Returns:
+            발송 성공 여부
+        """
+        msg = self.generate_nonfood_expiry_message(days_ahead)
+        if not msg:
+            logger.info(f"과자류 {days_ahead}일 이내 만료 대상 없음")
+            return True
+
+        try:
+            notifier = KakaoNotifier(DEFAULT_REST_API_KEY)
+            if not notifier.access_token:
+                logger.warning("카카오 토큰 없음. 과자류 알림 스킵.")
+                return False
+
+            result = notifier.send_message(msg, category="food_expiry")
+            if result:
+                logger.info("과자류 유통기한 알림 발송 완료")
+            # 단톡방: 비활성 (추후 활성화 시 아래 주석 해제)
+            # notifier.send_to_group(msg, store_id=self.store_id)
+            return result
+
+        except Exception as e:
+            logger.error(f"과자류 알림 발송 실패: {e}")
             return False
 
 

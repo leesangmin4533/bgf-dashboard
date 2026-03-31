@@ -900,6 +900,29 @@ def promotion_alert_wrapper() -> None:
     _run_task(alert_task, "PromotionAlert")
 
 
+def nonfood_expiry_alert_wrapper() -> None:
+    """비푸드 과자류 유통기한 7일 전 알림 (매일 07:30)"""
+    logger.info("=" * 60)
+    logger.info(f"Non-food expiry alert at {datetime.now().isoformat()}")
+    logger.info("=" * 60)
+
+    def alert_task(ctx):
+        from src.alert.expiry_checker import ExpiryChecker
+        checker = ExpiryChecker(store_id=ctx.store_id, store_name=ctx.store_name)
+        try:
+            result = checker.send_nonfood_expiry_alert(days_ahead=7)
+            if result:
+                logger.info(f"[{ctx.store_id}] 과자류 알림 완료")
+            return {"success": True, "sent": bool(result)}
+        except Exception as e:
+            logger.error(f"[{ctx.store_id}] 과자류 알림 실패: {e}")
+            return {"success": False, "error": str(e)}
+        finally:
+            checker.close()
+
+    _run_task(alert_task, "NonFoodExpiryAlert")
+
+
 def token_refresh_wrapper() -> None:
     """카카오 토큰 사전 갱신 (매일 06:30)
 
@@ -1535,6 +1558,10 @@ def run_scheduler(schedule_time: str = "07:00", multi_store: bool = True) -> Non
     # 4.5 행사 변경 알림 (매일 08:30)
     schedule.every().day.at("08:30").do(promotion_alert_wrapper)
     logger.info("[Schedule] Promotion alert: 08:30")
+
+    # 4.6 비푸드 과자류 유통기한 7일 전 알림 (매일 07:30)
+    schedule.every().day.at("07:30").do(nonfood_expiry_alert_wrapper)
+    logger.info("[Schedule] Non-food snack expiry alert: 07:30")
 
     # 5. 배송 도착 후 배치 동기화
     # 2차 배송 도착(07:00) -> 07:30 배치 체크
