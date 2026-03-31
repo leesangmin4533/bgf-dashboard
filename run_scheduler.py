@@ -901,7 +901,7 @@ def promotion_alert_wrapper() -> None:
 
 
 def withdrawal_alert_wrapper() -> None:
-    """BGF 전산 철수예정일 기반 폐기 알림 (매일 07:35)"""
+    """BGF 전산 철수예정일 기반 폐기 알림 (매일 10:05)"""
     logger.info("=" * 60)
     logger.info(f"Withdrawal expiry alert at {datetime.now().isoformat()}")
     logger.info("=" * 60)
@@ -924,7 +924,7 @@ def withdrawal_alert_wrapper() -> None:
 
 
 def nonfood_expiry_alert_wrapper() -> None:
-    """비푸드 과자류 유통기한 7일 전 PDA 등록 유도 알림 (매일 07:30)"""
+    """비푸드 과자류 유통기한 7일 전 PDA 등록 유도 알림 (매일 10:00)"""
     logger.info("=" * 60)
     logger.info(f"Non-food expiry alert at {datetime.now().isoformat()}")
     logger.info("=" * 60)
@@ -1582,13 +1582,13 @@ def run_scheduler(schedule_time: str = "07:00", multi_store: bool = True) -> Non
     schedule.every().day.at("08:30").do(promotion_alert_wrapper)
     logger.info("[Schedule] Promotion alert: 08:30")
 
-    # 4.6 비푸드 과자류 유통기한 7일 전 PDA 등록 유도 (매일 07:30)
-    schedule.every().day.at("07:30").do(nonfood_expiry_alert_wrapper)
-    logger.info("[Schedule] Non-food snack expiry alert (PDA guide): 07:30")
+    # 4.6 비푸드 과자류 유통기한 7일 전 PDA 등록 유도 (매일 10:00)
+    schedule.every().day.at("10:00").do(nonfood_expiry_alert_wrapper)
+    logger.info("[Schedule] Non-food snack expiry alert (PDA guide): 10:00")
 
-    # 4.7 BGF 전산 철수예정일 기반 폐기 알림 (매일 07:35)
-    schedule.every().day.at("07:35").do(withdrawal_alert_wrapper)
-    logger.info("[Schedule] Withdrawal expiry alert: 07:35")
+    # 4.7 BGF 전산 철수예정일 기반 폐기 알림 (매일 10:05)
+    schedule.every().day.at("10:05").do(withdrawal_alert_wrapper)
+    logger.info("[Schedule] Withdrawal expiry alert: 10:05")
 
     # 5. 배송 도착 후 배치 동기화
     # 2차 배송 도착(07:00) -> 07:30 배치 체크
