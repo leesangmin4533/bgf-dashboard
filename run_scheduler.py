@@ -1582,13 +1582,13 @@ def run_scheduler(schedule_time: str = "07:00", multi_store: bool = True) -> Non
     schedule.every().day.at("08:30").do(promotion_alert_wrapper)
     logger.info("[Schedule] Promotion alert: 08:30")
 
-    # 4.6 비푸드 과자류 유통기한 7일 전 PDA 등록 유도 (매일 10:00)
-    schedule.every().day.at("10:00").do(nonfood_expiry_alert_wrapper)
-    logger.info("[Schedule] Non-food snack expiry alert (PDA guide): 10:00")
+    # 4.6 비푸드 과자류 유통기한 7일 전 PDA 등록 유도 (매일 10:15)
+    schedule.every().day.at("10:15").do(nonfood_expiry_alert_wrapper)
+    logger.info("[Schedule] Non-food snack expiry alert (PDA guide): 10:15")
 
-    # 4.7 BGF 전산 철수예정일 기반 폐기 알림 (매일 10:05)
-    schedule.every().day.at("10:05").do(withdrawal_alert_wrapper)
-    logger.info("[Schedule] Withdrawal expiry alert: 10:05")
+    # 4.7 BGF 전산 철수예정일 기반 폐기 알림 (매일 10:20)
+    schedule.every().day.at("10:20").do(withdrawal_alert_wrapper)
+    logger.info("[Schedule] Withdrawal expiry alert: 10:20")
 
     # 5. 배송 도착 후 배치 동기화
     # 2차 배송 도착(07:00) -> 07:30 배치 체크
