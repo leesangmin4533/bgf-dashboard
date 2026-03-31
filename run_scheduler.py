@@ -900,6 +900,10 @@ def promotion_alert_wrapper() -> None:
     _run_task(alert_task, "PromotionAlert")
 
 
+# 스낵/철수예정 테스트 대상 매장 (추후 전 매장 확대 시 None으로 변경)
+_NONFOOD_ALERT_TEST_STORES = {"46513"}
+
+
 def withdrawal_alert_wrapper() -> None:
     """BGF 전산 철수예정일 기반 폐기 알림 (매일 10:05)"""
     logger.info("=" * 60)
@@ -907,6 +911,11 @@ def withdrawal_alert_wrapper() -> None:
     logger.info("=" * 60)
 
     def alert_task(ctx):
+        # 테스트 매장만 실행 (스낵 테스트와 동일 범위)
+        if _NONFOOD_ALERT_TEST_STORES and ctx.store_id not in _NONFOOD_ALERT_TEST_STORES:
+            logger.info(f"[{ctx.store_id}] 철수예정 알림 테스트 대상 아님 — 스킵")
+            return {"success": True, "skipped": True}
+
         from src.alert.expiry_checker import ExpiryChecker
         checker = ExpiryChecker(store_id=ctx.store_id, store_name=ctx.store_name)
         try:
@@ -924,12 +933,19 @@ def withdrawal_alert_wrapper() -> None:
 
 
 def nonfood_expiry_alert_wrapper() -> None:
-    """비푸드 과자류 유통기한 7일 전 PDA 등록 유도 알림 (매일 10:00)"""
+    """비푸드 과자류 유통기한 7일 전 PDA 등록 유도 알림 (매일 10:15)
+    현재 46513만 테스트, 추후 전 매장 확대
+    """
     logger.info("=" * 60)
     logger.info(f"Non-food expiry alert at {datetime.now().isoformat()}")
     logger.info("=" * 60)
 
     def alert_task(ctx):
+        # 테스트 매장만 실행
+        if _NONFOOD_ALERT_TEST_STORES and ctx.store_id not in _NONFOOD_ALERT_TEST_STORES:
+            logger.info(f"[{ctx.store_id}] 스낵 알림 테스트 대상 아님 — 스킵")
+            return {"success": True, "skipped": True}
+
         from src.alert.expiry_checker import ExpiryChecker
         checker = ExpiryChecker(store_id=ctx.store_id, store_name=ctx.store_name)
         try:

@@ -1013,67 +1013,49 @@ class ExpiryChecker:
             알림 메시지 (없으면 None)
         """
         alerts = self.get_alert_items()
-        batch_expiring = self.get_batch_expiring_items(days_ahead=7)
 
-        # 알림 대상 없으면 None
+        # 푸드류만 (비푸드는 별도 알림으로 분리됨)
         food_total = sum(len(items) for items in alerts.values())
-        batch_total = len(batch_expiring)
-        if food_total == 0 and batch_total == 0:
+        if food_total == 0:
             return None
 
         lines = []
         store_prefix = f"[{self.store_name}] " if self.store_name else ""
-        lines.append(f"{store_prefix}📦 폐기 위험 알림 ({datetime.now().strftime('%m/%d %H:%M')})")
+        lines.append(f"{store_prefix}📦 푸드 폐기 위험 알림 ({datetime.now().strftime('%m/%d %H:%M')})")
         lines.append("")
 
-        # === 푸드류 (시간 기반) ===
-        if food_total > 0:
-            lines.append(f"[푸드류] {food_total}건")
+        if alerts['expired']:
+            lines.append(f"⚫ 폐기 처리 필요 ({len(alerts['expired'])}개)")
+            for item in alerts['expired'][:5]:
+                expiry = item.get('expiry_time')
+                expiry_str = expiry.strftime('%H:%M') if expiry else ""
+                lines.append(f"  • {item['item_nm'][:12]} {item['current_stock']}개 (폐기:{expiry_str})")
+            if len(alerts['expired']) > 5:
+                lines.append(f"  ... 외 {len(alerts['expired']) - 5}개")
             lines.append("")
 
-            if alerts['expired']:
-                lines.append(f"⚫ 폐기 처리 필요 ({len(alerts['expired'])}개)")
-                for item in alerts['expired'][:5]:
-                    expiry = item.get('expiry_time')
-                    expiry_str = expiry.strftime('%H:%M') if expiry else ""
-                    lines.append(f"  • {item['item_nm'][:12]} {item['current_stock']}개 (폐기:{expiry_str})")
-                if len(alerts['expired']) > 5:
-                    lines.append(f"  ... 외 {len(alerts['expired']) - 5}개")
-                lines.append("")
+        if alerts['urgent']:
+            lines.append(f"🔴 긴급 ({len(alerts['urgent'])}개)")
+            for item in alerts['urgent'][:5]:
+                remaining = item.get('remaining_hours', 0)
+                remaining_str = format_time_remaining(remaining)
+                delivery = item.get('delivery_type', '')
+                lines.append(f"  • {item['item_nm'][:12]} {item['current_stock']}개 ({delivery}, {remaining_str})")
+            if len(alerts['urgent']) > 5:
+                lines.append(f"  ... 외 {len(alerts['urgent']) - 5}개")
+            lines.append("")
 
-            if alerts['urgent']:
-                lines.append(f"🔴 긴급 ({len(alerts['urgent'])}개)")
-                for item in alerts['urgent'][:5]:
-                    remaining = item.get('remaining_hours', 0)
-                    remaining_str = format_time_remaining(remaining)
-                    delivery = item.get('delivery_type', '')
-                    lines.append(f"  • {item['item_nm'][:12]} {item['current_stock']}개 ({delivery}, {remaining_str})")
-                if len(alerts['urgent']) > 5:
-                    lines.append(f"  ... 외 {len(alerts['urgent']) - 5}개")
-                lines.append("")
+        if alerts['warning']:
+            lines.append(f"🟡 주의 ({len(alerts['warning'])}개)")
+            for item in alerts['warning'][:3]:
+                remaining = item.get('remaining_hours', 0)
+                remaining_str = format_time_remaining(remaining)
+                lines.append(f"  • {item['item_nm'][:12]} {item['current_stock']}개 ({remaining_str})")
+            if len(alerts['warning']) > 3:
+                lines.append(f"  ... 외 {len(alerts['warning']) - 3}개")
+            lines.append("")
 
-            if alerts['warning']:
-                lines.append(f"🟡 주의 ({len(alerts['warning'])}개)")
-                for item in alerts['warning'][:3]:
-                    remaining = item.get('remaining_hours', 0)
-                    remaining_str = format_time_remaining(remaining)
-                    lines.append(f"  • {item['item_nm'][:12]} {item['current_stock']}개 ({remaining_str})")
-                if len(alerts['warning']) > 3:
-                    lines.append(f"  ... 외 {len(alerts['warning']) - 3}개")
-                lines.append("")
-
-        # === 비-푸드류 (배치 기반) ===
-        if batch_total > 0:
-            lines.append(f"[비-푸드 유통기한 만료 임박] {batch_total}건")
-            for batch in batch_expiring[:10]:
-                item_nm = batch.get('item_nm', '')[:12]
-                remaining = batch.get('remaining_qty', 0)
-                expiry_date = batch.get('expiry_date', '')
-                recv_date = batch.get('receiving_date', '')
-                recv_tag = f" 입고:{recv_date}" if recv_date else ""
-                lines.append(f"  • {item_nm} {remaining}개 (만료:{expiry_date}{recv_tag})")
-            if batch_total > 10:
-                lines.append(f"  ... 외 {batch_total - 10}건")
+        lines.append(f"총 {food_total}건")
 
         return "\n".join(lines)
 
