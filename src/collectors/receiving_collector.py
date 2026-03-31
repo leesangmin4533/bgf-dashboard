@@ -700,24 +700,38 @@ class ReceivingCollector:
 
         return ""
 
-    def _get_expiration_days(self, mid_cd: str) -> int:
+    def _get_expiration_days(self, mid_cd: str, item_cd: str = None) -> int:
         """
-        카테고리별 유통기한 조회
+        유통기한 조회 (product_details 우선 → 카테고리 기본값 폴백)
 
         Args:
             mid_cd: 중분류 코드
+            item_cd: 상품코드 (product_details 조회용)
 
         Returns:
             유통기한 (일)
         """
+        # 1순위: product_details (다이렉트 API 실제값)
+        if item_cd:
+            try:
+                from src.infrastructure.database.repos import ProductDetailRepository
+                repo = ProductDetailRepository()
+                pd = repo.get_detail(item_cd)
+                if pd and pd.get('expiration_days'):
+                    exp = pd['expiration_days']
+                    if exp not in (9999, 999):  # 비식품 마커 제외
+                        return exp
+            except Exception:
+                pass
+
         if not mid_cd:
             return DEFAULT_EXPIRY_DAYS_NON_FOOD
 
-        # 카테고리별 매핑에서 조회
+        # 2순위: 카테고리별 매핑에서 조회
         if mid_cd in CATEGORY_EXPIRY_DAYS:
             return CATEGORY_EXPIRY_DAYS[mid_cd]
 
-        # 푸드류/비푸드류 기본값
+        # 3순위: 푸드류/비푸드류 기본값
         if mid_cd in FOOD_CATEGORIES:
             return DEFAULT_EXPIRY_DAYS_FOOD
         else:
@@ -968,8 +982,8 @@ class ReceivingCollector:
                 # NULL = NULL은 SQLite에서 FALSE → 빈 order_date로 조회 시 항상 miss → 중복 생성 방지
                 effective_order_date = order_date if order_date else recv_date
 
-                # 유통기한 조회 (카테고리별) — 공통으로 사용
-                expiration_days = self._get_expiration_days(mid_cd)
+                # 유통기한 조회 (product_details 우선 → 카테고리 폴백)
+                expiration_days = self._get_expiration_days(mid_cd, item_cd=item_cd)
 
                 # 1차/2차 판별
                 center_nm = record.get('center_nm', '')
