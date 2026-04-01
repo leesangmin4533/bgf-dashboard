@@ -1208,8 +1208,8 @@ class ExpiryChecker:
             result = notifier.send_message(msg, category="food_expiry")
             if result:
                 logger.info("과자류 유통기한 알림 발송 완료")
-            # 단톡방: 비활성 (추후 활성화 시 아래 주석 해제)
-            # notifier.send_to_group(msg, store_id=self.store_id)
+            # 단톡방 전송 (group_chat.json에서 enabled=true인 매장만)
+            notifier.send_to_group(msg, store_id=self.store_id)
             return result
 
         except Exception as e:
