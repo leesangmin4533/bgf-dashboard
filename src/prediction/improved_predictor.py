@@ -241,6 +241,10 @@ class PredictionResult:
     round_floor: int = 0                   # 배수 내림 후보
     round_ceil: int = 0                    # 배수 올림 후보
 
+    # 행사 종료 후 평시 수요 (Branch D 캡 적용 시 설정)
+    # order_adjuster 재계산 시 adjusted_qty 대신 이 값을 사용하여 캡 무효화 방지
+    effective_predicted_sales: Optional[float] = None
+
     # 골든 스냅샷용 단계별 중간값 (리팩토링 검증, dry_run 시에만 채워짐)
     snapshot_stages: Optional[Dict[str, Any]] = None
 
@@ -1015,6 +1019,8 @@ class ImprovedPredictor:
             proposal_summary=self._build_proposal_summary(result_ctx.get("_proposal")),
             round_floor=result_ctx.get("_round_floor", 0),
             round_ceil=result_ctx.get("_round_ceil", 0),
+            # 행사 종료 후 평시 수요 (Branch D 캡 적용 시)
+            effective_predicted_sales=result_ctx.get("_effective_predicted_sales"),
             # 골든 스냅샷용 단계별 중간값
             snapshot_stages=result_ctx.get("_snapshot_stages"),
         )
@@ -2568,6 +2574,14 @@ class ImprovedPredictor:
             _skipped = False
             _promo_demand = 0.0
             _initial_qty = order_qty
+
+        # Branch D 적용 시 행사 전 평시 수요를 저장 (order_adjuster 재계산용)
+        # order_adjuster가 재고 변동 시 predicted_sales(=adjusted_qty)로 재계산하면
+        # Branch D 캡이 무효화되므로, 캡이 적용된 수요 기준을 전달한다.
+        if ctx is not None and _promo_branch == "D-normal_adjust":
+            ctx["_effective_predicted_sales"] = round(
+                promo_status.normal_avg * weekday_coef, 2
+            )
 
         # trace 저장
         if ctx is not None:

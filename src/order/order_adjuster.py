@@ -202,7 +202,7 @@ class OrderAdjuster:
                 exp_days = item.get('expiration_days')
                 mid_cd = item.get('mid_cd', '')
 
-                new_qty = self.recalculate_need_qty(
+                raw_new_qty = self.recalculate_need_qty(
                     predicted_sales=predicted_sales,
                     safety_stock=safety_stock,
                     new_stock=max(0, new_stock),
@@ -213,6 +213,21 @@ class OrderAdjuster:
                     expiration_days=exp_days,
                     mid_cd=mid_cd
                 )
+
+                # 재계산 상한: 원 발주량 + 재고/미입고 감소분 (캡 무효화 방지)
+                # prediction에서 적용된 캡(Branch D 등)이 재계산으로 무효화되는 것을 방지
+                stock_decrease = max(0, original_stock - new_stock)
+                pending_decrease = max(0, original_pending - new_pending)
+                cap_new_qty = original_qty + stock_decrease + pending_decrease
+                new_qty = min(raw_new_qty, cap_new_qty)
+
+                if new_qty != raw_new_qty:
+                    logger.info(
+                        f"[미입고조정-캡] {item_name[:20]}: "
+                        f"raw={raw_new_qty} → cap={new_qty} "
+                        f"(원발주={original_qty}+재고감소={stock_decrease}+미입고감소={pending_decrease})"
+                    )
+
                 recalculated_count += 1
 
                 stock_discrepancies.append({

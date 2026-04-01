@@ -786,7 +786,10 @@ class AutoOrderSystem:
 
                 if pred:
                     order_entry.update({
-                        "predicted_sales": round(getattr(pred, "adjusted_qty", 0), 2),
+                        "predicted_sales": round(
+                            getattr(pred, "effective_predicted_sales", None)
+                            or getattr(pred, "adjusted_qty", 0), 2
+                        ),
                         "current_stock": getattr(pred, "current_stock", 0),
                         "pending_receiving_qty": getattr(pred, "pending_qty", 0),
                         "safety_stock": getattr(pred, "safety_stock", 0),
@@ -979,7 +982,10 @@ class AutoOrderSystem:
             "current_stock": result.current_stock,
             "pending_receiving_qty": result.pending_qty,
             "expected_stock": result.current_stock + result.pending_qty,
-            "predicted_sales": round(result.adjusted_qty, 2),
+            "predicted_sales": round(
+                getattr(result, "effective_predicted_sales", None)
+                or result.adjusted_qty, 2
+            ),
             "daily_avg": result.predicted_qty,
             "weekday_coef": result.weekday_coef,
             "safety_stock": result.safety_stock,
@@ -1224,14 +1230,14 @@ class AutoOrderSystem:
 
             # 예측 결과 로그 저장 (Phase 1.7에서 이미 저장했으면 스킵)
             if skip_db_write:
-                logger.info(f"예측 로그: skip_db_write=True, 스킵")
+                logger.info("예측 로그: skip_db_write=True, 스킵")
             else:
                 try:
                     saved_count = self.prediction_logger.log_predictions_batch_if_needed(candidates)
                     if saved_count > 0:
                         logger.info(f"예측 로그 저장: {saved_count}/{len(candidates)}건")
                     else:
-                        logger.info(f"예측 로그: 이미 기록됨 (Phase 1.7), 스킵")
+                        logger.info("예측 로그: 이미 기록됨 (Phase 1.7), 스킵")
                 except Exception as e:
                     logger.warning(f"예측 로그 저장 실패: {e}")
 
@@ -1661,7 +1667,7 @@ class AutoOrderSystem:
             # 4단계: 기존 발주 목록을 미입고/실시간재고 데이터로 직접 업데이트
             # [v10 최적화] get_recommendations() 재호출 없이 직접 조정
             if pending_data or (hasattr(self, '_last_stock_data') and self._last_stock_data):
-                logger.info(f"4단계: 미입고+실시간재고 직접 반영 (재호출 없음)...")
+                logger.info("4단계: 미입고+실시간재고 직접 반영 (재호출 없음)...")
 
                 before_total = sum(item.get('final_order_qty', 0) for item in order_list)
 
