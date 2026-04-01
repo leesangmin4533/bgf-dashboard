@@ -25,6 +25,8 @@ from src.settings.constants import (
     DESSERT_CONFIRMED_STOP_WASTE_WEEKS,
     DESSERT_CONFIRMED_STOP_WASTE_DAYS,
     DESSERT_WASTE_RATE_STOP_THRESHOLD,
+    DESSERT_CONFIRMED_STOP_CUMULATIVE_WASTE_RATE,
+    DESSERT_CONFIRMED_STOP_CUMULATIVE_DAYS,
 )
 from src.prediction.categories.dessert_decision.classifier import classify_dessert_category
 from src.prediction.categories.dessert_decision.lifecycle import determine_lifecycle
@@ -296,25 +298,68 @@ class DessertDecisionService:
             if high_waste_weeks >= DESSERT_CONFIRMED_STOP_WASTE_WEEKS:
                 confirmed_cds.append(item_cd)
 
+        # --- 신규: 누적 폐기율 기준 (연속 조건 미충족 잔여분 대상) ---
+        confirmed_set = set(confirmed_cds)
+        remaining = [ic for ic in stop_items if ic not in confirmed_set]
+        cumulative_confirmed = []
+        if remaining:
+            cutoff = (ref - timedelta(
+                days=DESSERT_CONFIRMED_STOP_CUMULATIVE_DAYS
+            )).strftime("%Y-%m-%d")
+            for item_cd in remaining:
+                cursor = conn.execute("""
+                    SELECT COALESCE(SUM(sale_qty), 0),
+                           COALESCE(SUM(disuse_qty), 0)
+                    FROM daily_sales
+                    WHERE item_cd = ? AND sales_date > ?
+                """, (item_cd, cutoff))
+                sale, disuse = cursor.fetchone()
+                wr = calc_waste_rate(sale, disuse)
+                if wr >= DESSERT_CONFIRMED_STOP_CUMULATIVE_WASTE_RATE:
+                    cumulative_confirmed.append(item_cd)
+
+            if cumulative_confirmed:
+                confirmed_cds.extend(cumulative_confirmed)
+                logger.info(
+                    f"[디저트판단] 누적폐기율 자동확인 {len(cumulative_confirmed)}건 "
+                    f"({DESSERT_CONFIRMED_STOP_CUMULATIVE_DAYS}일 누적 "
+                    f"폐기율 {DESSERT_CONFIRMED_STOP_CUMULATIVE_WASTE_RATE:.0%} 이상)"
+                )
+
         if not confirmed_cds:
             return []
 
-        confirmed = self.decision_repo.batch_update_operator_action(
-            item_cds=confirmed_cds,
-            action="CONFIRMED_STOP",
-            operator_note=f"auto: 폐기율 {DESSERT_WASTE_RATE_STOP_THRESHOLD:.0%} "
-                          f"{DESSERT_CONFIRMED_STOP_WASTE_WEEKS}주 연속 자동확인",
-            store_id=self.store_id,
-        )
+        # 연속 기준 확정분과 누적 기준 확정분의 note 구분
+        weekly_cds = [ic for ic in confirmed_cds if ic not in set(cumulative_confirmed)]
+        cumul_cds = cumulative_confirmed
 
-        result_cds = [c["item_cd"] for c in confirmed]
-        if result_cds:
-            logger.info(
-                f"[디저트판단] 폐기율 자동확인 {len(result_cds)}건 "
-                f"(폐기율 {DESSERT_WASTE_RATE_STOP_THRESHOLD:.0%} "
-                f"{DESSERT_CONFIRMED_STOP_WASTE_WEEKS}주 연속 → CONFIRMED_STOP)"
+        all_result_cds = []
+        if weekly_cds:
+            confirmed = self.decision_repo.batch_update_operator_action(
+                item_cds=weekly_cds,
+                action="CONFIRMED_STOP",
+                operator_note=f"auto: 폐기율 {DESSERT_WASTE_RATE_STOP_THRESHOLD:.0%} "
+                              f"{DESSERT_CONFIRMED_STOP_WASTE_WEEKS}주 연속 자동확인",
+                store_id=self.store_id,
             )
-        return result_cds
+            all_result_cds.extend(c["item_cd"] for c in confirmed)
+
+        if cumul_cds:
+            confirmed = self.decision_repo.batch_update_operator_action(
+                item_cds=cumul_cds,
+                action="CONFIRMED_STOP",
+                operator_note=f"auto: {DESSERT_CONFIRMED_STOP_CUMULATIVE_DAYS}일 "
+                              f"누적 폐기율 {DESSERT_CONFIRMED_STOP_CUMULATIVE_WASTE_RATE:.0%} 자동확인",
+                store_id=self.store_id,
+            )
+            all_result_cds.extend(c["item_cd"] for c in confirmed)
+
+        if all_result_cds:
+            logger.info(
+                f"[디저트판단] 폐기율 자동확인 총 {len(all_result_cds)}건 "
+                f"(연속={len(weekly_cds)}, 누적={len(cumul_cds)} → CONFIRMED_STOP)"
+            )
+        return all_result_cds
 
     def _notify_confirmed_stop(
         self,
