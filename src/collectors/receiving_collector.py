@@ -456,6 +456,17 @@ class ReceivingCollector:
                 logger.debug("[ReceivingAPI] API 조회 결과 없음, Selenium 폴백")
                 return None
 
+            # 성공률 체크: 50% 미만이면 Selenium 폴백
+            ok_count = len(results)
+            success_rate = ok_count / len(chit_nos) if chit_nos else 0
+            if success_rate < 0.5:
+                logger.warning(
+                    f"[ReceivingAPI] 성공률 낮음 "
+                    f"({ok_count}/{len(chit_nos)}={success_rate:.0%}), "
+                    f"Selenium 폴백"
+                )
+                return None
+
             # SSV 딕셔너리 → 입고 레코드 변환
             all_data = []
             for chit in chit_list:
@@ -468,7 +479,7 @@ class ReceivingCollector:
 
             logger.info(
                 f"[ReceivingAPI] Direct API 성공: "
-                f"{len(chit_nos)}전표, {len(all_data)}건"
+                f"{len(chit_nos)}전표, {ok_count}성공, {len(all_data)}건"
             )
             return all_data
 
