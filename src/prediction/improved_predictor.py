@@ -1658,15 +1658,23 @@ class ImprovedPredictor:
         if self._cost_optimizer and self._cost_optimizer.enabled and not _is_slow_override:
             cost_info = self._cost_optimizer.get_item_cost_info(item_cd, daily_avg=daily_avg, mid_cd=mid_cd)
             if cost_info.enabled and cost_info.composite_score != 1.0:
-                original_safety = safety_stock
-                safety_stock *= cost_info.composite_score
-                safety_stock = max(safety_stock, 0)
-                logger.info(
-                    f"[비용최적화] {product['item_nm']}: "
-                    f"안전재고 {original_safety:.1f}→{safety_stock:.1f} "
-                    f"(마진={cost_info.margin_rate}%, 회전={cost_info.turnover_level}, "
-                    f"비중={cost_info.category_share:.1%}, 계수={cost_info.composite_score:.2f})"
-                )
+                # WMA=0 상품에 인플레이션 계수(>1) 적용 금지: 수요 없는 상품의 과잉 safety 방지
+                if daily_avg == 0 and cost_info.composite_score > 1.0:
+                    logger.info(
+                        f"[비용최적화스킵] {product['item_nm']}: "
+                        f"WMA=0, composite_score={cost_info.composite_score:.2f} 인플레이션 방지 "
+                        f"(safety={safety_stock:.1f} 유지)"
+                    )
+                else:
+                    original_safety = safety_stock
+                    safety_stock *= cost_info.composite_score
+                    safety_stock = max(safety_stock, 0)
+                    logger.info(
+                        f"[비용최적화] {product['item_nm']}: "
+                        f"안전재고 {original_safety:.1f}→{safety_stock:.1f} "
+                        f"(마진={cost_info.margin_rate}%, 회전={cost_info.turnover_level}, "
+                        f"비중={cost_info.category_share:.1%}, 계수={cost_info.composite_score:.2f})"
+                    )
 
         # 간헐적 수요: 최소 안전재고 보장
         if sell_day_ratio < 0.3 and daily_avg > 0:
@@ -1754,6 +1762,18 @@ class ImprovedPredictor:
                 need_qty = 0
                 proposal.set(0, "stock_gate_entry",
                     f"가용={effective_stock} >= 필요={cover_need:.1f}")
+
+        # ★ WMA=0 + 재고 있음 가드: 비용최적화 잔여 인플레이션 또는 기타 경로로
+        # safety > stock이 되더라도 수요 없는 상품은 발주 차단 (defense-in-depth)
+        if adjusted_prediction == 0 and effective_stock > 0 and need_qty > 0:
+            logger.info(
+                f"[WMA0가드] {product['item_nm']}: "
+                f"WMA=0, 가용={effective_stock}(stk={effective_stock_for_need}+pnd={effective_pending}), "
+                f"need {need_qty:.1f}→0 차단"
+            )
+            need_qty = 0
+            proposal.set(0, "stock_gate_wma_zero",
+                f"WMA=0, stock={effective_stock_for_need}+pnd={effective_pending}")
 
         # FORCE_ORDER 발주량 상한
         if current_stock <= 0 and need_qty > 0 and adjusted_prediction > 0:
@@ -2293,10 +2313,10 @@ class ImprovedPredictor:
             )
             return 0
 
-        if rule_result.stage == "rules_overstock":
+        if rule_result.stage in ("rules_overstock", "rules_overstock_zero_demand"):
             logger.debug(
                 f"[FINALIZE] {store_id}:{item_cd} → 0 "
-                f"(rules_overstock: {rule_result.reason})"
+                f"({rule_result.stage}: {rule_result.reason})"
             )
             return 0
 
