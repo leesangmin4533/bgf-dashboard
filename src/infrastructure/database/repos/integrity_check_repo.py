@@ -300,6 +300,7 @@ class IntegrityCheckRepository(BaseRepository):
                 WHERE store_id = ?
                   AND status NOT IN ('expired', 'disposed', 'cancelled')
                   AND (delivery_type IS NULL OR delivery_type = '')
+                  AND order_source != 'site'
             """
             cursor.execute(f"SELECT COUNT(*) as cnt {_where}", (store_id,))
             count = cursor.fetchone()["cnt"]

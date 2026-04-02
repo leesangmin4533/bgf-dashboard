@@ -50,5 +50,11 @@
     "startedAt": "2026-04-02T12:00:00Z",
     "archivedAt": "2026-04-02T13:00:00Z",
     "archivedTo": "docs/archive/2026-04/db-router-unify/"
+  },
+  "self-healing-executor": {
+    "phase": "design",
+    "matchRate": null,
+    "iterationCount": 0,
+    "startedAt": "2026-04-02T14:00:00Z"
   }
 }

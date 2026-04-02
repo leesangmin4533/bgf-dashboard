@@ -70,3 +70,53 @@ class ActionProposalRepository(BaseRepository):
             conn.commit()
         finally:
             conn.close()
+
+    def mark_executed(self, proposal_id: int) -> None:
+        """EXECUTED 상태 + executed_at 기록"""
+        conn = self._get_conn()
+        try:
+            conn.execute(
+                """
+                UPDATE action_proposals
+                SET status = 'EXECUTED', executed_at = datetime('now', 'localtime')
+                WHERE id = ?
+                """,
+                (proposal_id,),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def mark_verified(self, proposal_id: int, result: str) -> None:
+        """검증 결과 기록 (success/failed/skipped)"""
+        conn = self._get_conn()
+        try:
+            conn.execute(
+                """
+                UPDATE action_proposals
+                SET verified_at = datetime('now', 'localtime'), verified_result = ?
+                WHERE id = ?
+                """,
+                (result, proposal_id),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def get_executed_yesterday(self, store_id: str) -> List[Dict[str, Any]]:
+        """전날 EXECUTED 건 조회 (검증 대상)"""
+        conn = self._get_conn()
+        try:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT * FROM action_proposals
+                WHERE store_id = ? AND status = 'EXECUTED'
+                AND date(executed_at) = date('now', '-1 day', 'localtime')
+                ORDER BY id
+                """,
+                (store_id,),
+            )
+            return [dict(r) for r in cursor.fetchall()]
+        finally:
+            conn.close()

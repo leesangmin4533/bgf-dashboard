@@ -278,8 +278,21 @@ def run_calibration_phases(ctx: Dict[str, Any]) -> Dict[str, Any]:
     except Exception as e:
         logger.warning(f"[Phase 1.66] 배치 FIFO 동기화 실패 (발주 플로우 계속): {e}")
 
-    # ★ 데이터 무결성 검증 (Phase 1.67)
-    # Phase 1.66 FIFO 동기화 후, 남아있는 데이터 이상치 자동 감지
+    # ★ 자전 시스템 (Phase 1.67) — 감지 → 판단 → 보고 → 실행 → 검증
+
+    # 1.67a: 전날 실행 건 검증 (4번째 고리)
+    try:
+        from src.application.services.execution_verifier import ExecutionVerifier
+        verify_result = ExecutionVerifier(store_id).verify_previous_day()
+        if verify_result["verified"] > 0:
+            logger.info(
+                f"[Phase 1.67a] 전날 실행 검증: "
+                f"{verify_result['success']}건 성공, {verify_result['failed']}건 실패"
+            )
+    except Exception as e:
+        logger.warning(f"[Phase 1.67a] 전날 검증 실패 (계속): {e}")
+
+    # 1.67b: 데이터 무결성 검증 (1~2번째 고리: 감지+판단+보고)
     try:
         with phase_timer("1.67", "Data Integrity Verification",
                          store_id=store_id, _logger=logger,
@@ -297,6 +310,18 @@ def run_calibration_phases(ctx: Dict[str, Any]) -> Dict[str, Any]:
             else:
                 logger.info("데이터 무결성 검증 통과 (이상 없음)")
     except Exception as e:
-        logger.warning(f"[Phase 1.67] 무결성 검증 실패 (발주 플로우 계속): {e}")
+        logger.warning(f"[Phase 1.67b] 무결성 검증 실패 (발주 플로우 계속): {e}")
+
+    # 1.67c: 자동 실행 (3번째 고리)
+    try:
+        from src.application.services.auto_executor import AutoExecutor
+        exec_result = AutoExecutor(store_id).run()
+        if exec_result["executed"] + exec_result["approval_requested"] > 0:
+            logger.info(
+                f"[Phase 1.67c] 자전 실행: "
+                f"자동={exec_result['executed']}, 승인요청={exec_result['approval_requested']}"
+            )
+    except Exception as e:
+        logger.warning(f"[Phase 1.67c] 자전 실행 실패 (계속): {e}")
 
     return ctx

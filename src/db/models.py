@@ -1822,6 +1822,12 @@ CREATE TABLE IF NOT EXISTS expiry_management (
 CREATE INDEX IF NOT EXISTS idx_em_expire ON expiry_management(store_id, expire_ymd);
 CREATE INDEX IF NOT EXISTS idx_em_item ON expiry_management(item_cd);
     """,
+    70: """
+-- v70: action_proposals 자전 시스템 실행/검증 컬럼
+ALTER TABLE action_proposals ADD COLUMN executed_at TIMESTAMP;
+ALTER TABLE action_proposals ADD COLUMN verified_at TIMESTAMP;
+ALTER TABLE action_proposals ADD COLUMN verified_result TEXT;
+    """,
 }
 
 

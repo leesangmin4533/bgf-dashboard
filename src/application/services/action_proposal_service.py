@@ -27,10 +27,22 @@ class ActionProposalService:
         self.eval_repo = EvalOutcomeRepository(store_id=store_id)
 
     def generate(self, check_results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """제안 생성 → DB 저장 → 목록 반환. 실패 시 빈 리스트."""
+        """제안 생성 → 중복 필터 → DB 저장 → 목록 반환. 실패 시 빈 리스트."""
         proposals: List[Dict[str, Any]] = []
         try:
-            proposals = self._analyze(check_results)
+            # 오늘 이미 PENDING인 action_type → 중복 재생성 방지
+            existing = self.proposal_repo.get_pending(self.store_id, self.today)
+            existing_types = {p["action_type"] for p in existing}
+
+            all_proposals = self._analyze(check_results)
+            proposals = [p for p in all_proposals if p["action_type"] not in existing_types]
+
+            if len(all_proposals) > len(proposals):
+                logger.info(
+                    f"[제안] {self.store_id} 중복 필터: "
+                    f"{len(all_proposals)}건 → {len(proposals)}건 (기존 PENDING {len(existing_types)}건)"
+                )
+
             for p in proposals:
                 self.proposal_repo.save(p)
             if proposals:

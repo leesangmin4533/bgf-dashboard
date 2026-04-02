@@ -252,7 +252,17 @@ BATCH_EXPIRY_ALERT_DAYS = 1             # 폐기 N일 전 알림
 
 # DB 스키마 버전
 # =====================================================================
-DB_SCHEMA_VERSION = 69  # v69: expiry_management (BGF 상품 유통기한 관리 수집)
+DB_SCHEMA_VERSION = 70  # v70: action_proposals 실행/검증 컬럼 + 자전 시스템
+
+# =====================================================================
+# 자전 시스템 (self-healing) 실행 분류
+# =====================================================================
+AUTO_EXEC_HIGH = frozenset({"CLEAR_EXPIRED_BATCH"})
+AUTO_EXEC_LOW = frozenset({
+    "CLEAR_GHOST_STOCK", "RESTORE_IS_AVAILABLE", "DEACTIVATE_EXPIRED"
+})
+AUTO_EXEC_INFO = frozenset({"FIX_EXPIRY_TIME", "MANUAL_CHECK_REQUIRED"})
+AUTO_EXEC_SKIP = frozenset({"CHECK_DELIVERY_TYPE"})
 
 # =====================================================================
 # 디저트 판단 시스템
