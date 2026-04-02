@@ -188,14 +188,42 @@ def analyze_beer_pattern(
         """, (item_cd, config["analysis_days"]))
 
     row = cursor.fetchone()
-    conn.close()
 
     data_days = row[0] or 0
     total_sales = row[1] or 0
     has_enough_data = data_days >= config["min_data_days"]
 
-    # 일평균 계산
-    daily_avg = (total_sales / data_days) if data_days > 0 else 0.0
+    # 일평균 계산 (이상치 cap 적용: 대량 일괄판매 왜곡 방지)
+    if data_days >= 5 and total_sales > 0:
+        if store_id:
+            cursor.execute("""
+                SELECT sale_qty FROM daily_sales
+                WHERE item_cd = ? AND store_id = ?
+                AND sales_date >= date('now', '-' || ? || ' days')
+                AND sale_qty > 0
+                ORDER BY sale_qty
+            """, (item_cd, store_id, config["analysis_days"]))
+        else:
+            cursor.execute("""
+                SELECT sale_qty FROM daily_sales
+                WHERE item_cd = ?
+                AND sales_date >= date('now', '-' || ? || ' days')
+                AND sale_qty > 0
+                ORDER BY sale_qty
+            """, (item_cd, config["analysis_days"]))
+
+        daily_sales = [r[0] for r in cursor.fetchall()]
+        if len(daily_sales) >= 5:
+            cap_idx = max(0, int(len(daily_sales) * 0.95) - 1)
+            cap_value = sorted(daily_sales)[cap_idx]
+            capped_total = sum(min(s, cap_value) for s in daily_sales)
+            daily_avg = capped_total / data_days
+        else:
+            daily_avg = (total_sales / data_days) if data_days > 0 else 0.0
+    else:
+        daily_avg = (total_sales / data_days) if data_days > 0 else 0.0
+
+    conn.close()
 
     # 안전재고 수량
     safety_stock = daily_avg * safety_days

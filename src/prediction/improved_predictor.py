@@ -3184,9 +3184,10 @@ class ImprovedPredictor:
         # 1. 금요일 부스트 (주류, 담배)
         if rules["friday_boost"]["enabled"]:
             if weekday == 4 and product["mid_cd"] in rules["friday_boost"]["categories"]:
-                order_qty *= rules["friday_boost"]["boost_rate"]
-                _applied_stage = "rules_friday_boost"
-                _applied_reason = f"boost={rules['friday_boost']['boost_rate']}"
+                if daily_avg > 0:  # WMA=0(무판매)이면 부스트 불필요
+                    order_qty *= rules["friday_boost"]["boost_rate"]
+                    _applied_stage = "rules_friday_boost"
+                    _applied_reason = f"boost={rules['friday_boost']['boost_rate']}"
 
         # 2. 폐기 방지 (초단기 상품)
         if rules["disuse_prevention"]["enabled"]:
@@ -3207,6 +3208,13 @@ class ImprovedPredictor:
                             reason=f"stock_days={stock_days:.1f}",
                             stage="rules_overstock",
                         )
+            elif current_stock + pending_qty > 0 and need_qty > 0:
+                # WMA=0(수요 없음) + 재고 있음 → safety_stock만으로 발주 불필요
+                return RuleResult(
+                    qty=0, delta=-need_qty,
+                    reason=f"zero_demand, stock={current_stock}+pnd={pending_qty}",
+                    stage="rules_overstock_zero_demand",
+                )
 
         # 4. 반올림 + 최소 발주 임계값
         # 간헐적 수요 지원: 0.1개 이상이면 발주 허용
