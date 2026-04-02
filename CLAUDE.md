@@ -33,6 +33,45 @@ BGF 리테일(CU 편의점) 다매장 자동 발주 시스템
 
 ---
 
+## 현재 진행 단계 (2026-04)
+
+> DB 안정화가 최우선. 아래 순서로 진행 중.
+
+| 단계 | 상태 | 내용 |
+|------|------|------|
+| 1단계 | **완료** | DB 오류 감지 (DataIntegrityService — 6개 체크) |
+| 2단계 | **완료** | DB 오류 자동 보정 (AutoExecutor — 5고리 자전 시스템) |
+| 3단계 | **진행 중** | DB 안정 확인 후 → 발주 품질 개선 |
+
+### 판단 기준
+
+1. **새 기능 요청이 와도 DB 값 신뢰성이 먼저** — 예측/발주 로직 개선보다 데이터 정합성 우선
+2. **sqlite3.connect 직접 호출 금지** → `DBRouter` 또는 `get_conn()` 만 사용 (WAL + busy_timeout 보장)
+3. **자동 실행은 신뢰도 높은 것만** (HIGH: `CLEAR_EXPIRED_BATCH`), 나머지는 승인 요청 (LOW)
+4. **CLEAR_GHOST_STOCK은 LOW(승인 필요)** — 2주 오탐률 확인 후 HIGH 승격 검토
+
+### 하지 말아야 할 것
+
+- `sqlite3.connect(db_path)` 직접 호출 (→ `DBRouter.get_store_connection(store_id)` 사용)
+- `_get_db_path()` 신규 사용 (deprecated → `get_conn()` 사용)
+- 자전 시스템에서 실물 확인 없이 `stock_qty = 0` 자동 보정 (GHOST_STOCK은 LOW 유지)
+- 파이프라인 단계 수정 시 후행 덮어쓰기 체크 생략 (CLAUDE.md 체크리스트 참조)
+- `CHECK_DELIVERY_TYPE`에서 `order_source='site'` 발주 경고 (정상 데이터, 과감지)
+
+### 자전 시스템 5고리 (Phase 1.67)
+
+```
+감지 → 판단 → 보고 → 실행 → 검증
+ │       │       │       │       │
+ │       │       │       │       └─ ExecutionVerifier (다음날 Phase 1.67a)
+ │       │       │       └─ AutoExecutor (Phase 1.67c)
+ │       │       └─ KakaoNotifier (DataIntegrityService 내부)
+ │       └─ ActionProposalService (중복 방지 적용)
+ └─ DataIntegrityService.run_all_checks() (Phase 1.67b)
+```
+
+---
+
 ## 아키텍처
 
 ```
