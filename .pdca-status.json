@@ -36,9 +36,11 @@
     "archivedTo": "docs/archive/2026-03/milk-demand-classifier-fix/"
   },
   "order-overstock-guard": {
-    "phase": "design",
-    "matchRate": null,
+    "phase": "archived",
+    "matchRate": 95,
     "iterationCount": 0,
-    "startedAt": "2026-04-02T10:00:00Z"
+    "startedAt": "2026-04-02T10:00:00Z",
+    "archivedAt": "2026-04-02T11:00:00Z",
+    "archivedTo": "docs/archive/2026-04/order-overstock-guard/"
   }
 }
