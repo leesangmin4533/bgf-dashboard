@@ -215,10 +215,13 @@ def run_preparation_phases(ctx: Dict[str, Any], job: Any) -> Dict[str, Any]:
                         )
                         confirmed = reconcile_result.get('confirmed', 0)
                         invalidated = reconcile_result.get('invalidated', 0)
-                        if confirmed > 0 or invalidated > 0:
+                        preserved = reconcile_result.get('preserved', 0)
+                        if confirmed > 0 or invalidated > 0 or preserved > 0:
                             logger.info(
                                 f"[Phase 1.96] 발주정합성: "
-                                f"BGF확인={confirmed}건, 무효화={invalidated}건"
+                                f"BGF확인={confirmed}건, "
+                                f"배송중보존={preserved}건, "
+                                f"무효화={invalidated}건"
                             )
                         else:
                             logger.info("[Phase 1.96] 발주정합성: 대조 대상 없음")

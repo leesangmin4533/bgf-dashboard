@@ -2294,21 +2294,62 @@ class OrderStatusCollector:
 
             conn.commit()
 
+            # ★ 장기 미정리 site 발주 정리 (3일 초과, remaining_qty > 0)
+            # reconcile_with_bgf_orders는 auto만 처리하므로
+            # site 발주는 별도 안전장치가 필요
+            stale_site_cleared = 0
+            try:
+                stale_site_rows = cursor.execute(
+                    """
+                    SELECT item_cd, order_date, remaining_qty
+                    FROM order_tracking
+                    WHERE order_source = 'site'
+                      AND remaining_qty > 0
+                      AND order_date < date(?, '-3 days')
+                    """,
+                    (today,),
+                ).fetchall()
+
+                for item_cd, order_date, remaining_qty in stale_site_rows:
+                    cursor.execute(
+                        """
+                        UPDATE order_tracking
+                        SET remaining_qty = 0,
+                            updated_at = datetime('now', 'localtime')
+                        WHERE item_cd = ? AND order_date = ?
+                          AND order_source = 'site' AND remaining_qty > 0
+                        """,
+                        (item_cd, order_date),
+                    )
+                    stale_site_cleared += cursor.rowcount
+
+                if stale_site_cleared > 0:
+                    logger.info(
+                        f"[pending_clear] site 발주 정리: "
+                        f"{stale_site_cleared}건 (3일 초과 잔여 클리어)"
+                    )
+            except Exception as e:
+                logger.warning(f"[pending_clear] site 발주 정리 실패 (무시): {e}")
+
+            conn.commit()
+
             result = {
                 "cleared": cleared,
                 "extended": extended,
                 "force_cleared": force_cleared,
                 "cleared_ri": cleared_ri,
+                "stale_site_cleared": stale_site_cleared,
                 # 호환성: 기존 호출부에서 cleared_ot 참조
-                "cleared_ot": cleared + force_cleared,
+                "cleared_ot": cleared + force_cleared + stale_site_cleared,
                 "kept_unreceived": extended,
             }
 
-            if cleared > 0 or extended > 0 or force_cleared > 0:
+            if cleared > 0 or extended > 0 or force_cleared > 0 or stale_site_cleared > 0:
                 logger.info(
                     f"[pending_clear] {self.store_id}: "
                     f"클리어={cleared}, 연장={extended}, "
-                    f"강제={force_cleared}, RI={cleared_ri}"
+                    f"강제={force_cleared}, site정리={stale_site_cleared}, "
+                    f"RI={cleared_ri}"
                 )
 
             return result

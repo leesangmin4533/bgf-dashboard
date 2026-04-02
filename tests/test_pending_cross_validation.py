@@ -62,68 +62,90 @@ class TestGetPendingQtySumBatch:
         assert result == {}
 
     def test_single_ordered_item(self):
-        """ordered 상태 1건 => {item_cd: remaining_qty}"""
+        """ordered 상태 1건 (최근 3일 이내) => {item_cd: remaining_qty}"""
+        from datetime import datetime
+        today = datetime.now().strftime("%Y-%m-%d")
         conn = self._setup_db()
         conn.execute("""
             INSERT INTO order_tracking (store_id, order_date, item_cd, order_qty, remaining_qty, status)
-            VALUES ('46513', '2026-02-24', 'ITEM001', 16, 16, 'ordered')
-        """)
+            VALUES ('46513', ?, 'ITEM001', 16, 16, 'ordered')
+        """, (today,))
         repo = self._make_repo_with_db(conn)
         result = repo.get_pending_qty_sum_batch(store_id="46513")
         assert result == {"ITEM001": 16}
 
-    def test_multiple_orders_same_item(self):
-        """동일 상품 2건(ordered+arrived) => 합산"""
+    def test_old_order_excluded(self):
+        """3일 초과 발주는 pending에서 제외"""
         conn = self._setup_db()
         conn.execute("""
             INSERT INTO order_tracking (store_id, order_date, item_cd, order_qty, remaining_qty, status)
-            VALUES ('46513', '2026-02-23', 'ITEM001', 16, 10, 'ordered')
+            VALUES ('46513', '2026-01-01', 'ITEM001', 16, 16, 'ordered')
         """)
+        repo = self._make_repo_with_db(conn)
+        result = repo.get_pending_qty_sum_batch(store_id="46513")
+        assert result == {}
+
+    def test_multiple_orders_same_item(self):
+        """동일 상품 2건(ordered+arrived) => 합산 (최근 3일 이내)"""
+        from datetime import datetime, timedelta
+        today = datetime.now().strftime("%Y-%m-%d")
+        yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+        conn = self._setup_db()
         conn.execute("""
             INSERT INTO order_tracking (store_id, order_date, item_cd, order_qty, remaining_qty, status)
-            VALUES ('46513', '2026-02-24', 'ITEM001', 16, 6, 'arrived')
-        """)
+            VALUES ('46513', ?, 'ITEM001', 16, 10, 'ordered')
+        """, (yesterday,))
+        conn.execute("""
+            INSERT INTO order_tracking (store_id, order_date, item_cd, order_qty, remaining_qty, status)
+            VALUES ('46513', ?, 'ITEM001', 16, 6, 'arrived')
+        """, (today,))
         repo = self._make_repo_with_db(conn)
         result = repo.get_pending_qty_sum_batch(store_id="46513")
         assert result == {"ITEM001": 16}  # 10 + 6
 
     def test_disposed_excluded(self):
         """disposed/expired 상태 제외"""
+        from datetime import datetime
+        today = datetime.now().strftime("%Y-%m-%d")
         conn = self._setup_db()
         conn.execute("""
             INSERT INTO order_tracking (store_id, order_date, item_cd, order_qty, remaining_qty, status)
-            VALUES ('46513', '2026-02-24', 'ITEM001', 16, 16, 'disposed')
-        """)
+            VALUES ('46513', ?, 'ITEM001', 16, 16, 'disposed')
+        """, (today,))
         conn.execute("""
             INSERT INTO order_tracking (store_id, order_date, item_cd, order_qty, remaining_qty, status)
-            VALUES ('46513', '2026-02-23', 'ITEM002', 12, 12, 'expired')
-        """)
+            VALUES ('46513', ?, 'ITEM002', 12, 12, 'expired')
+        """, (today,))
         repo = self._make_repo_with_db(conn)
         result = repo.get_pending_qty_sum_batch(store_id="46513")
         assert result == {}
 
     def test_zero_remaining_excluded(self):
         """remaining_qty=0 제외 (입고 완료)"""
+        from datetime import datetime
+        today = datetime.now().strftime("%Y-%m-%d")
         conn = self._setup_db()
         conn.execute("""
             INSERT INTO order_tracking (store_id, order_date, item_cd, order_qty, remaining_qty, status)
-            VALUES ('46513', '2026-02-24', 'ITEM001', 16, 0, 'arrived')
-        """)
+            VALUES ('46513', ?, 'ITEM001', 16, 0, 'arrived')
+        """, (today,))
         repo = self._make_repo_with_db(conn)
         result = repo.get_pending_qty_sum_batch(store_id="46513")
         assert result == {}
 
     def test_store_filter(self):
         """store_id 필터 동작"""
+        from datetime import datetime
+        today = datetime.now().strftime("%Y-%m-%d")
         conn = self._setup_db()
         conn.execute("""
             INSERT INTO order_tracking (store_id, order_date, item_cd, order_qty, remaining_qty, status)
-            VALUES ('46513', '2026-02-24', 'ITEM001', 16, 16, 'ordered')
-        """)
+            VALUES ('46513', ?, 'ITEM001', 16, 16, 'ordered')
+        """, (today,))
         conn.execute("""
             INSERT INTO order_tracking (store_id, order_date, item_cd, order_qty, remaining_qty, status)
-            VALUES ('99999', '2026-02-24', 'ITEM002', 12, 12, 'ordered')
-        """)
+            VALUES ('99999', ?, 'ITEM002', 12, 12, 'ordered')
+        """, (today,))
         repo = self._make_repo_with_db(conn)
         result = repo.get_pending_qty_sum_batch(store_id="46513")
         assert "ITEM001" in result

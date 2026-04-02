@@ -755,6 +755,8 @@ class OrderTrackingRepository(BaseRepository):
             store_filter = "AND store_id = ?" if store_id else ""
             store_params = (store_id,) if store_id else ()
 
+            # 최대 3일 이내 발주만 pending으로 인정
+            # (site 발주 등 arrival_time 없는 건이 무기한 잔류하는 것 방지)
             cursor.execute(
                 f"""
                 SELECT
@@ -763,6 +765,7 @@ class OrderTrackingRepository(BaseRepository):
                 FROM order_tracking
                 WHERE status IN ('ordered', 'arrived')
                     AND remaining_qty > 0
+                    AND order_date >= date('now', '-3 days', 'localtime')
                     {store_filter}
                 GROUP BY item_cd
                 """,
@@ -805,7 +808,8 @@ class OrderTrackingRepository(BaseRepository):
 
             # auto 발주 중 remaining_qty > 0 (미입고 상태)인 건만 대상
             cursor.execute("""
-                SELECT id, item_cd, item_nm, order_qty, remaining_qty
+                SELECT id, item_cd, item_nm, order_qty, remaining_qty,
+                       arrival_time
                 FROM order_tracking
                 WHERE order_date = ?
                   AND order_source = 'auto'
@@ -813,12 +817,15 @@ class OrderTrackingRepository(BaseRepository):
             """, (order_date,))
             rows = cursor.fetchall()
 
+            today_str = datetime.now().strftime("%Y-%m-%d")
+
             confirmed_count = 0
             invalidated_count = 0
+            preserved_count = 0
             confirmed_items = []
 
             for row in rows:
-                track_id, item_cd, item_nm, order_qty, remaining_qty = row
+                track_id, item_cd, item_nm, order_qty, remaining_qty, arrival_time = row
                 if item_cd in bgf_confirmed_items:
                     # BGF에 있음 → 발주 확인됨, pending_confirmed 마킹
                     cursor.execute("""
@@ -835,30 +842,58 @@ class OrderTrackingRepository(BaseRepository):
                         'order_qty': order_qty,
                     })
                 else:
-                    # BGF에 없음 → false positive, 무효화
-                    cursor.execute("""
-                        UPDATE order_tracking
-                        SET remaining_qty = 0, status = 'invalidated',
-                            updated_at = datetime('now', 'localtime')
-                        WHERE id = ?
-                    """, (track_id,))
-                    invalidated_count += 1
-                    logger.warning(
-                        f"[발주정합성] 무효화: {item_nm}({item_cd}) "
-                        f"qty={order_qty} (order_tracking에 있으나 BGF에 없음)"
-                    )
+                    # BGF에 없음 — arrival_time이 오늘 이후면 아직 배송 중이므로
+                    # invalidate하지 않고 pending_confirmed=1로 보존 (조기 무효화 방지)
+                    arrival_date_str = (arrival_time or "")[:10]
+                    if arrival_date_str >= today_str:
+                        # 입고 예정일이 오늘 이후 → 배송 중, pending 보존
+                        cursor.execute("""
+                            UPDATE order_tracking
+                            SET pending_confirmed = 1,
+                                pending_confirmed_at = datetime('now', 'localtime'),
+                                updated_at = datetime('now', 'localtime')
+                            WHERE id = ?
+                        """, (track_id,))
+                        preserved_count += 1
+                        confirmed_items.append({
+                            'item_cd': item_cd,
+                            'item_nm': item_nm,
+                            'order_qty': order_qty,
+                        })
+                        logger.info(
+                            f"[발주정합성] 보존: {item_nm}({item_cd}) "
+                            f"qty={order_qty} (BGF 미확인이나 "
+                            f"arrival={arrival_date_str} >= today, 배송중 추정)"
+                        )
+                    else:
+                        # 입고 예정일이 이미 지남 → false positive, 무효화
+                        cursor.execute("""
+                            UPDATE order_tracking
+                            SET remaining_qty = 0, status = 'invalidated',
+                                updated_at = datetime('now', 'localtime')
+                            WHERE id = ?
+                        """, (track_id,))
+                        invalidated_count += 1
+                        logger.warning(
+                            f"[발주정합성] 무효화: {item_nm}({item_cd}) "
+                            f"qty={order_qty} (BGF 미확인, "
+                            f"arrival={arrival_date_str} < today)"
+                        )
 
-            if confirmed_count > 0 or invalidated_count > 0:
+            if confirmed_count > 0 or invalidated_count > 0 or preserved_count > 0:
                 conn.commit()
                 logger.info(
                     f"[발주정합성] {order_date}: "
-                    f"BGF확인={confirmed_count}건, 무효화={invalidated_count}건 "
+                    f"BGF확인={confirmed_count}건, "
+                    f"배송중보존={preserved_count}건, "
+                    f"무효화={invalidated_count}건 "
                     f"(전체 {len(rows)}건 대조)"
                 )
 
             return {
                 'confirmed': confirmed_count,
                 'invalidated': invalidated_count,
+                'preserved': preserved_count,
                 'confirmed_items': confirmed_items,
             }
         except Exception as e:
