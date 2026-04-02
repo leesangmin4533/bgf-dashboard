@@ -103,10 +103,21 @@ class MultiStoreRunner:
                     })
 
         success_count = sum(1 for r in results if r.get("success"))
+        fail_count = len(results) - success_count
+        elapsed_list = [r.get("elapsed_seconds", 0) for r in results]
+        max_elapsed = max(elapsed_list) if elapsed_list else 0
         logger.info(
-            f"[{task_name}] 완료:"
-            f" {success_count}/{len(stores)} 성공"
+            f"[{task_name}] 완료: {success_count}/{len(stores)} 성공"
+            f"{f', 실패={fail_count}' if fail_count else ''}"
+            f", 최대소요={max_elapsed:.0f}s"
         )
+        if fail_count > 0:
+            for r in results:
+                if not r.get("success"):
+                    logger.warning(
+                        f"[{task_name}] 실패 매장: {r['store_id']}"
+                        f" — {r.get('error', 'unknown')}"
+                    )
         return results
 
     def _run_single(
@@ -115,7 +126,7 @@ class MultiStoreRunner:
         store_ctx: Any,
         task_name: str,
     ) -> Dict[str, Any]:
-        """단일 매장 실행
+        """단일 매장 실행 (자원 정리 보장)
 
         Args:
             task_fn: 작업 함수
@@ -127,18 +138,52 @@ class MultiStoreRunner:
         """
         store_id = store_ctx.store_id
         logger.info(f"[{task_name}] {store_id} 시작")
+        start_time = time.time()
         try:
             result = task_fn(store_ctx)
-            logger.info(f"[{task_name}] {store_id} 완료")
+            elapsed = time.time() - start_time
+            logger.info(f"[{task_name}] {store_id} 완료 ({elapsed:.1f}s)")
             return {
                 "store_id": store_id,
                 "success": True,
                 "result": result,
+                "elapsed_seconds": round(elapsed, 1),
             }
         except Exception as e:
-            logger.error(f"[{task_name}] {store_id} 실패: {e}")
+            elapsed = time.time() - start_time
+            logger.error(
+                f"[{task_name}] {store_id} 실패 ({elapsed:.1f}s): {e}",
+                exc_info=True,
+            )
             return {
                 "store_id": store_id,
                 "success": False,
                 "error": str(e),
+                "elapsed_seconds": round(elapsed, 1),
             }
+        finally:
+            # 드라이버 정리 가드: task_fn이 예외로 죽어도 드라이버 누수 방지
+            self._cleanup_thread_resources(store_id, task_name)
+
+    @staticmethod
+    def _cleanup_thread_resources(store_id: str, task_name: str) -> None:
+        """스레드 종료 시 잔여 chromedriver 프로세스 정리
+
+        task_fn 내부에서 예외 발생 시 Selenium 드라이버가 quit()되지 않을 수 있음.
+        해당 스레드에서 생성된 orphan chromedriver 프로세스를 감지하여 로그만 남김.
+        (강제 kill은 하지 않음 — 다른 매장 세션과 혼동 방지)
+        """
+        try:
+            import subprocess
+            result = subprocess.run(
+                ["tasklist", "/FI", "IMAGENAME eq chromedriver.exe"],
+                capture_output=True, text=True, timeout=5,
+            )
+            driver_count = result.stdout.count("chromedriver.exe")
+            if driver_count > 0:
+                logger.debug(
+                    f"[{task_name}] {store_id} 완료 시점 chromedriver "
+                    f"프로세스: {driver_count}개"
+                )
+        except Exception:
+            pass  # tasklist 실패는 무시

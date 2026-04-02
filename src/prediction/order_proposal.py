@@ -177,7 +177,7 @@ class OrderProposal:
         return f"need={self.need_qty:.1f} → " + " → ".join(parts) + f" = {self._qty}"
 
     def log_trace(self, item_nm: str, trace_id: str = "") -> None:
-        """전체 이력을 로그로 출력 (INFO 레벨)"""
+        """전체 이력을 로그로 출력 (INFO 레벨) + 불변식 자동 검사"""
         prefix = f"[Proposal][{trace_id}] " if trace_id else "[Proposal] "
         lines = [f"{prefix}{item_nm}: {self.summary()}"]
         for a in self.adjustments:
@@ -187,6 +187,8 @@ class OrderProposal:
                 f"  {marker} {a.stage}: {a.before} → {a.after}{reason_str}"
             )
         logger.info("\n".join(lines))
+        # 불변식 자동 검사 (읽기 전용 — 발주량 변경 없음, 경고만 출력)
+        self.check_invariants()
 
     def stock_gate_summary(self) -> Optional[str]:
         """첫 번째 stock_gate 차단 지점을 한 줄로 반환.
@@ -208,6 +210,59 @@ class OrderProposal:
                 )
         return None
 
+    def check_invariants(self) -> List[str]:
+        """파이프라인 불변식 위반 검사 (읽기 전용, 발주량 미변경)
+
+        반복 버그 패턴 자동 감지:
+        - 프로모션 floor 이후 단계가 floor 이하로 내린 경우
+        - 0으로 설정된 후 다시 양수로 올라간 경우 (유령 부활)
+        - need_qty < 0인데 양수 발주가 나온 경우
+
+        Returns:
+            위반 메시지 리스트 (빈 리스트 = 정상)
+        """
+        violations = []
+
+        # 불변식 1: 0 이후 부활 금지
+        # 한번 0으로 설정된 후 다시 양수가 되면 위반
+        seen_zero = False
+        zero_stage = ""
+        for a in self.adjustments:
+            if a.after == 0 and a.before > 0:
+                seen_zero = True
+                zero_stage = a.stage
+            elif seen_zero and a.after > 0 and a.before == 0:
+                violations.append(
+                    f"GHOST_REVIVAL: {zero_stage}에서 0 → "
+                    f"{a.stage}에서 {a.after}로 부활"
+                )
+
+        # 불변식 2: 프로모션 floor 보호
+        # promo 단계에서 설정한 최소값을 이후 단계가 깨뜨리면 위반
+        promo_floor = None
+        for a in self.adjustments:
+            if a.stage.startswith("promo_") and a.after > 0:
+                promo_floor = a.after
+            elif promo_floor is not None and a.after < promo_floor and a.after > 0:
+                # 0은 overstock 등 정당한 차단이므로 제외
+                violations.append(
+                    f"PROMO_FLOOR_BREACH: promo={promo_floor} → "
+                    f"{a.stage}에서 {a.after}로 하락"
+                )
+
+        # 불변식 3: 음수 need에서 양수 발주
+        if self.need_qty < 0 and self._qty > 0:
+            violations.append(
+                f"NEGATIVE_NEED_ORDER: need={self.need_qty:.1f}인데 "
+                f"order={self._qty}"
+            )
+
+        if violations:
+            for v in violations:
+                logger.warning(f"[INVARIANT] {v}")
+
+        return violations
+
     def to_dict(self) -> dict:
         """ctx에 저장할 딕셔너리 변환"""
         return {
@@ -223,4 +278,5 @@ class OrderProposal:
                 for a in self.adjustments
             ],
             "summary": self.summary(),
+            "invariant_violations": self.check_invariants(),
         }
