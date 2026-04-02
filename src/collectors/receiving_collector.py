@@ -70,6 +70,9 @@ class ReceivingCollector:
         self.store_id = store_id
         self.repo = ReceivingRepository(store_id=self.store_id)
         self._new_product_candidates: List[Dict] = []  # 신제품 후보 축적용
+        # new-product-detection: 캐시 (None=미로드, set=로딩완료)
+        self._detected_item_cds: Optional[set] = None
+        self._detected_common_cds: Optional[set] = None
 
     @staticmethod
     def _to_int(value) -> int:
@@ -653,7 +656,27 @@ class ReceivingCollector:
                 row = cursor.fetchone()
 
                 if row and row[0]:
-                    return row[0]
+                    mid_cd = row[0]
+                    # ★ new-product-detection: products에 있어도
+                    # detected_new_products에 없으면 신제품 후보 추가
+                    self._load_detected_cache()
+                    if (self._detected_item_cds is not None
+                            and item_cd not in self._detected_item_cds):
+                        in_common = item_cd in (self._detected_common_cds or set())
+                        self._new_product_candidates.append({
+                            "item_cd": item_cd,
+                            "item_nm": item_nm,
+                            "cust_nm": cust_nm,
+                            "mid_cd": mid_cd,
+                            "mid_cd_source": "products",
+                            "already_in_products": True,
+                        })
+                        logger.debug(
+                            f"[신제품 후보] {item_cd} ({item_nm}): "
+                            f"products=O, store_detected=X, common_detected={'O' if in_common else 'X'} "
+                            f"→ 후보 추가"
+                        )
+                    return mid_cd
             finally:
                 conn.close()
 
@@ -670,6 +693,38 @@ class ReceivingCollector:
             "mid_cd_source": "fallback" if estimated_mid else "unknown",
         })
         return estimated_mid
+
+    def _load_detected_cache(self) -> None:
+        """detected_new_products 캐시 한 번만 로딩 (배치 최적화)
+
+        fail-safe: 로딩 실패 시 None 유지 → _get_mid_cd에서 None이면
+        신제품 후보 추가 안 함 (대량 오감지 방지)
+        """
+        if self._detected_item_cds is not None:
+            return  # 이미 로딩됨
+
+        try:
+            from src.infrastructure.database.repos import DetectedNewProductRepository
+            repo = DetectedNewProductRepository(store_id=self.store_id)
+            self._detected_item_cds = repo.get_all_item_cds(store_id=self.store_id)
+            self._detected_common_cds = repo.get_all_item_cds_from_common()
+        except Exception as e:
+            logger.warning(f"[신제품 캐시] 로딩 실패 → 이번 실행 신제품 감지 스킵: {e}")
+            # fail-safe: None 유지 (set()으로 초기화하지 않음)
+            return
+
+        store_cnt = len(self._detected_item_cds)
+        common_cnt = len(self._detected_common_cds)
+        logger.info(f"[신제품 캐시] store={store_cnt}건, common={common_cnt}건 로딩 완료")
+
+    @staticmethod
+    def _is_within_days(date_str: str, days: int) -> bool:
+        """date_str이 오늘 기준 N일 이내인지"""
+        try:
+            dt = datetime.strptime(date_str, "%Y-%m-%d")
+            return dt >= datetime.now() - timedelta(days=days)
+        except (ValueError, TypeError):
+            return False
 
     def _fallback_mid_cd(self, cust_nm: str, item_nm: str) -> str:
         """
@@ -788,6 +843,8 @@ class ReceivingCollector:
             저장 통계 {"total", "new", "updated", "batches_created"}
         """
         self._new_product_candidates = []  # 매 호출마다 초기화
+        self._detected_item_cds = None     # 캐시 리셋
+        self._detected_common_cds = None
 
         data = self.collect_receiving_data(dgfw_ymd)
 
@@ -1250,6 +1307,16 @@ class ReceivingCollector:
                 continue
             if item_cd not in confirmed_items:
                 continue  # 입고 예정/미확정 → 무시
+
+            # ★ new-product-detection: already_in_products인 경우 30일 제한
+            if candidate.get("already_in_products"):
+                recv_date = confirmed_items[item_cd].get("receiving_date", "")
+                if not self._is_within_days(recv_date, 30):
+                    logger.debug(
+                        f"[신제품 필터] {item_cd}: 입고일={recv_date} → 30일 초과 스킵"
+                    )
+                    continue  # 30일 초과 → 오래된 상품, 스킵
+
             seen.add(item_cd)
             # 입고 데이터 병합
             recv_record = confirmed_items[item_cd]
@@ -1264,7 +1331,12 @@ class ReceivingCollector:
             return stats
 
         stats["new_products_detected"] = len(new_products)
-        logger.info(f"[신제품 감지] {len(new_products)}건 (입고 확정 기준)")
+        from_products = sum(1 for p in new_products if p.get("already_in_products"))
+        from_new = len(new_products) - from_products
+        logger.info(
+            f"[신제품 감지] {len(new_products)}건 "
+            f"(신규={from_new}, products기존={from_products})"
+        )
 
         # 일괄 등록
         for product in new_products:
@@ -1305,23 +1377,28 @@ class ReceivingCollector:
 
         registered = {"products": False, "details": False, "inventory": False}
 
+        # ★ new-product-detection: already_in_products면 products 재등록 스킵
+        if product.get("already_in_products"):
+            registered["products"] = True  # 이미 등록됨
+
         # 1) products 테이블 (common.db)
-        try:
-            from src.infrastructure.database.connection import DBRouter
-            conn = DBRouter.get_common_connection()
+        if not registered["products"]:
             try:
-                cursor = conn.cursor()
-                cursor.execute(
-                    """INSERT OR IGNORE INTO products (item_cd, item_nm, mid_cd, created_at, updated_at)
-                       VALUES (?, ?, ?, ?, ?)""",
-                    (item_cd, item_nm, mid_cd or "999", now, now)
-                )
-                conn.commit()
-                registered["products"] = cursor.rowcount > 0
-            finally:
-                conn.close()
-        except Exception as e:
-            logger.warning(f"products 등록 실패 ({item_cd}): {e}")
+                from src.infrastructure.database.connection import DBRouter
+                conn = DBRouter.get_common_connection()
+                try:
+                    cursor = conn.cursor()
+                    cursor.execute(
+                        """INSERT OR IGNORE INTO products (item_cd, item_nm, mid_cd, created_at, updated_at)
+                           VALUES (?, ?, ?, ?, ?)""",
+                        (item_cd, item_nm, mid_cd or "999", now, now)
+                    )
+                    conn.commit()
+                    registered["products"] = cursor.rowcount > 0
+                finally:
+                    conn.close()
+            except Exception as e:
+                logger.warning(f"products 등록 실패 ({item_cd}): {e}")
 
         # 2) product_details 테이블 (common.db) — 기본값
         try:
@@ -1376,11 +1453,38 @@ class ReceivingCollector:
         except Exception as e:
             logger.warning(f"detected_new_products 기록 실패 ({item_cd}): {e}")
 
+        # ★ 5) detected_new_products (common.db) — 매장 간 공유
+        self._last_common_save_ok = None
+        try:
+            from src.infrastructure.database.repos import DetectedNewProductRepository
+            common_repo = DetectedNewProductRepository(store_id=self.store_id)
+            self._last_common_save_ok = common_repo.save_to_common(
+                item_cd=item_cd,
+                item_nm=item_nm,
+                mid_cd=mid_cd,
+                mid_cd_source=product.get("mid_cd_source", "unknown"),
+                first_receiving_date=product.get("receiving_date", now[:10]),
+                receiving_qty=product.get("receiving_qty", 0),
+                order_unit_qty=product.get("order_unit_qty", 1),
+                center_cd=product.get("center_cd"),
+                center_nm=product.get("center_nm"),
+                cust_nm=product.get("cust_nm"),
+                store_id=store_id,
+            )
+        except Exception as e:
+            self._last_common_save_ok = False
+            logger.warning(f"common.db 신제품 등록 실패 ({item_cd}): {e}")
+
+        # common.db 등록 결과 추적
+        common_ok = getattr(self, '_last_common_save_ok', None)
+
         logger.info(
-            f"[신제품] {item_cd} ({item_nm}) mid_cd={mid_cd}: "
+            f"[신제품] {item_cd} ({item_nm}) mid_cd={mid_cd} "
+            f"src={product.get('mid_cd_source', '?')}: "
             f"products={'O' if registered['products'] else 'X'}, "
             f"details={'O' if registered['details'] else 'X'}, "
-            f"inventory={'O' if registered['inventory'] else 'X'}"
+            f"inventory={'O' if registered['inventory'] else 'X'}, "
+            f"common={'O' if common_ok else 'X' if common_ok is False else '?'}"
         )
 
     def close_receiving_menu(self) -> bool:

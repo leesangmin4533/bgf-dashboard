@@ -483,3 +483,145 @@ class DetectedNewProductRepository(BaseRepository):
             return row[0] if row else 0
         finally:
             conn.close()
+
+    # ── new-product-detection 확장 ──────────────────────────
+
+    def exists(self, item_cd: str, store_id: Optional[str] = None) -> bool:
+        """해당 상품이 detected_new_products에 존재하는지 확인"""
+        conn = self._get_conn()
+        try:
+            cursor = conn.cursor()
+            if store_id:
+                cursor.execute(
+                    "SELECT 1 FROM detected_new_products WHERE item_cd = ? AND store_id = ? LIMIT 1",
+                    (item_cd, store_id),
+                )
+            else:
+                cursor.execute(
+                    "SELECT 1 FROM detected_new_products WHERE item_cd = ? LIMIT 1",
+                    (item_cd,),
+                )
+            return cursor.fetchone() is not None
+        finally:
+            conn.close()
+
+    def get_all_item_cds(self, store_id: Optional[str] = None) -> set:
+        """현재 매장의 detected_new_products에 등록된 모든 item_cd set 반환
+
+        성능 최적화: 상품마다 DB 조회 대신 한 번에 전체 로딩
+        """
+        conn = self._get_conn()
+        try:
+            cursor = conn.cursor()
+            query = "SELECT item_cd FROM detected_new_products"
+            params: list = []
+            if store_id:
+                query += " WHERE store_id = ?"
+                params.append(store_id)
+            cursor.execute(query, params)
+            return {row[0] for row in cursor.fetchall()}
+        finally:
+            conn.close()
+
+    def get_all_item_cds_from_common(self) -> set:
+        """common.db의 모든 detected_new_products item_cd 반환 (배치 캐싱용)"""
+        try:
+            from src.infrastructure.database.connection import DBRouter
+            conn = DBRouter.get_common_connection()
+            try:
+                cursor = conn.cursor()
+                cursor.execute("SELECT item_cd FROM detected_new_products")
+                return {row[0] for row in cursor.fetchall()}
+            finally:
+                conn.close()
+        except Exception:
+            return set()
+
+    def exists_in_common(self, item_cd: str) -> bool:
+        """common.db의 detected_new_products에 존재하는지 확인"""
+        try:
+            from src.infrastructure.database.connection import DBRouter
+            conn = DBRouter.get_common_connection()
+            try:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "SELECT 1 FROM detected_new_products WHERE item_cd = ? LIMIT 1",
+                    (item_cd,),
+                )
+                return cursor.fetchone() is not None
+            finally:
+                conn.close()
+        except Exception:
+            return False
+
+    def get_from_common(self, item_cd: str) -> Optional[Dict[str, Any]]:
+        """common.db에서 신제품 정보 조회 (다른 매장 참조용)"""
+        try:
+            from src.infrastructure.database.connection import DBRouter
+            conn = DBRouter.get_common_connection()
+            try:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "SELECT * FROM detected_new_products WHERE item_cd = ? LIMIT 1",
+                    (item_cd,),
+                )
+                row = cursor.fetchone()
+                return dict(row) if row else None
+            finally:
+                conn.close()
+        except Exception:
+            return None
+
+    def save_to_common(
+        self,
+        item_cd: str,
+        item_nm: str,
+        mid_cd: str,
+        mid_cd_source: str,
+        first_receiving_date: str,
+        receiving_qty: int,
+        order_unit_qty: int = 1,
+        center_cd: Optional[str] = None,
+        center_nm: Optional[str] = None,
+        cust_nm: Optional[str] = None,
+        store_id: Optional[str] = None,
+    ) -> bool:
+        """common.db에 신제품 등록 (매장 간 공유)
+
+        UPSERT: item_cd + first_receiving_date 기준.
+        ON CONFLICT DO NOTHING: 먼저 등록한 매장의 정보 보존 (멱등성).
+
+        Returns:
+            성공 여부
+        """
+        try:
+            from src.infrastructure.database.connection import DBRouter
+            conn = DBRouter.get_common_connection()
+            try:
+                cursor = conn.cursor()
+                now = self._now()
+                cursor.execute(
+                    """
+                    INSERT INTO detected_new_products
+                    (item_cd, item_nm, mid_cd, mid_cd_source,
+                     first_receiving_date, receiving_qty, order_unit_qty,
+                     center_cd, center_nm, cust_nm,
+                     registered_to_products, registered_to_details, registered_to_inventory,
+                     detected_at, store_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, ?, ?)
+                    ON CONFLICT(item_cd, first_receiving_date) DO NOTHING
+                    """,
+                    (
+                        item_cd, item_nm, mid_cd, mid_cd_source,
+                        first_receiving_date, receiving_qty, order_unit_qty,
+                        center_cd, center_nm, cust_nm,
+                        now, store_id,
+                    ),
+                )
+                conn.commit()
+                return True
+            finally:
+                conn.close()
+        except Exception as e:
+            logger.warning(f"common.db 신제품 등록 실패 ({item_cd}): {e}")
+            return False

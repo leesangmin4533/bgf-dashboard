@@ -57,6 +57,19 @@ def store_db(tmp_path):
             registered_to_inventory INTEGER DEFAULT 0,
             detected_at TEXT NOT NULL,
             store_id TEXT,
+            lifecycle_status TEXT DEFAULT 'detected',
+            monitoring_start_date TEXT,
+            monitoring_end_date TEXT,
+            total_sold_qty INTEGER DEFAULT 0,
+            sold_days INTEGER DEFAULT 0,
+            similar_item_avg REAL,
+            status_changed_at TEXT,
+            analysis_window_days INTEGER,
+            extension_count INTEGER DEFAULT 0,
+            settlement_score REAL,
+            settlement_verdict TEXT,
+            settlement_date TEXT,
+            settlement_checked_at TEXT,
             UNIQUE(item_cd, first_receiving_date)
         )
     """)
@@ -132,6 +145,40 @@ def common_db(tmp_path):
             updated_at TEXT NOT NULL,
             sell_price INTEGER,
             margin_rate REAL
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE detected_new_products (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            item_cd TEXT NOT NULL,
+            item_nm TEXT,
+            mid_cd TEXT,
+            mid_cd_source TEXT DEFAULT 'fallback',
+            first_receiving_date TEXT NOT NULL,
+            receiving_qty INTEGER DEFAULT 0,
+            order_unit_qty INTEGER DEFAULT 1,
+            center_cd TEXT,
+            center_nm TEXT,
+            cust_nm TEXT,
+            registered_to_products INTEGER DEFAULT 0,
+            registered_to_details INTEGER DEFAULT 0,
+            registered_to_inventory INTEGER DEFAULT 0,
+            detected_at TEXT NOT NULL,
+            store_id TEXT,
+            lifecycle_status TEXT DEFAULT 'detected',
+            monitoring_start_date TEXT,
+            monitoring_end_date TEXT,
+            total_sold_qty INTEGER DEFAULT 0,
+            sold_days INTEGER DEFAULT 0,
+            similar_item_avg REAL,
+            status_changed_at TEXT,
+            analysis_window_days INTEGER,
+            extension_count INTEGER DEFAULT 0,
+            settlement_score REAL,
+            settlement_verdict TEXT,
+            settlement_date TEXT,
+            settlement_checked_at TEXT,
+            UNIQUE(item_cd, first_receiving_date)
         )
     """)
     # 기존 상품 등록
@@ -564,3 +611,196 @@ class TestWebAPIDetectedNewProducts:
         data = resp.get_json()
         assert "items" in data
         assert data["count"] == 1
+
+
+# ─── new-product-detection 확장 테스트 ───
+# Design Reference: docs/02-design/features/new-product-detection.design.md
+
+
+class TestNewProductDetectionExtension:
+    """신제품 감지 보완 기능 테스트 (Plan 시나리오 2,3,5,6)"""
+
+    def test_already_in_products_added_as_candidate(self, store_db, common_db):
+        """시나리오2: products에 있지만 detected에 없는 상품이 신제품 후보로 추가되는지"""
+        from src.collectors.receiving_collector import ReceivingCollector
+
+        driver = MagicMock()
+        collector = ReceivingCollector(driver, store_id="46513")
+
+        # detected 캐시를 빈 set으로 설정 (= detected에 아무것도 없음)
+        collector._detected_item_cds = set()
+        collector._detected_common_cds = set()
+
+        # products에서 mid_cd를 찾도록 mock
+        with patch(
+            "src.infrastructure.database.connection.DBRouter"
+        ) as MockRouter:
+            mock_conn = MagicMock()
+            mock_cursor = MagicMock()
+            mock_cursor.fetchone.return_value = ("022",)  # products에 있음
+            mock_conn.cursor.return_value = mock_cursor
+            MockRouter.get_common_connection.return_value = mock_conn
+
+            result = collector._get_mid_cd("8800099999999", "테스트거래처", "테스트상품")
+
+        assert result == "022"
+        # 후보에 추가되었는지
+        assert len(collector._new_product_candidates) == 1
+        cand = collector._new_product_candidates[0]
+        assert cand["item_cd"] == "8800099999999"
+        assert cand["already_in_products"] is True
+        assert cand["mid_cd_source"] == "products"
+
+    def test_already_detected_skipped(self, store_db, common_db):
+        """시나리오3: detected에 이미 있는 상품은 후보에 추가되지 않는지"""
+        from src.collectors.receiving_collector import ReceivingCollector
+
+        driver = MagicMock()
+        collector = ReceivingCollector(driver, store_id="46513")
+
+        # detected 캐시에 이미 등록
+        collector._detected_item_cds = {"8800099999999"}
+        collector._detected_common_cds = set()
+
+        with patch(
+            "src.infrastructure.database.connection.DBRouter"
+        ) as MockRouter:
+            mock_conn = MagicMock()
+            mock_cursor = MagicMock()
+            mock_cursor.fetchone.return_value = ("022",)
+            mock_conn.cursor.return_value = mock_cursor
+            MockRouter.get_common_connection.return_value = mock_conn
+
+            result = collector._get_mid_cd("8800099999999", "거래처", "상품")
+
+        assert result == "022"
+        # 후보에 추가되지 않아야 함
+        assert len(collector._new_product_candidates) == 0
+
+    def test_common_db_failure_does_not_block_store_db(self, store_db):
+        """시나리오5: common.db 등록 실패 시 store DB 등록은 정상 진행"""
+        from src.infrastructure.database.repos.detected_new_product_repo import (
+            DetectedNewProductRepository,
+        )
+
+        repo = DetectedNewProductRepository(db_path=store_db, store_id="46513")
+
+        # store DB 등록 (정상)
+        rid = repo.save(
+            item_cd="8800055555555",
+            item_nm="테스트상품",
+            mid_cd="022",
+            mid_cd_source="test",
+            first_receiving_date="2026-04-01",
+            receiving_qty=1,
+            store_id="46513",
+        )
+        assert rid > 0
+
+        # common.db 등록 실패 (DB 없으므로)
+        with patch(
+            "src.infrastructure.database.connection.DBRouter"
+        ) as MockRouter:
+            MockRouter.get_common_connection.side_effect = Exception("DB 접근 불가")
+            result = repo.save_to_common(
+                item_cd="8800055555555",
+                item_nm="테스트상품",
+                mid_cd="022",
+                mid_cd_source="test",
+                first_receiving_date="2026-04-01",
+                receiving_qty=1,
+                store_id="46513",
+            )
+
+        # common.db 실패
+        assert result is False
+
+        # store DB에는 정상 등록되어 있어야 함
+        assert repo.exists("8800055555555", store_id="46513")
+
+    def test_30day_filter_skips_old_products(self):
+        """시나리오6: 30일 이전 첫 입고 상품은 감지 안 함"""
+        from src.collectors.receiving_collector import ReceivingCollector
+
+        # 30일 이내 → True
+        assert ReceivingCollector._is_within_days("2026-04-01", 30) is True
+        # 30일 초과 → False
+        assert ReceivingCollector._is_within_days("2026-02-01", 30) is False
+        # None → False (안전)
+        assert ReceivingCollector._is_within_days(None, 30) is False
+        # 빈 문자열 → False
+        assert ReceivingCollector._is_within_days("", 30) is False
+
+    def test_failsafe_cache_none_skips_detection(self, store_db, common_db):
+        """fail-safe: 캐시 로딩 실패(None) 시 신제품 후보 추가 안 함"""
+        from src.collectors.receiving_collector import ReceivingCollector
+
+        driver = MagicMock()
+        collector = ReceivingCollector(driver, store_id="46513")
+
+        # 캐시가 None (로딩 실패 상태)
+        collector._detected_item_cds = None
+        collector._detected_common_cds = None
+
+        with patch(
+            "src.infrastructure.database.connection.DBRouter"
+        ) as MockRouter:
+            mock_conn = MagicMock()
+            mock_cursor = MagicMock()
+            mock_cursor.fetchone.return_value = ("022",)
+            mock_conn.cursor.return_value = mock_cursor
+            MockRouter.get_common_connection.return_value = mock_conn
+
+            # _load_detected_cache가 실패하도록
+            with patch.object(collector, "_load_detected_cache"):
+                result = collector._get_mid_cd("8800099999999", "거래처", "상품")
+
+        assert result == "022"
+        # None 상태이므로 후보에 추가되지 않아야 함
+        assert len(collector._new_product_candidates) == 0
+
+    def test_save_to_common_idempotent(self, store_db, common_db):
+        """멱등성: save_to_common 2회 호출해도 1건만 저장"""
+        from src.infrastructure.database.repos.detected_new_product_repo import (
+            DetectedNewProductRepository,
+        )
+
+        repo = DetectedNewProductRepository(db_path=store_db, store_id="46513")
+
+        kwargs = dict(
+            item_cd="8800077777777",
+            item_nm="멱등성테스트",
+            mid_cd="022",
+            mid_cd_source="test",
+            first_receiving_date="2026-04-01",
+            receiving_qty=1,
+            store_id="46513",
+        )
+
+        with patch(
+            "src.infrastructure.database.connection.DBRouter"
+        ) as MockRouter:
+            mock_conn = sqlite3.connect(str(common_db))
+            mock_conn.row_factory = sqlite3.Row
+            MockRouter.get_common_connection.return_value = mock_conn
+            result1 = repo.save_to_common(**kwargs)
+
+        with patch(
+            "src.infrastructure.database.connection.DBRouter"
+        ) as MockRouter:
+            mock_conn2 = sqlite3.connect(str(common_db))
+            mock_conn2.row_factory = sqlite3.Row
+            MockRouter.get_common_connection.return_value = mock_conn2
+            result2 = repo.save_to_common(**kwargs)
+
+        assert result1 is True
+        assert result2 is True
+
+        # common.db에 1건만 있어야 함
+        verify_conn = sqlite3.connect(str(common_db))
+        cnt = verify_conn.execute(
+            "SELECT COUNT(*) FROM detected_new_products WHERE item_cd=?",
+            ("8800077777777",),
+        ).fetchone()[0]
+        verify_conn.close()
+        assert cnt == 1
