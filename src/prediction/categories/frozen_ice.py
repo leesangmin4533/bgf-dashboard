@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from typing import Optional, Tuple
 
 from src.utils.logger import get_logger
+from src.prediction.categories._db import get_conn
 
 logger = get_logger(__name__)
 
@@ -90,7 +91,7 @@ FROZEN_REORDER_CONFIG = {
 
 
 def _get_db_path(store_id: str = None) -> str:
-    """DB 경로 반환"""
+    """DB 경로 반환 (deprecated - get_conn 사용 권장)"""
     from src.infrastructure.database.connection import resolve_db_path
     return resolve_db_path(store_id=store_id)
 
@@ -162,11 +163,8 @@ def _learn_weekday_pattern(mid_cd: str, db_path: str = None, min_data_days: int 
     Returns:
         {0: coef, 1: coef, ..., 6: coef} Python weekday 순서 dict
     """
-    if db_path is None:
-        db_path = _get_db_path(store_id)
-
     try:
-        conn = sqlite3.connect(db_path, timeout=30)
+        conn = get_conn(store_id=store_id, db_path=db_path)
         cursor = conn.cursor()
 
         # 최근 30일간 해당 중분류의 요일별 판매량 집계
@@ -257,11 +255,8 @@ def _learn_seasonal_pattern(mid_cd: str, db_path: str = None, store_id: Optional
     Returns:
         {1: coef, 2: coef, ..., 12: coef} 월별 계절 계수 dict
     """
-    if db_path is None:
-        db_path = _get_db_path(store_id)
-
     try:
-        conn = sqlite3.connect(db_path, timeout=30)
+        conn = get_conn(store_id=store_id, db_path=db_path)
         cursor = conn.cursor()
 
         # 전체 기간의 월별 판매량 집계
@@ -382,9 +377,6 @@ def analyze_frozen_ice_pattern(
     """
     config = FROZEN_ICE_DYNAMIC_SAFETY_CONFIG
 
-    if db_path is None:
-        db_path = _get_db_path(store_id)
-
     now = datetime.now()
     order_weekday = now.weekday()  # 0=월, 6=일
     current_month = now.month
@@ -410,7 +402,7 @@ def analyze_frozen_ice_pattern(
     safety_days = _get_seasonal_safety_days(current_month)
 
     # DB에서 일평균 판매량 조회
-    conn = sqlite3.connect(db_path, timeout=30)
+    conn = get_conn(store_id=store_id, db_path=db_path)
     cursor = conn.cursor()
 
     if store_id:
@@ -520,8 +512,7 @@ def should_bypass_frozen_surplus_zero(
 
     # 90일 판매이력 조회
     try:
-        db_path = _get_db_path(store_id)
-        conn = sqlite3.connect(db_path, timeout=30)
+        conn = get_conn(store_id=store_id)
         cursor = conn.cursor()
         cursor.execute("""
             SELECT COALESCE(SUM(sale_qty), 0)

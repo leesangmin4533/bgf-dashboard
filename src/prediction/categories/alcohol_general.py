@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from typing import Optional, Tuple
 
 from src.utils.logger import get_logger
+from src.prediction.categories._db import get_conn
 
 logger = get_logger(__name__)
 
@@ -90,7 +91,7 @@ def is_alcohol_general_category(mid_cd: str) -> bool:
 
 
 def _get_db_path(store_id: str = None) -> str:
-    """DB 경로 반환"""
+    """DB 경로 반환 (deprecated - get_conn 사용 권장)"""
     from src.infrastructure.database.connection import resolve_db_path
     return resolve_db_path(store_id=store_id)
 
@@ -111,10 +112,8 @@ def _learn_weekday_pattern(mid_cd: str, db_path: str = None, min_data_days: int 
     Returns:
         {0: coef, 1: coef, ..., 6: coef} (Python weekday: 월=0, 일=6)
     """
-    if db_path is None:
-        db_path = _get_db_path(store_id)
     try:
-        conn = sqlite3.connect(db_path)
+        conn = get_conn(store_id=store_id, db_path=db_path)
         cursor = conn.cursor()
         if store_id:
             cursor.execute("""
@@ -194,9 +193,6 @@ def analyze_alcohol_general_pattern(
     """
     config = ALCOHOL_GENERAL_DYNAMIC_SAFETY_CONFIG
 
-    if db_path is None:
-        db_path = _get_db_path(store_id)
-
     # 오늘 요일
     weekday = datetime.now().weekday()  # 월=0, 일=6
 
@@ -211,7 +207,7 @@ def analyze_alcohol_general_pattern(
     weekday_coef = learned_coef.get(weekday, 1.0)
 
     # DB에서 일평균 판매량 조회
-    conn = sqlite3.connect(db_path, timeout=30)
+    conn = get_conn(store_id=store_id, db_path=db_path)
     cursor = conn.cursor()
 
     if store_id:

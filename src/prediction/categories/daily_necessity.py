@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from typing import Optional, Tuple
 
 from src.utils.logger import get_logger
+from src.prediction.categories._db import get_conn
 
 logger = get_logger(__name__)
 
@@ -80,7 +81,7 @@ def is_daily_necessity_category(mid_cd: str) -> bool:
 
 
 def _get_db_path(store_id: str = None) -> str:
-    """DB 경로 반환"""
+    """DB 경로 반환 (deprecated - get_conn 사용 권장)"""
     from src.infrastructure.database.connection import resolve_db_path
     return resolve_db_path(store_id=store_id)
 
@@ -101,11 +102,8 @@ def _learn_weekday_pattern(mid_cd: str, db_path: str = None, min_data_days: int 
     Returns:
         요일별 계수 딕셔너리 {0: 계수, 1: 계수, ..., 6: 계수}
     """
-    if db_path is None:
-        db_path = _get_db_path(store_id)
-
     try:
-        conn = sqlite3.connect(db_path)
+        conn = get_conn(store_id=store_id, db_path=db_path)
         cursor = conn.cursor()
         if store_id:
             cursor.execute("""
@@ -187,16 +185,13 @@ def analyze_daily_necessity_pattern(
     """
     config = DAILY_NECESSITY_DYNAMIC_SAFETY_CONFIG
 
-    if db_path is None:
-        db_path = _get_db_path(store_id)
-
     # 요일 계수 학습
     weekday_coefs = _learn_weekday_pattern(mid_cd, db_path, config["min_data_days"], store_id=store_id)
     order_weekday = datetime.now().weekday()  # 0=월, 6=일
     weekday_coef = weekday_coefs.get(order_weekday, 1.0)
 
     # DB에서 일평균 판매량 조회
-    conn = sqlite3.connect(db_path, timeout=30)
+    conn = get_conn(store_id=store_id, db_path=db_path)
     cursor = conn.cursor()
 
     if store_id:

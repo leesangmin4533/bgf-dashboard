@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from typing import Optional, Tuple
 
 from src.utils.logger import get_logger
+from src.prediction.categories._db import get_conn
 
 logger = get_logger(__name__)
 
@@ -81,7 +82,7 @@ INSTANT_MEAL_DYNAMIC_SAFETY_CONFIG = {
 
 
 def _get_db_path(store_id: str = None) -> str:
-    """DB 경로 반환"""
+    """DB 경로 반환 (deprecated - get_conn 사용 권장)"""
     from src.infrastructure.database.connection import resolve_db_path
     return resolve_db_path(store_id=store_id)
 
@@ -153,11 +154,8 @@ def _learn_weekday_pattern(mid_cd: str, db_path: str = None, min_data_days: int 
     Returns:
         {0: coef, 1: coef, ..., 6: coef} Python weekday 순서 dict
     """
-    if db_path is None:
-        db_path = _get_db_path(store_id)
-
     try:
-        conn = sqlite3.connect(db_path, timeout=30)
+        conn = get_conn(store_id=store_id, db_path=db_path)
         cursor = conn.cursor()
 
         # 최근 30일간 해당 중분류의 요일별 판매량 집계
@@ -246,11 +244,8 @@ def _get_expiration_days(item_cd: str, db_path: str = None) -> Tuple[Optional[in
     Returns:
         (유통기한_일수, 데이터소스) - 정보 없으면 (None, 'fallback')
     """
-    if db_path is None:
-        db_path = _get_db_path()
-
     try:
-        conn = sqlite3.connect(db_path, timeout=30)
+        conn = get_conn(db_path=db_path)  # product_details → common DB
         cursor = conn.cursor()
         cursor.execute("""
             SELECT expiration_days
@@ -350,9 +345,6 @@ def analyze_instant_meal_pattern(
     """
     config = INSTANT_MEAL_DYNAMIC_SAFETY_CONFIG
 
-    if db_path is None:
-        db_path = _get_db_path(store_id)
-
     from datetime import datetime
     order_weekday = datetime.now().weekday()  # 0=월, 6=일
 
@@ -369,7 +361,7 @@ def analyze_instant_meal_pattern(
     safety_days = group_cfg["safety_days"]
 
     # DB에서 일평균 판매량 조회
-    conn = sqlite3.connect(db_path, timeout=30)
+    conn = get_conn(store_id=store_id, db_path=db_path)
     cursor = conn.cursor()
 
     if store_id:

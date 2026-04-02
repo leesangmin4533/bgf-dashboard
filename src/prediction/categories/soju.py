@@ -15,6 +15,7 @@ from pathlib import Path
 from datetime import datetime
 from dataclasses import dataclass
 from typing import Optional, Tuple
+from src.prediction.categories._db import get_conn
 
 
 # =============================================================================
@@ -55,7 +56,7 @@ SOJU_SAFETY_CONFIG = {
 
 
 def _get_db_path(store_id: str = None) -> str:
-    """DB 경로 반환"""
+    """DB 경로 반환 (deprecated - get_conn 사용 권장)"""
     from src.infrastructure.database.connection import resolve_db_path
     return resolve_db_path(store_id=store_id)
 
@@ -152,9 +153,6 @@ def analyze_soju_pattern(
     """
     config = SOJU_SAFETY_CONFIG
 
-    if db_path is None:
-        db_path = _get_db_path(store_id)
-
     # 오늘 요일 (발주 기준)
     order_weekday = datetime.now().weekday()  # 0=월, 6=일
 
@@ -165,7 +163,7 @@ def analyze_soju_pattern(
     safety_days = get_soju_safety_days(order_weekday)
 
     # DB에서 일평균 판매량 조회
-    conn = sqlite3.connect(db_path, timeout=30)
+    conn = get_conn(store_id=store_id, db_path=db_path)
     cursor = conn.cursor()
 
     if store_id:

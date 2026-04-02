@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from typing import Optional, Tuple, List
 
 from src.utils.logger import get_logger
+from src.prediction.categories._db import get_conn
 
 logger = get_logger(__name__)
 
@@ -72,7 +73,7 @@ BEVERAGE_DYNAMIC_SAFETY_CONFIG = {
 
 
 def _get_db_path(store_id: str = None) -> str:
-    """DB 경로 반환"""
+    """DB 경로 반환 (deprecated - get_conn 사용 권장)"""
     from src.infrastructure.database.connection import resolve_db_path
     return resolve_db_path(store_id=store_id)
 
@@ -144,13 +145,10 @@ def _learn_weekday_pattern(mid_cd: str, db_path: str = None, min_data_days: int 
     Returns:
         [월, 화, 수, 목, 금, 토, 일] 7개 계수 (Python weekday 순서)
     """
-    if db_path is None:
-        db_path = _get_db_path(store_id)
-
     default_coefs = [DEFAULT_WEEKDAY_COEF[i] for i in range(7)]
 
     try:
-        conn = sqlite3.connect(db_path, timeout=30)
+        conn = get_conn(store_id=store_id, db_path=db_path)
         cursor = conn.cursor()
 
         # 최근 30일 데이터에서 요일별 판매량 집계
@@ -286,9 +284,6 @@ def analyze_beverage_pattern(
         BeveragePatternResult: 분석 결과 데이터클래스
     """
     config = BEVERAGE_DYNAMIC_SAFETY_CONFIG
-    if db_path is None:
-        db_path = _get_db_path(store_id)
-
     analysis_days = config["analysis_days"]
     min_data_days = config["min_data_days"]
     default_safety_days = config["default_safety_days"]
@@ -297,7 +292,7 @@ def analyze_beverage_pattern(
     # === mid_cd 조회 (필요 시) ===
     if mid_cd is None:
         try:
-            conn = sqlite3.connect(db_path, timeout=30)
+            conn = get_conn(store_id=store_id, db_path=db_path)
             cursor = conn.cursor()
             if store_id:
                 cursor.execute("""
@@ -327,7 +322,7 @@ def analyze_beverage_pattern(
 
     # === DB에서 판매 데이터 조회 ===
     try:
-        conn = sqlite3.connect(db_path, timeout=30)
+        conn = get_conn(store_id=store_id, db_path=db_path)
         cursor = conn.cursor()
 
         if store_id:

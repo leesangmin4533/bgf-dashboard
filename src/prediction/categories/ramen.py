@@ -16,6 +16,7 @@ from typing import Optional, Tuple
 
 from .snack_confection import _is_orderable_today, _calculate_order_interval
 from src.settings.constants import RAMEN_DEFAULT_ORDERABLE_DAYS
+from src.prediction.categories._db import get_conn
 
 
 # =============================================================================
@@ -54,7 +55,7 @@ RAMEN_DYNAMIC_SAFETY_CONFIG = {
 
 
 def _get_db_path(store_id: str = None) -> str:
-    """DB 경로 반환"""
+    """DB 경로 반환 (deprecated - get_conn 사용 권장)"""
     from src.infrastructure.database.connection import resolve_db_path
     return resolve_db_path(store_id=store_id)
 
@@ -126,16 +127,13 @@ def analyze_ramen_pattern(
         RamenPatternResult: 분석 결과 데이터클래스
     """
     config = RAMEN_DYNAMIC_SAFETY_CONFIG
-    if db_path is None:
-        db_path = _get_db_path(store_id)
-
     analysis_days = config["analysis_days"]
     min_data_days = config["min_data_days"]
     default_safety_days = config["default_safety_days"]
     turnover_config = config["turnover_safety_days"]
 
     # DB에서 판매 데이터 조회
-    conn = sqlite3.connect(db_path, timeout=30)
+    conn = get_conn(store_id=store_id, db_path=db_path)
     cursor = conn.cursor()
 
     if store_id:

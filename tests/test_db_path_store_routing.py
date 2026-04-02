@@ -116,179 +116,170 @@ class TestCategoryStoreIdPassthrough:
         return db_path
 
     def test_ramen_passes_store_id(self):
-        """ramen.py analyze_ramen_pattern()이 store_id를 _get_db_path에 전달."""
-        with patch("src.prediction.categories.ramen._get_db_path", return_value=":memory:") as mock_get:
-            with patch("src.prediction.categories.ramen.sqlite3") as mock_sqlite:
-                mock_conn = MagicMock()
-                mock_cursor = MagicMock()
-                mock_cursor.fetchone.return_value = (5, 25, 10)
-                mock_conn.cursor.return_value = mock_cursor
-                mock_sqlite.connect.return_value = mock_conn
+        """ramen.py analyze_ramen_pattern()이 store_id를 get_conn에 전달."""
+        with patch("src.prediction.categories.ramen.get_conn") as mock_conn_fn:
+            mock_conn = MagicMock()
+            mock_cursor = MagicMock()
+            mock_cursor.fetchone.return_value = (5, 25, 10)
+            mock_conn.cursor.return_value = mock_cursor
+            mock_conn_fn.return_value = mock_conn
 
-                from src.prediction.categories.ramen import analyze_ramen_pattern
-                analyze_ramen_pattern(
-                    item_cd="TEST001",
-                    db_path=None,
-                    current_stock=0,
-                    pending_qty=0,
-                    store_id="46513"
-                )
+            from src.prediction.categories.ramen import analyze_ramen_pattern
+            analyze_ramen_pattern(
+                item_cd="TEST001",
+                db_path=None,
+                current_stock=0,
+                pending_qty=0,
+                store_id="46513"
+            )
 
-            mock_get.assert_called_once_with("46513")
+            mock_conn_fn.assert_called_once_with(store_id="46513", db_path=None)
 
     def test_beverage_passes_store_id(self):
-        """beverage.py analyze_beverage_pattern()이 store_id를 _get_db_path에 전달."""
-        with patch("src.prediction.categories.beverage._get_db_path", return_value=":memory:") as mock_get:
-            with patch("src.prediction.categories.beverage.sqlite3") as mock_sqlite:
-                mock_conn = MagicMock()
-                mock_cursor = MagicMock()
-                mock_cursor.fetchone.return_value = (5, 25, 10)
-                mock_conn.cursor.return_value = mock_cursor
-                mock_sqlite.connect.return_value = mock_conn
+        """beverage.py analyze_beverage_pattern()이 store_id를 get_conn에 전달."""
+        with patch("src.prediction.categories.beverage.get_conn") as mock_conn_fn:
+            mock_conn = MagicMock()
+            mock_cursor = MagicMock()
+            mock_cursor.fetchone.return_value = (5, 25, 10)
+            mock_conn.cursor.return_value = mock_cursor
+            mock_conn_fn.return_value = mock_conn
 
-                from src.prediction.categories.beverage import analyze_beverage_pattern
-                analyze_beverage_pattern(
-                    item_cd="TEST001",
-                    mid_cd="039",
-                    db_path=None,
-                    current_stock=0,
-                    pending_qty=0,
-                    store_id="46513"
-                )
+            from src.prediction.categories.beverage import analyze_beverage_pattern
+            analyze_beverage_pattern(
+                item_cd="TEST001",
+                mid_cd="039",
+                db_path=None,
+                current_stock=0,
+                pending_qty=0,
+                store_id="46513"
+            )
 
-            mock_get.assert_called_once_with("46513")
+            # beverage는 _learn + analyze에서 2회 호출
+            mock_conn_fn.assert_any_call(store_id="46513", db_path=None)
 
     def test_tobacco_passes_store_id(self):
-        """tobacco.py analyze_tobacco_pattern()이 store_id를 _get_db_path에 전달."""
-        with patch("src.prediction.categories.tobacco._get_db_path", return_value=":memory:") as mock_get:
-            with patch("src.prediction.categories.tobacco.sqlite3") as mock_sqlite:
-                mock_conn = MagicMock()
-                mock_cursor = MagicMock()
-                mock_cursor.fetchone.return_value = (10, 50, 20)
-                mock_conn.cursor.return_value = mock_cursor
-                mock_sqlite.connect.return_value = mock_conn
+        """tobacco.py analyze_tobacco_pattern()이 store_id를 get_conn에 전달."""
+        with patch("src.prediction.categories.tobacco.get_conn") as mock_conn_fn:
+            mock_conn = MagicMock()
+            mock_cursor = MagicMock()
+            mock_cursor.fetchone.return_value = (10, 50, 20)
+            mock_conn.cursor.return_value = mock_cursor
+            mock_conn_fn.return_value = mock_conn
 
-                from src.prediction.categories.tobacco import analyze_tobacco_pattern
-                analyze_tobacco_pattern(
-                    item_cd="TEST001",
-                    db_path=None,
-                    current_stock=0,
-                    pending_qty=0,
-                    store_id="46513"
-                )
+            from src.prediction.categories.tobacco import analyze_tobacco_pattern
+            analyze_tobacco_pattern(
+                item_cd="TEST001",
+                db_path=None,
+                current_stock=0,
+                pending_qty=0,
+                store_id="46513"
+            )
 
-            mock_get.assert_called_once_with("46513")
+            mock_conn_fn.assert_called_once_with(store_id="46513", db_path=None)
 
     def test_dessert_passes_store_id(self):
-        """dessert.py analyze_dessert_pattern()이 store_id를 _get_db_path에 전달."""
-        with patch("src.prediction.categories.dessert._get_db_path", return_value=":memory:") as mock_get:
-            with patch("src.prediction.categories.dessert.sqlite3") as mock_sqlite:
-                mock_conn = MagicMock()
-                mock_cursor = MagicMock()
-                # _get_dessert_expiration_days 조회 + analyze 본체 조회
-                mock_cursor.fetchone.side_effect = [
-                    (3,),       # expiration_days
-                    (7, 35, 5)  # data_days, total_sales, latest_stock
-                ]
-                mock_conn.cursor.return_value = mock_cursor
-                mock_sqlite.connect.return_value = mock_conn
+        """dessert.py analyze_dessert_pattern()이 store_id를 get_conn에 전달."""
+        with patch("src.prediction.categories.dessert.get_conn") as mock_conn_fn:
+            mock_conn = MagicMock()
+            mock_cursor = MagicMock()
+            mock_cursor.fetchone.side_effect = [
+                (3,),       # expiration_days
+                (7, 35, 5)  # data_days, total_sales, latest_stock
+            ]
+            mock_conn.cursor.return_value = mock_cursor
+            mock_conn_fn.return_value = mock_conn
 
-                from src.prediction.categories.dessert import analyze_dessert_pattern
-                analyze_dessert_pattern(
-                    item_cd="TEST001",
-                    db_path=None,
-                    current_stock=0,
-                    pending_qty=0,
-                    store_id="46513"
-                )
+            from src.prediction.categories.dessert import analyze_dessert_pattern
+            analyze_dessert_pattern(
+                item_cd="TEST001",
+                db_path=None,
+                current_stock=0,
+                pending_qty=0,
+                store_id="46513"
+            )
 
-            # dessert는 _learn_weekday_pattern과 analyze 본체에서 2회 호출
-            calls = mock_get.call_args_list
-            # 최소 1회는 store_id="46513"으로 호출
-            store_id_calls = [c for c in calls if c[0] == ("46513",) or c[1].get("store_id") == "46513"
-                              or (len(c[0]) > 0 and c[0][0] == "46513")]
+            # get_conn이 최소 1회 store_id="46513"으로 호출
+            calls = mock_conn_fn.call_args_list
+            store_id_calls = [c for c in calls if c[1].get("store_id") == "46513"]
             assert len(store_id_calls) >= 1, f"store_id='46513' 호출 없음: {calls}"
 
     def test_beer_passes_store_id(self):
-        """beer.py analyze_beer_pattern()이 store_id를 _get_db_path에 전달."""
-        with patch("src.prediction.categories.beer._get_db_path", return_value=":memory:") as mock_get:
-            with patch("src.prediction.categories.beer.sqlite3") as mock_sqlite:
-                mock_conn = MagicMock()
-                mock_cursor = MagicMock()
-                mock_cursor.fetchone.return_value = (5, 25, 10)
-                mock_conn.cursor.return_value = mock_cursor
-                mock_sqlite.connect.return_value = mock_conn
+        """beer.py analyze_beer_pattern()이 store_id를 get_conn에 전달."""
+        with patch("src.prediction.categories.beer.get_conn") as mock_conn_fn:
+            mock_conn = MagicMock()
+            mock_cursor = MagicMock()
+            mock_cursor.fetchone.return_value = (5, 25, 10)
+            mock_cursor.fetchall.return_value = []
+            mock_conn.cursor.return_value = mock_cursor
+            mock_conn_fn.return_value = mock_conn
 
-                from src.prediction.categories.beer import analyze_beer_pattern
-                analyze_beer_pattern(
-                    item_cd="TEST001",
-                    db_path=None,
-                    current_stock=0,
-                    pending_qty=0,
-                    store_id="46513"
-                )
+            from src.prediction.categories.beer import analyze_beer_pattern
+            analyze_beer_pattern(
+                item_cd="TEST001",
+                db_path=None,
+                current_stock=0,
+                pending_qty=0,
+                store_id="46513"
+            )
 
-            mock_get.assert_called_once_with("46513")
+            mock_conn_fn.assert_called_once_with(store_id="46513", db_path=None)
 
     def test_soju_passes_store_id(self):
-        """soju.py analyze_soju_pattern()이 store_id를 _get_db_path에 전달."""
-        with patch("src.prediction.categories.soju._get_db_path", return_value=":memory:") as mock_get:
-            with patch("src.prediction.categories.soju.sqlite3") as mock_sqlite:
-                mock_conn = MagicMock()
-                mock_cursor = MagicMock()
-                mock_cursor.fetchone.return_value = (5, 25, 10)
-                mock_conn.cursor.return_value = mock_cursor
-                mock_sqlite.connect.return_value = mock_conn
+        """soju.py analyze_soju_pattern()이 store_id를 get_conn에 전달."""
+        with patch("src.prediction.categories.soju.get_conn") as mock_conn_fn:
+            mock_conn = MagicMock()
+            mock_cursor = MagicMock()
+            mock_cursor.fetchone.return_value = (5, 25, 10)
+            mock_conn.cursor.return_value = mock_cursor
+            mock_conn_fn.return_value = mock_conn
 
-                from src.prediction.categories.soju import analyze_soju_pattern
-                analyze_soju_pattern(
-                    item_cd="TEST001",
-                    db_path=None,
-                    current_stock=0,
-                    pending_qty=0,
-                    store_id="46513"
-                )
+            from src.prediction.categories.soju import analyze_soju_pattern
+            analyze_soju_pattern(
+                item_cd="TEST001",
+                db_path=None,
+                current_stock=0,
+                pending_qty=0,
+                store_id="46513"
+            )
 
-            mock_get.assert_called_once_with("46513")
+            mock_conn_fn.assert_called_once_with(store_id="46513", db_path=None)
 
     def test_store_id_none_passes_none(self):
-        """store_id=None이면 _get_db_path(None) 호출 (레거시 폴백)."""
-        with patch("src.prediction.categories.ramen._get_db_path", return_value=":memory:") as mock_get:
-            with patch("src.prediction.categories.ramen.sqlite3") as mock_sqlite:
-                mock_conn = MagicMock()
-                mock_cursor = MagicMock()
-                mock_cursor.fetchone.return_value = (5, 25, 10)
-                mock_conn.cursor.return_value = mock_cursor
-                mock_sqlite.connect.return_value = mock_conn
+        """store_id=None이면 get_conn(store_id=None, db_path=None) 호출."""
+        with patch("src.prediction.categories.ramen.get_conn") as mock_conn_fn:
+            mock_conn = MagicMock()
+            mock_cursor = MagicMock()
+            mock_cursor.fetchone.return_value = (5, 25, 10)
+            mock_conn.cursor.return_value = mock_cursor
+            mock_conn_fn.return_value = mock_conn
 
-                from src.prediction.categories.ramen import analyze_ramen_pattern
-                analyze_ramen_pattern(
-                    item_cd="TEST001",
-                    db_path=None,
-                    current_stock=0,
-                    pending_qty=0,
-                    store_id=None
-                )
+            from src.prediction.categories.ramen import analyze_ramen_pattern
+            analyze_ramen_pattern(
+                item_cd="TEST001",
+                db_path=None,
+                current_stock=0,
+                pending_qty=0,
+                store_id=None
+            )
 
-            mock_get.assert_called_once_with(None)
+            mock_conn_fn.assert_called_once_with(store_id=None, db_path=None)
 
-    def test_explicit_db_path_skips_get_db_path(self):
-        """db_path 명시 시 _get_db_path 호출되지 않음."""
-        with patch("src.prediction.categories.ramen._get_db_path") as mock_get:
-            with patch("src.prediction.categories.ramen.sqlite3") as mock_sqlite:
-                mock_conn = MagicMock()
-                mock_cursor = MagicMock()
-                mock_cursor.fetchone.return_value = (5, 25, 10)
-                mock_conn.cursor.return_value = mock_cursor
-                mock_sqlite.connect.return_value = mock_conn
+    def test_explicit_db_path_passed_to_get_conn(self):
+        """db_path 명시 시 get_conn(db_path=...) 전달."""
+        with patch("src.prediction.categories.ramen.get_conn") as mock_conn_fn:
+            mock_conn = MagicMock()
+            mock_cursor = MagicMock()
+            mock_cursor.fetchone.return_value = (5, 25, 10)
+            mock_conn.cursor.return_value = mock_cursor
+            mock_conn_fn.return_value = mock_conn
 
-                from src.prediction.categories.ramen import analyze_ramen_pattern
-                analyze_ramen_pattern(
-                    item_cd="TEST001",
-                    db_path="/tmp/explicit.db",
-                    current_stock=0,
-                    pending_qty=0,
-                    store_id="46513"
-                )
+            from src.prediction.categories.ramen import analyze_ramen_pattern
+            analyze_ramen_pattern(
+                item_cd="TEST001",
+                db_path="/tmp/explicit.db",
+                current_stock=0,
+                pending_qty=0,
+                store_id="46513"
+            )
 
-            mock_get.assert_not_called()
+            mock_conn_fn.assert_called_once_with(store_id="46513", db_path="/tmp/explicit.db")

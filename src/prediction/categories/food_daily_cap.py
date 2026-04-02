@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from src.utils.logger import get_logger
+from src.prediction.categories._db import get_conn
 
 logger = get_logger(__name__)
 
@@ -38,7 +39,7 @@ FOOD_DAILY_CAP_CONFIG = {
 
 
 def _get_db_path(store_id: str = None) -> str:
-    """DB 경로 반환"""
+    """DB 경로 반환 (deprecated - get_conn 사용 권장)"""
     from src.infrastructure.database.connection import resolve_db_path
     return resolve_db_path(store_id=store_id)
 
@@ -87,7 +88,7 @@ def get_weekday_avg_sales(
     db_path = _resolve_db_path(store_id, db_path)
 
     try:
-        conn = sqlite3.connect(db_path, timeout=30)
+        conn = get_conn(store_id=store_id, db_path=db_path)
         try:
             cursor = conn.cursor()
 
@@ -184,7 +185,7 @@ def get_explore_failed_items(
     db_path = _resolve_db_path(store_id, db_path)
 
     try:
-        conn = sqlite3.connect(db_path, timeout=30)
+        conn = get_conn(store_id=store_id, db_path=db_path)
         cursor = conn.cursor()
 
         # ★ sell_days: "판매 발생일" (stock_qty 무관 — cap 판정용, 의도적으로 demand_classifier와 다름)

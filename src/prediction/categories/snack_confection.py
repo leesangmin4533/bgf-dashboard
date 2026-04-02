@@ -19,6 +19,7 @@ from typing import Optional, Tuple
 
 from src.utils.logger import get_logger
 from src.settings.constants import SNACK_DEFAULT_ORDERABLE_DAYS
+from src.prediction.categories._db import get_conn
 
 logger = get_logger(__name__)
 
@@ -145,7 +146,7 @@ def _calculate_order_interval(orderable_day: str) -> int:
 
 
 def _get_db_path(store_id: str = None) -> str:
-    """DB 경로 반환"""
+    """DB 경로 반환 (deprecated - get_conn 사용 권장)"""
     from src.infrastructure.database.connection import resolve_db_path
     return resolve_db_path(store_id=store_id)
 
@@ -166,10 +167,8 @@ def _learn_weekday_pattern(mid_cd: str, db_path: str = None, min_data_days: int 
     Returns:
         {0: coef, 1: coef, ..., 6: coef} (Python weekday: 월=0, 일=6)
     """
-    if db_path is None:
-        db_path = _get_db_path(store_id)
     try:
-        conn = sqlite3.connect(db_path)
+        conn = get_conn(store_id=store_id, db_path=db_path)
         cursor = conn.cursor()
         if store_id:
             cursor.execute("""
@@ -267,9 +266,6 @@ def analyze_snack_confection_pattern(
     """
     config = SNACK_CONFECTION_DYNAMIC_SAFETY_CONFIG
 
-    if db_path is None:
-        db_path = _get_db_path(store_id)
-
     # 발주가능요일 결정 (DB값 우선, 없으면 스낵 기본값)
     effective_orderable_day = orderable_day or SNACK_DEFAULT_ORDERABLE_DAYS
 
@@ -287,7 +283,7 @@ def analyze_snack_confection_pattern(
     weekday_coef = learned_coef.get(weekday, 1.0)
 
     # DB에서 일평균 판매량 조회
-    conn = sqlite3.connect(db_path, timeout=30)
+    conn = get_conn(store_id=store_id, db_path=db_path)
     cursor = conn.cursor()
 
     if store_id:

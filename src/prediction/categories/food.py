@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from typing import Any, Optional, Tuple, Dict
 
 from src.utils.logger import get_logger
+from src.prediction.categories._db import get_conn
 from src.settings.constants import (
     DISUSE_COEF_FLOOR, DISUSE_COEF_MULTIPLIER,
     DISUSE_MIN_BATCH_COUNT, DISUSE_IB_LOOKBACK_DAYS,
@@ -313,7 +314,7 @@ def get_food_expiration_days(item_cd: str, mid_cd: str, db_path: Optional[str] =
 
     # 1. DB에서 조회 (product_details.expiration_days)
     try:
-        conn = sqlite3.connect(common_path, timeout=30)
+        conn = get_conn(db_path=common_path)
         try:
             cursor = conn.cursor()
             cursor.execute("""
@@ -392,14 +393,11 @@ def get_dynamic_disuse_coefficient(
     Returns:
         동적 폐기율 계수 (0.5 ~ 1.0)
     """
-    if db_path is None:
-        db_path = _get_db_path(store_id)
-
     item_rate = None
     mid_rate = None
 
     try:
-        conn = sqlite3.connect(db_path, timeout=30)
+        conn = get_conn(store_id=store_id, db_path=db_path)
         try:
             cursor = conn.cursor()
 
@@ -587,9 +585,6 @@ def analyze_food_expiry_pattern(
         FoodExpiryResult: 분석 결과 데이터클래스
     """
     config = FOOD_EXPIRY_SAFETY_CONFIG
-    if db_path is None:
-        db_path = _get_db_path(store_id)
-
     # 유통기한 조회
     expiration_days, data_source = get_food_expiration_days(item_cd, mid_cd, db_path)
 
@@ -610,7 +605,7 @@ def analyze_food_expiry_pattern(
     # 일평균 판매량 조회 (최근 FOOD_ANALYSIS_DAYS일)
     analysis_days = FOOD_ANALYSIS_DAYS
     try:
-        conn = sqlite3.connect(db_path, timeout=30)
+        conn = get_conn(store_id=store_id, db_path=db_path)
         try:
             cursor = conn.cursor()
             if store_id:
@@ -750,9 +745,6 @@ def get_delivery_waste_adjustment(
     Returns:
         조정 계수 (1.0=기본, <1.0=축소)
     """
-    if db_path is None:
-        db_path = _get_db_path(store_id)
-
     # 차수 판별
     if not item_nm or not item_nm.strip():
         return 1.0
@@ -762,7 +754,7 @@ def get_delivery_waste_adjustment(
     delivery_type = f"{last_char}차"
 
     try:
-        conn = sqlite3.connect(db_path, timeout=30)
+        conn = get_conn(store_id=store_id, db_path=db_path)
         try:
             cursor = conn.cursor()
 
@@ -852,14 +844,11 @@ def get_unified_waste_coefficient(
     Returns:
         통합 폐기 계수 (0.70 ~ 1.0)
     """
-    if db_path is None:
-        db_path = _get_db_path(store_id)
-
     ib_rate = None   # inventory_batches 기반 폐기율
     ot_rate = None   # order_tracking 기반 폐기율
 
     try:
-        conn = sqlite3.connect(db_path, timeout=30)
+        conn = get_conn(store_id=store_id, db_path=db_path)
         try:
             cursor = conn.cursor()
             lookback = DISUSE_IB_LOOKBACK_DAYS
@@ -1124,11 +1113,8 @@ def get_food_weekday_coefficient(
     if mid_cd not in FOOD_CATEGORIES:
         return 1.0
 
-    if db_path is None:
-        db_path = _get_db_path(store_id)
-
     try:
-        conn = sqlite3.connect(db_path, timeout=30)
+        conn = get_conn(store_id=store_id, db_path=db_path)
         try:
             cursor = conn.cursor()
 

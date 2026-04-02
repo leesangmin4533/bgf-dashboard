@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from typing import Optional, Tuple
 
 from src.utils.logger import get_logger
+from src.prediction.categories._db import get_conn
 
 logger = get_logger(__name__)
 
@@ -114,7 +115,7 @@ class DessertPatternResult:
 # Private 함수
 # =============================================================================
 def _get_db_path(store_id: str = None) -> str:
-    """DB 경로 반환"""
+    """DB 경로 반환 (deprecated - get_conn 사용 권장)"""
     from src.infrastructure.database.connection import resolve_db_path
     return resolve_db_path(store_id=store_id)
 
@@ -145,11 +146,8 @@ def _get_dessert_expiration_days(item_cd: str, db_path: Optional[str] = None) ->
     Returns:
         (유통기한_일수, 데이터소스)
     """
-    if db_path is None:
-        db_path = _get_db_path()
-
     try:
-        conn = sqlite3.connect(db_path, timeout=30)
+        conn = get_conn(db_path=db_path)  # product_details → common DB
         try:
             cursor = conn.cursor()
             cursor.execute("""
@@ -202,11 +200,8 @@ def _learn_weekday_pattern(db_path: Optional[str] = None, min_data_days: int = 1
     Returns:
         {0: coef, 1: coef, ..., 6: coef} (Python weekday: 월=0, 일=6)
     """
-    if db_path is None:
-        db_path = _get_db_path(store_id)
-
     try:
-        conn = sqlite3.connect(db_path, timeout=30)
+        conn = get_conn(store_id=store_id, db_path=db_path)
         try:
             cursor = conn.cursor()
             if store_id:
@@ -320,9 +315,6 @@ def analyze_dessert_pattern(
     """
     config = DESSERT_EXPIRY_SAFETY_CONFIG
 
-    if db_path is None:
-        db_path = _get_db_path(store_id)
-
     # 1. 유통기한 조회
     expiration_days, data_source = _get_dessert_expiration_days(item_cd, db_path)
 
@@ -334,7 +326,7 @@ def analyze_dessert_pattern(
     daily_avg = 0.0
     has_enough_data = False
     try:
-        conn = sqlite3.connect(db_path, timeout=30)
+        conn = get_conn(store_id=store_id, db_path=db_path)
         try:
             cursor = conn.cursor()
             if store_id:
