@@ -8,6 +8,7 @@ BGF "상품 유통기한 관리" 화면 수집기 (STCM130_M0)
   LARGE_NM, MID_NM, ITEM_NM, ITEM_CD, EXPIRE_YMD, STORE_CD, DEL_FLAG, NOW_QTY
 """
 
+import json
 import time
 import sqlite3
 from datetime import datetime
@@ -30,52 +31,143 @@ MENU_JS = """
 })();
 """
 
+# form 구조 탐색 JS (실제 컴포넌트 구조를 런타임에 파악)
+DISCOVER_JS = """
+(function() {
+    try {
+        var f = nexacro.getApplication().mainframe.HFrameSet00.VFrameSet00.FrameSet.STCM130_M0;
+        if (!f) return JSON.stringify({error: 'frame_not_found'});
+        if (!f.form) return JSON.stringify({error: 'form_not_loaded'});
+
+        var form = f.form;
+        var info = {components: [], datasets: [], divs: []};
+
+        // 1단계: form 직속 컴포넌트 탐색
+        if (form.components) {
+            for (var i = 0; i < form.components.length; i++) {
+                var c = form.components[i];
+                info.components.push(c.id + '(' + (c.typeid || c.constructor.name || '?') + ')');
+            }
+        }
+
+        // 2단계: objects에서 Dataset 찾기
+        if (form.objects) {
+            for (var i = 0; i < form.objects.length; i++) {
+                var o = form.objects[i];
+                if (o.id && (o.id.indexOf('ds') === 0 || o.id.indexOf('DS') === 0 || o.id.indexOf('Ds') === 0)) {
+                    info.datasets.push(o.id + '(rows=' + (o.rowcount || 0) + ')');
+                }
+            }
+        }
+
+        // 3단계: div_workForm 탐색
+        var wf = null;
+        if (form.div_workForm) {
+            wf = form.div_workForm.form;
+            if (wf && wf.components) {
+                for (var i = 0; i < wf.components.length; i++) {
+                    var c = wf.components[i];
+                    info.divs.push('wf.' + c.id + '(' + (c.typeid || '?') + ')');
+                }
+            }
+            // div_search 하위도 탐색
+            if (wf && wf.div_search && wf.div_search.form && wf.div_search.form.components) {
+                var ds = wf.div_search.form;
+                for (var i = 0; i < ds.components.length; i++) {
+                    var c = ds.components[i];
+                    info.divs.push('wf.div_search.' + c.id + '(' + (c.typeid || '?') + ')');
+                }
+            }
+        }
+
+        // 4단계: div_cmmbtn 탐색 (조회 버튼)
+        if (form.div_cmmbtn && form.div_cmmbtn.form && form.div_cmmbtn.form.components) {
+            var btn = form.div_cmmbtn.form;
+            for (var i = 0; i < btn.components.length; i++) {
+                var c = btn.components[i];
+                info.divs.push('btn.' + c.id + '(' + (c.typeid || '?') + ')');
+            }
+        }
+
+        return JSON.stringify(info);
+    } catch(e) { return JSON.stringify({error: 'discover_error: ' + String(e)}); }
+})();
+"""
+
 # 조회 실행 JS (년월 설정 + 현재고 체크 + 조회)
 SEARCH_JS_TEMPLATE = """
 (function() {{
     try {{
-        var form = nexacro.getApplication().mainframe.HFrameSet00.VFrameSet00.FrameSet.STCM130_M0.form;
-        var wf = form.div_workForm.form;
-        var ds = wf.div_search.form;
+        var f = nexacro.getApplication().mainframe.HFrameSet00.VFrameSet00.FrameSet.STCM130_M0;
+        if (!f || !f.form) return 'ERR:frame_not_ready';
 
-        // 조회년월 설정
-        var ymDiv = ds.meSearchYm;
-        if (ymDiv && ymDiv.form) {{
-            // MaskEdit 또는 Calendar 찾기
-            var comps = ymDiv.form.components;
-            for (var i = 0; i < comps.length; i++) {{
-                if (comps[i].value !== undefined) {{
-                    comps[i].set_value('{ym}');
-                    break;
+        var form = f.form;
+
+        // div_workForm 하위 탐색
+        var wf = form.div_workForm ? form.div_workForm.form : null;
+        var ds = (wf && wf.div_search) ? wf.div_search.form : null;
+
+        if (ds) {{
+            // 조회년월 설정 — meSearchYm 또는 다른 컴포넌트 시도
+            var ymComp = ds.meSearchYm || ds.cal_searchYm || ds.edt_searchYm;
+            if (ymComp) {{
+                if (ymComp.form && ymComp.form.components) {{
+                    for (var i = 0; i < ymComp.form.components.length; i++) {{
+                        if (ymComp.form.components[i].set_value) {{
+                            ymComp.form.components[i].set_value('{ym}');
+                            break;
+                        }}
+                    }}
+                }} else if (ymComp.set_value) {{
+                    ymComp.set_value('{ym}');
                 }}
             }}
+
+            // 현재고 있는 상품만 조회 체크
+            var chk = ds.chk_nowQtyYn;
+            if (chk) chk.set_value('{stock_only}');
         }}
 
-        // 현재고 있는 상품만 조회 체크
-        var chk = ds.chk_nowQtyYn;
-        if (chk) chk.set_value('{stock_only}');
+        // 조회 버튼 클릭 — 여러 위치 시도
+        var btn = null;
+        if (form.div_cmmbtn && form.div_cmmbtn.form) {{
+            btn = form.div_cmmbtn.form.F_10 || form.div_cmmbtn.form.btn_search;
+        }}
+        // 폴백: form 직속 또는 wf 하위
+        if (!btn && form.F_10) btn = form.F_10;
+        if (!btn && wf && wf.btn_search) btn = wf.btn_search;
 
-        // 조회 버튼 클릭
-        var btn = form.div_cmmbtn.form.F_10;
-        if (btn) btn.click();
-
-        return true;
-    }} catch(e) {{ return e.message; }}
+        if (btn) {{
+            btn.click();
+            return true;
+        }} else {{
+            return 'ERR:search_button_not_found';
+        }}
+    }} catch(e) {{ return 'ERR:' + String(e); }}
 }})();
 """
 
-# 데이터셋 추출 JS
+# 데이터셋 추출 JS — form과 wf.objects 양쪽에서 dsList 탐색
 EXTRACT_JS = """
 (function() {
     try {
-        var form = nexacro.getApplication().mainframe.HFrameSet00.VFrameSet00.FrameSet.STCM130_M0.form;
-        var wf = form.div_workForm.form;
+        var f = nexacro.getApplication().mainframe.HFrameSet00.VFrameSet00.FrameSet.STCM130_M0;
+        if (!f || !f.form) return JSON.stringify({error: 'frame_not_ready', rows: []});
 
-        // dsList 찾기
+        var form = f.form;
+        var wf = form.div_workForm ? form.div_workForm.form : null;
+
+        // dsList 찾기 — form.objects + wf.objects 양쪽 탐색
         var ds = null;
-        var objs = wf.objects;
-        for (var i = 0; i < objs.length; i++) {
-            if (objs[i].id === 'dsList') { ds = objs[i]; break; }
+        var searchTargets = [];
+        if (form.objects) searchTargets.push(form.objects);
+        if (wf && wf.objects) searchTargets.push(wf.objects);
+
+        for (var t = 0; t < searchTargets.length && !ds; t++) {
+            var objs = searchTargets[t];
+            for (var i = 0; i < objs.length; i++) {
+                if (objs[i].id === 'dsList') { ds = objs[i]; break; }
+            }
         }
         if (!ds) return JSON.stringify({error: 'dsList not found', rows: []});
 
@@ -93,7 +185,7 @@ EXTRACT_JS = """
             });
         }
         return JSON.stringify({rows: rows, total: ds.rowcount});
-    } catch(e) { return JSON.stringify({error: e.message, rows: []}); }
+    } catch(e) { return JSON.stringify({error: 'extract_error: ' + String(e), rows: []}); }
 })();
 """
 
@@ -124,22 +216,44 @@ class ExpiryManagementCollector:
             # 1. 메뉴 이동
             logger.info(f"[ExpiryMgmt] 메뉴 이동: {FRAME_ID}")
             self.driver.execute_script(MENU_JS)
-            time.sleep(2)
+            time.sleep(3)
 
-            # 프레임 로딩 대기
-            for _ in range(10):
+            # 프레임 로딩 대기 (form까지 준비 확인)
+            frame_ready = False
+            for _ in range(15):
                 try:
                     check = self.driver.execute_script(f"""
                         try {{
                             var f = nexacro.getApplication().mainframe.HFrameSet00.VFrameSet00.FrameSet.{FRAME_ID};
-                            return f ? true : false;
+                            return (f && f.form) ? true : false;
                         }} catch(e) {{ return false; }}
                     """)
                     if check:
+                        frame_ready = True
                         break
                 except Exception:
                     pass
                 time.sleep(0.5)
+
+            if not frame_ready:
+                logger.warning(f"[ExpiryMgmt] 프레임 로딩 타임아웃 ({FRAME_ID})")
+                return {"success": False, "error": "frame_load_timeout", "count": 0}
+
+            # 1.5. form 구조 진단 (첫 실행 시 구조 파악용)
+            try:
+                discover_raw = self.driver.execute_script(DISCOVER_JS)
+                if discover_raw:
+                    discover_data = json.loads(discover_raw)
+                    if discover_data.get("error"):
+                        logger.warning(f"[ExpiryMgmt] 구조 탐색 오류: {discover_data['error']}")
+                    else:
+                        logger.info(f"[ExpiryMgmt] 구조: components={discover_data.get('components', [])}")
+                        logger.info(f"[ExpiryMgmt] 구조: datasets={discover_data.get('datasets', [])}")
+                        logger.info(f"[ExpiryMgmt] 구조: divs={discover_data.get('divs', [])}")
+                else:
+                    logger.warning("[ExpiryMgmt] 구조 탐색 결과: None")
+            except Exception as e:
+                logger.warning(f"[ExpiryMgmt] 구조 탐색 실패: {e}")
 
             # 2. 조회 실행
             stock_val = "1" if stock_only else "0"
@@ -148,11 +262,14 @@ class ExpiryManagementCollector:
             if result is not True:
                 logger.warning(f"[ExpiryMgmt] 조회 실행 결과: {result}")
 
-            time.sleep(2)  # 데이터 로딩 대기
+            time.sleep(3)  # 데이터 로딩 대기
 
             # 3. 데이터 추출
-            import json
             raw = self.driver.execute_script(EXTRACT_JS)
+            if raw is None:
+                logger.error("[ExpiryMgmt] 추출 JS가 None 반환 — 프레임 접근 실패")
+                return {"success": False, "error": "extract_js_returned_none", "count": 0}
+
             data = json.loads(raw)
 
             if data.get("error"):
