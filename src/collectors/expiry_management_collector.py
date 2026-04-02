@@ -20,14 +20,14 @@ logger = get_logger(__name__)
 
 FRAME_ID = "STCM130_M0"
 
-# 메뉴 이동 JS
+# 메뉴 이동 JS — TopFrame.form.gfn_openMenuId 사용
 MENU_JS = """
 (function() {
     try {
-        var app = nexacro.getApplication();
-        app.gfn_menuOpen('STCM130_M0', '상품 유통기한 관리', 'CM::stcm130/stcm130_m0.xfdl');
+        var form = nexacro.getApplication().mainframe.HFrameSet00.VFrameSet00.TopFrame.form;
+        form.gfn_openMenuId('STCM130_M0');
         return true;
-    } catch(e) { return false; }
+    } catch(e) { return 'ERR:' + String(e); }
 })();
 """
 
@@ -95,6 +95,7 @@ DISCOVER_JS = """
 """
 
 # 조회 실행 JS (년월 설정 + 현재고 체크 + 조회)
+# 검증된 구조: div_search.form.meSearchYm.form.mae_monthCal + div_cmmbtn.form.F_10
 SEARCH_JS_TEMPLATE = """
 (function() {{
     try {{
@@ -102,47 +103,26 @@ SEARCH_JS_TEMPLATE = """
         if (!f || !f.form) return 'ERR:frame_not_ready';
 
         var form = f.form;
+        var wf = form.div_workForm.form;
+        var ds = wf.div_search.form;
 
-        // div_workForm 하위 탐색
-        var wf = form.div_workForm ? form.div_workForm.form : null;
-        var ds = (wf && wf.div_search) ? wf.div_search.form : null;
-
-        if (ds) {{
-            // 조회년월 설정 — meSearchYm 또는 다른 컴포넌트 시도
-            var ymComp = ds.meSearchYm || ds.cal_searchYm || ds.edt_searchYm;
-            if (ymComp) {{
-                if (ymComp.form && ymComp.form.components) {{
-                    for (var i = 0; i < ymComp.form.components.length; i++) {{
-                        if (ymComp.form.components[i].set_value) {{
-                            ymComp.form.components[i].set_value('{ym}');
-                            break;
-                        }}
-                    }}
-                }} else if (ymComp.set_value) {{
-                    ymComp.set_value('{ym}');
-                }}
-            }}
-
-            // 현재고 있는 상품만 조회 체크
-            var chk = ds.chk_nowQtyYn;
-            if (chk) chk.set_value('{stock_only}');
+        // 조회년월 설정 — meSearchYm > mae_monthCal
+        var ymComp = ds.meSearchYm;
+        if (ymComp && ymComp.form && ymComp.form.mae_monthCal) {{
+            ymComp.form.mae_monthCal.set_value('{ym}');
         }}
 
-        // 조회 버튼 클릭 — 여러 위치 시도
-        var btn = null;
-        if (form.div_cmmbtn && form.div_cmmbtn.form) {{
-            btn = form.div_cmmbtn.form.F_10 || form.div_cmmbtn.form.btn_search;
-        }}
-        // 폴백: form 직속 또는 wf 하위
-        if (!btn && form.F_10) btn = form.F_10;
-        if (!btn && wf && wf.btn_search) btn = wf.btn_search;
+        // 현재고 있는 상품만 조회 체크
+        var chk = ds.chk_nowQtyYn;
+        if (chk) chk.set_value('{stock_only}');
 
+        // 조회 버튼 클릭
+        var btn = form.div_cmmbtn.form.F_10;
         if (btn) {{
             btn.click();
             return true;
-        }} else {{
-            return 'ERR:search_button_not_found';
         }}
+        return 'ERR:F_10_not_found';
     }} catch(e) {{ return 'ERR:' + String(e); }}
 }})();
 """
@@ -239,7 +219,7 @@ class ExpiryManagementCollector:
                 logger.warning(f"[ExpiryMgmt] 프레임 로딩 타임아웃 ({FRAME_ID})")
                 return {"success": False, "error": "frame_load_timeout", "count": 0}
 
-            # 1.5. form 구조 진단 (첫 실행 시 구조 파악용)
+            # 1.5. form 구조 진단 (디버그용 — 문제 발생 시 로그 확인)
             try:
                 discover_raw = self.driver.execute_script(DISCOVER_JS)
                 if discover_raw:
@@ -247,13 +227,11 @@ class ExpiryManagementCollector:
                     if discover_data.get("error"):
                         logger.warning(f"[ExpiryMgmt] 구조 탐색 오류: {discover_data['error']}")
                     else:
-                        logger.info(f"[ExpiryMgmt] 구조: components={discover_data.get('components', [])}")
-                        logger.info(f"[ExpiryMgmt] 구조: datasets={discover_data.get('datasets', [])}")
-                        logger.info(f"[ExpiryMgmt] 구조: divs={discover_data.get('divs', [])}")
+                        logger.debug(f"[ExpiryMgmt] 구조: {discover_data}")
                 else:
                     logger.warning("[ExpiryMgmt] 구조 탐색 결과: None")
             except Exception as e:
-                logger.warning(f"[ExpiryMgmt] 구조 탐색 실패: {e}")
+                logger.debug(f"[ExpiryMgmt] 구조 탐색 실패: {e}")
 
             # 2. 조회 실행
             stock_val = "1" if stock_only else "0"
