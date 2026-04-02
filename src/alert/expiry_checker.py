@@ -419,9 +419,24 @@ class ExpiryChecker:
 
         return None  # 정상
 
+    # ── expiry-alert-receiving-based: 역매핑 테이블 ──
+    # expiry_hour → [(delivery_type, mid_cd_list, receiving_date_offset)]
+    # offset: 폐기일(today) 기준 입고(도착)일이 며칠 전인지
+    # delivery_utils.get_expiry_time_for_delivery() 역산 결과로 검증
+    EXPIRY_HOUR_TO_RECEIVING = {
+        2:  [("1차", ["001", "002", "003"], -2)],  # D-2 1차 입고 → 오늘 02:00 폐기
+        10: [("2차", ["004", "005"], -3)],          # D-3 2차 입고 → 오늘 10:00 폐기
+        14: [("2차", ["001", "002", "003"], -1)],   # D-1 2차 입고 → 오늘 14:00 폐기
+        22: [("1차", ["004", "005"], -3)],           # D-3 1차 입고 → 오늘 22:00 폐기
+        # 0: 빵(012) → get_bread_items_expiring_today() 별도 처리
+    }
+
     def get_items_expiring_at(self, expiry_hour: int) -> List[Dict[str, Any]]:
         """
-        특정 폐기 시간에 해당하는 상품 조회 (inventory_batches 우선 + order_tracking 보충)
+        특정 폐기 시간에 해당하는 상품 조회 (receiving_history 기반)
+
+        ★ expiry-alert-receiving-based: 발주 주체(AI/수동) 무관하게 모든 입고 상품 대상.
+        receiving_history를 1순위로 사용하고, inventory_batches를 보충용으로 유지.
 
         Args:
             expiry_hour: 폐기 시간 (예: 14 = 14:00 폐기)
@@ -431,69 +446,130 @@ class ExpiryChecker:
         """
         today = datetime.now().strftime("%Y-%m-%d")
 
-        # ★ 0순위: inventory_batches (입고 기반, 가장 정확)
+        # ★ 1순위: receiving_history 기반 (발주 주체 무관)
+        recv_items = self._get_receiving_items_expiring_at(expiry_hour, today)
+
+        # 2순위: inventory_batches 보충 (receiving에 없는 것만)
+        recv_codes = {item['item_cd'] for item in recv_items}
         batch_items = self._get_batch_items_expiring_at(expiry_hour, today)
-        # 배치에서 실물 재고 있는 item_cd (remain > 0, active)
-        batch_active_codes = {bi['item_cd'] for bi in batch_items}
+        for bi in batch_items:
+            if bi['item_cd'] not in recv_codes:
+                recv_items.append(bi)
 
-        # 1순위: order_tracking (보충 — 배치에 없는 것만)
-        items = self.tracking_repo.get_items_expiring_at(expiry_hour, today, store_id=self.store_id)
+        return recv_items
 
-        # ★ OT의 remaining_qty가 부정확하므로, 배치 기반으로 실물 존재 여부 검증
-        # daily_sales.stock_qty도 교차 확인하여 이미 판매된 상품 제외
+    def _get_receiving_items_expiring_at(
+        self, expiry_hour: int, target_date: str
+    ) -> List[Dict[str, Any]]:
+        """receiving_history에서 특정 폐기 시간 대상 조회
+
+        EXPIRY_HOUR_TO_RECEIVING 역매핑으로 (delivery_type, mid_cd, receiving_date)
+        조건을 결정하고, daily_sales.stock_qty > 0 교차검증으로 이미 판매된 상품 제외.
+
+        Args:
+            expiry_hour: 폐기 시간
+            target_date: 폐기일 (YYYY-MM-DD, 보통 today)
+
+        Returns:
+            폐기 대상 상품 목록
+        """
+        mappings = self.EXPIRY_HOUR_TO_RECEIVING.get(expiry_hour)
+        if not mappings:
+            return []  # 매핑 없음 (빵 등 별도 처리 대상)
+
         conn = self._get_connection()
         cursor = conn.cursor()
 
-        result = []
-        for item in items:
-            item_cd = item.get('item_cd')
-            mid_cd = item.get('mid_cd', '')
-            expiry_time_str = item.get('expiry_time', '')
+        store_filter = "AND rh.store_id = ?" if self.store_id else ""
+        store_params = (self.store_id,) if self.store_id else ()
+        common_prefix = "common." if self.store_id else ""
 
-            # inventory_batches에 active remain > 0 배치가 있는지 확인
-            if item_cd not in batch_active_codes:
-                # 배치에 없으면 daily_sales.stock_qty로 재확인
-                try:
-                    store_filter = "AND store_id = ?" if self.store_id else ""
-                    store_params = (self.store_id,) if self.store_id else ()
-                    cursor.execute(f"""
-                        SELECT stock_qty FROM daily_sales
-                        WHERE item_cd = ? {store_filter}
-                        ORDER BY sales_date DESC LIMIT 1
-                    """, (item_cd,) + store_params)
-                    row = cursor.fetchone()
-                    if row and (row['stock_qty'] or 0) == 0:
-                        continue  # 재고 0 → 이미 판매, 제외
-                except Exception:
-                    pass
+        all_items = []
 
-            # 폐기 시간 파싱
+        for delivery_type, mid_cd_list, offset in mappings:
+            # receiving_date 계산 (폐기일 + offset)
+            from datetime import timedelta
+            target_dt = datetime.strptime(target_date, "%Y-%m-%d")
+            recv_date = (target_dt + timedelta(days=offset)).strftime("%Y-%m-%d")
+
+            placeholders = ",".join("?" for _ in mid_cd_list)
+
             try:
-                expiry_time = datetime.strptime(expiry_time_str, "%Y-%m-%d %H:%M")
-            except Exception:
-                expiry_time = None
+                cursor.execute(f"""
+                    SELECT
+                        rh.item_cd,
+                        p.item_nm,
+                        p.mid_cd,
+                        SUM(rh.receiving_qty) as receiving_qty,
+                        rh.delivery_type,
+                        rh.receiving_date
+                    FROM receiving_history rh
+                    JOIN {common_prefix}products p ON rh.item_cd = p.item_cd
+                    WHERE rh.delivery_type = ?
+                      AND p.mid_cd IN ({placeholders})
+                      AND rh.receiving_date = ?
+                      AND rh.receiving_qty > 0
+                      {store_filter}
+                    GROUP BY rh.item_cd
+                    ORDER BY p.mid_cd, p.item_nm
+                """, (delivery_type, *mid_cd_list, recv_date) + store_params)
 
-            result.append({
-                'id': item.get('id'),
-                'item_cd': item_cd,
-                'item_nm': item.get('item_nm'),
-                'mid_cd': mid_cd,
-                'category_name': ALERT_CATEGORIES.get(mid_cd, {}).get('name', '기타'),
-                'order_qty': item.get('order_qty', 0),
-                'remaining_qty': item.get('remaining_qty', 0),
-                'delivery_type': item.get('delivery_type'),
-                'expiry_time': expiry_time,
-                'order_date': item.get('order_date'),
-                'arrival_time': item.get('arrival_time')
-            })
+                rows = cursor.fetchall()
+            except Exception as e:
+                logger.warning(f"receiving_history 조회 실패 (expiry_hour={expiry_hour}): {e}")
+                continue
 
-        # ★ 배치 결과 합산 (OT에 없는 것만 추가)
-        ot_codes = {item['item_cd'] for item in result if item.get('item_cd')}
-        for bi in batch_items:
-            if bi['item_cd'] not in ot_codes:
-                result.append(bi)
+            for row in rows:
+                item_cd = row['item_cd']
+                mid_cd = row['mid_cd']
+                recv_qty = row['receiving_qty']
 
-        return result
+                # daily_sales.stock_qty 교차검증: 이미 전량 판매된 상품 제외
+                stock_qty = self._get_latest_stock_qty(cursor, item_cd)
+                if stock_qty is not None and stock_qty == 0:
+                    continue  # 재고 0 → 이미 판매, 제외
+
+                # 폐기 시간 계산
+                from src.alert.delivery_utils import (
+                    get_arrival_time, get_expiry_time_for_delivery,
+                )
+                recv_dt = datetime.strptime(row['receiving_date'], "%Y-%m-%d")
+                # receiving_date = 도착일 (1차: order당일, 2차: order+1일)
+                # arrival_time 직접 구성
+                arrival_hour = DELIVERY_CONFIG.get(delivery_type, {}).get('arrival_hour', 7)
+                arrival_time = recv_dt.replace(hour=arrival_hour, minute=0, second=0)
+                expiry_time = get_expiry_time_for_delivery(
+                    delivery_type, mid_cd, arrival_time
+                )
+
+                all_items.append({
+                    'item_cd': item_cd,
+                    'item_nm': row['item_nm'],
+                    'mid_cd': mid_cd,
+                    'category_name': ALERT_CATEGORIES.get(mid_cd, {}).get('name', '기타'),
+                    'remaining_qty': stock_qty if stock_qty is not None else recv_qty,
+                    'delivery_type': delivery_type,
+                    'expiry_time': expiry_time,
+                    'order_date': row['receiving_date'],
+                    'arrival_time': arrival_time.strftime("%Y-%m-%d %H:%M"),
+                })
+
+        return all_items
+
+    def _get_latest_stock_qty(self, cursor, item_cd: str) -> Optional[int]:
+        """daily_sales에서 최신 stock_qty 조회 (None=미조회/오류)"""
+        try:
+            store_filter = "AND store_id = ?" if self.store_id else ""
+            store_params = (self.store_id,) if self.store_id else ()
+            cursor.execute(f"""
+                SELECT stock_qty FROM daily_sales
+                WHERE item_cd = ? {store_filter}
+                ORDER BY sales_date DESC LIMIT 1
+            """, (item_cd,) + store_params)
+            row = cursor.fetchone()
+            return row['stock_qty'] if row else None
+        except Exception:
+            return None
 
     def _get_batch_items_expiring_at(self, expiry_hour: int, target_date: str) -> List[Dict[str, Any]]:
         """inventory_batches에서 특정 폐기 시간 대상 조회 (입고 기반)"""
@@ -805,18 +881,9 @@ class ExpiryChecker:
         Returns:
             알림 메시지 (없으면 None)
         """
-        # order_tracking에서 조회
+        # ★ expiry-alert-receiving-based: receiving_history 기반으로 통합 조회
+        # (legacy 보충 제거 — receiving이 모든 케이스 커버)
         items = self.get_items_expiring_at(expiry_hour)
-
-        # order_tracking에 없으면 레거시 방식으로 조회
-        # 있더라도 레거시 경로에서 추가 항목 보충 (중복 제거)
-        legacy_items = self.get_items_expiring_at_legacy(expiry_hour)
-        if legacy_items:
-            tracked_codes = {item['item_cd'] for item in items}
-            for legacy_item in legacy_items:
-                if legacy_item['item_cd'] not in tracked_codes:
-                    items.append(legacy_item)
-                    tracked_codes.add(legacy_item['item_cd'])
 
         if not items:
             return None
