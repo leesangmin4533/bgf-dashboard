@@ -2419,15 +2419,20 @@ class OrderExecutor:
         from src.utils.nexacro_helpers import close_tab_verified
 
         # 1. FrameSet 내 열린 프레임 목록 조회
+        #    넥사크로 내부 프로퍼티(_max_frame, WorkFrame, _last_focused, _active_frame 등)
+        #    를 제외하고 실제 메뉴 프레임(ST로 시작)만 수집
         try:
             open_frames = self.driver.execute_script("""
                 try {
                     var app = nexacro.getApplication();
                     var frameSet = app.mainframe.HFrameSet00.VFrameSet00.FrameSet;
                     var result = [];
+                    var skip = {_max_frame:1, WorkFrame:1, _last_focused:1, _active_frame:1,
+                                _focused_frame:1, _default_frame:1};
                     var keys = Object.keys(frameSet);
                     for (var i = 0; i < keys.length; i++) {
                         var key = keys[i];
+                        if (skip[key] || key.charAt(0) === '_') continue;
                         try {
                             if (frameSet[key] && frameSet[key].form) {
                                 result.push(key);
