@@ -1075,15 +1075,11 @@ class InventoryBatchRepository(BaseRepository):
             if not batch_totals:
                 return {"checked": 0, "adjusted": 0, "consumed": 0}
 
-            # 2) 해당 상품들의 최신 stock_qty 조회
-            #    daily_sales + realtime_inventory 교차 확인 (MAX 사용)
-            #    daily_sales가 오래된 경우 RI가 더 정확할 수 있음
+            # 2) 해당 상품들의 최신 stock_qty 조회 (daily_sales 기준)
             placeholders = ",".join("?" * len(batch_totals))
-
-            # 2a) daily_sales 기준
             cursor.execute(
                 f"""
-                SELECT ds.item_cd, ds.stock_qty, latest.max_date
+                SELECT ds.item_cd, ds.stock_qty
                 FROM daily_sales ds
                 INNER JOIN (
                     SELECT item_cd, MAX(sales_date) as max_date
@@ -1097,69 +1093,10 @@ class InventoryBatchRepository(BaseRepository):
                 """,
                 (store_id, *batch_totals.keys(), store_id),
             )
-            ds_stock_map = {}
-            ds_date_map = {}
-            for row in cursor.fetchall():
-                ds_stock_map[row["item_cd"]] = int(row["stock_qty"] or 0)
-                ds_date_map[row["item_cd"]] = row["max_date"] or ""
-
-            # 2b) realtime_inventory 기준 (daily_sales보다 최신일 수 있음)
-            ri_stock_map = {}
-            try:
-                cursor.execute(
-                    f"""
-                    SELECT item_cd, stock_qty
-                    FROM realtime_inventory
-                    WHERE store_id = ? AND item_cd IN ({placeholders})
-                    """,
-                    (store_id, *batch_totals.keys()),
-                )
-                ri_stock_map = {
-                    row["item_cd"]: int(row["stock_qty"] or 0)
-                    for row in cursor.fetchall()
-                }
-            except Exception:
-                pass  # RI 없으면 DS만 사용
-
-            # 2c) 배치 최신 receiving_date 조회 (DS 신선도 비교용)
-            batch_recv_map = {}
-            try:
-                cursor.execute(
-                    f"""
-                    SELECT item_cd, MAX(receiving_date) as latest_recv
-                    FROM inventory_batches
-                    WHERE store_id = ? AND status = ? AND remaining_qty > 0
-                      AND item_cd IN ({placeholders})
-                    GROUP BY item_cd
-                    """,
-                    (store_id, BATCH_STATUS_ACTIVE, *batch_totals.keys()),
-                )
-                batch_recv_map = {
-                    row["item_cd"]: row["latest_recv"] or ""
-                    for row in cursor.fetchall()
-                }
-            except Exception:
-                pass
-
-            # 2d) stock_map 결정: DS가 배치 입고일보다 오래되었으면 RI 우선
-            stock_map = {}
-            for item_cd in batch_totals:
-                ds_stock = ds_stock_map.get(item_cd, 0)
-                ds_date = ds_date_map.get(item_cd, "")
-                ri_stock = ri_stock_map.get(item_cd, 0)
-                latest_recv = batch_recv_map.get(item_cd, "")
-
-                if latest_recv and ds_date and ds_date < latest_recv:
-                    # daily_sales가 배치 입고일보다 오래됨 → RI 우선
-                    stock_map[item_cd] = max(ds_stock, ri_stock)
-                    if ri_stock > ds_stock:
-                        logger.debug(
-                            f"[BatchSync] {item_cd}: DS 오래됨 "
-                            f"(ds_date={ds_date} < recv={latest_recv}), "
-                            f"RI stock={ri_stock} 사용 (DS={ds_stock})"
-                        )
-                else:
-                    stock_map[item_cd] = ds_stock
+            stock_map = {
+                row["item_cd"]: int(row["stock_qty"] or 0)
+                for row in cursor.fetchall()
+            }
 
             checked = len(batch_totals)
             adjusted = 0
