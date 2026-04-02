@@ -44,9 +44,11 @@
     "archivedTo": "docs/archive/2026-04/order-overstock-guard/"
   },
   "db-router-unify": {
-    "phase": "design",
-    "matchRate": null,
+    "phase": "archived",
+    "matchRate": 100,
     "iterationCount": 0,
-    "startedAt": "2026-04-02T12:00:00Z"
+    "startedAt": "2026-04-02T12:00:00Z",
+    "archivedAt": "2026-04-02T13:00:00Z",
+    "archivedTo": "docs/archive/2026-04/db-router-unify/"
   }
 }
