@@ -844,8 +844,8 @@ class SalesRepository(BaseRepository):
             validator = DataValidator(store_id=store_id)
             result = validator.validate_sales_data(sales_data, sales_date, store_id)
 
-            # 검증 결과 로깅
-            validation_repo = ValidationRepository()
+            # 검증 결과 로깅 (store_id 전달 → 매장별 DB에 저장)
+            validation_repo = ValidationRepository(store_id=store_id)
             validation_repo.log_validation_result(result, validation_type='post_save')
 
             # 에러 발생 시 경고 로그 + 알림 (선택적)
