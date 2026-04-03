@@ -622,11 +622,11 @@ def apply_food_daily_cap(
         # 행사 부스트 등으로 품목당 qty>1이 될 수 있으므로 sum(qty) 비교 필수.
         site_qty = (site_order_counts or {}).get(mid_cd, 0)
         category_total = weekday_avg + site_qty
-        effective_buffer = int(category_total * 0.20 + 0.5)
+        effective_buffer = max(1, int(category_total * 0.20 + 0.5))
         total_cap = round(weekday_avg) + effective_buffer
         logger.info(
             f"[Cap] {mid_cd} buffer={effective_buffer} "
-            f"(category_total={category_total:.1f} × 20%)"
+            f"(category_total={category_total:.1f} × 20%, min=1)"
         )
 
         # site(사용자) 발주 차감
