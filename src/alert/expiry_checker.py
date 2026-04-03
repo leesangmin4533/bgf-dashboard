@@ -525,9 +525,13 @@ class ExpiryChecker:
                 recv_qty = row['receiving_qty']
 
                 # daily_sales.stock_qty 교차검증
-                stock_qty = self._get_latest_stock_qty(cursor, item_cd)
+                stock_qty, ds_date = self._get_latest_stock_with_date(cursor, item_cd)
                 if stock_qty is not None and stock_qty == 0:
-                    continue  # 재고 0 → 이미 판매, 제외
+                    # stock=0이지만 그 이후에 입고가 있으면 오판 방지
+                    if ds_date and ds_date < row['receiving_date']:
+                        stock_qty = recv_qty  # 입고 후 daily_sales 미반영 → 입고수량 사용
+                    else:
+                        continue  # 입고 이후 stock=0 확인 → 실제 판매완료, 제외
                 if stock_qty is None:
                     continue  # daily_sales에 기록 없음 → 매장에 물리적으로 없는 상품 (교차오염 방어)
 
@@ -560,18 +564,29 @@ class ExpiryChecker:
 
     def _get_latest_stock_qty(self, cursor, item_cd: str) -> Optional[int]:
         """daily_sales에서 최신 stock_qty 조회 (None=미조회/오류)"""
+        stock_qty, _ = self._get_latest_stock_with_date(cursor, item_cd)
+        return stock_qty
+
+    def _get_latest_stock_with_date(self, cursor, item_cd: str) -> tuple:
+        """daily_sales에서 최신 stock_qty + sales_date 조회
+
+        Returns:
+            (stock_qty, sales_date) — 미조회 시 (None, None)
+        """
         try:
             store_filter = "AND store_id = ?" if self.store_id else ""
             store_params = (self.store_id,) if self.store_id else ()
             cursor.execute(f"""
-                SELECT stock_qty FROM daily_sales
+                SELECT stock_qty, sales_date FROM daily_sales
                 WHERE item_cd = ? {store_filter}
                 ORDER BY sales_date DESC LIMIT 1
             """, (item_cd,) + store_params)
             row = cursor.fetchone()
-            return row['stock_qty'] if row else None
+            if row:
+                return row['stock_qty'], row['sales_date']
+            return None, None
         except Exception:
-            return None
+            return None, None
 
     def _get_batch_items_expiring_at(self, expiry_hour: int, target_date: str) -> List[Dict[str, Any]]:
         """inventory_batches에서 특정 폐기 시간 대상 조회 (입고 기반)"""
