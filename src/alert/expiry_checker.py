@@ -524,10 +524,12 @@ class ExpiryChecker:
                 mid_cd = row['mid_cd']
                 recv_qty = row['receiving_qty']
 
-                # daily_sales.stock_qty 교차검증: 이미 전량 판매된 상품 제외
+                # daily_sales.stock_qty 교차검증
                 stock_qty = self._get_latest_stock_qty(cursor, item_cd)
                 if stock_qty is not None and stock_qty == 0:
                     continue  # 재고 0 → 이미 판매, 제외
+                if stock_qty is None:
+                    continue  # daily_sales에 기록 없음 → 매장에 물리적으로 없는 상품 (교차오염 방어)
 
                 # 폐기 시간 계산
                 from src.alert.delivery_utils import (
