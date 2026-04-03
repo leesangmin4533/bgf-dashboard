@@ -268,7 +268,7 @@ class OrderStatusCollector:
         all_orders = self.collect_order_status()
         if not all_orders:
             logger.warning("[발주정합성] BGF 발주현황 조회 실패 또는 데이터 없음")
-            return []
+            return None  # 빈 리스트가 아닌 None 반환 → 조회 실패와 데이터 없음 구분
 
         # 날짜 형식 변환: YYYY-MM-DD → YYYYMMDD (BGF ORD_YMD 형식)
         yesterday_ymd = yesterday.replace('-', '')

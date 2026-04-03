@@ -807,6 +807,7 @@ class OrderTrackingRepository(BaseRepository):
             cursor = conn.cursor()
 
             # auto 발주 중 remaining_qty > 0 (미입고 상태)인 건만 대상
+            # pending_confirmed=1: 10:30 sync에서 BGF 확인 완료 → 재검증 제외
             cursor.execute("""
                 SELECT id, item_cd, item_nm, order_qty, remaining_qty,
                        arrival_time
@@ -814,6 +815,7 @@ class OrderTrackingRepository(BaseRepository):
                 WHERE order_date = ?
                   AND order_source = 'auto'
                   AND remaining_qty > 0
+                  AND COALESCE(pending_confirmed, 0) != 1
             """, (order_date,))
             rows = cursor.fetchall()
 
