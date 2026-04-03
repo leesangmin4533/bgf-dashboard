@@ -94,24 +94,37 @@ class PendingSyncFlow:
             # 3. 발주현황 메뉴 이동 + pending sync
             os_collector = OrderStatusCollector(driver=driver, store_id=store_id)
 
-            if not os_collector.navigate_to_order_status_menu():
-                logger.warning("[PendingSyncFlow] 발주현황 메뉴 이동 실패")
-                result["error"] = "menu_nav_failed"
-                return result
+            menu_ok = os_collector.navigate_to_order_status_menu()
+            if not menu_ok:
+                logger.warning(
+                    "[PendingSyncFlow] 발주현황 메뉴 이동 실패 → Direct API 폴백 시도"
+                )
 
             sync_result = os_collector.post_order_pending_sync(today)
             result.update(sync_result)
-            result["success"] = True
+
+            synced = sync_result.get("synced", 0)
+            if synced > 0:
+                result["success"] = True
+                if not menu_ok:
+                    result["method"] = "direct_api_fallback"
+            elif not menu_ok:
+                # 메뉴 이동도 실패, Direct API도 0건 → 실패
+                result["error"] = "menu_nav_failed_and_api_empty"
+            else:
+                result["success"] = True  # 메뉴 OK인데 0건은 정상 (발주 없음 등)
 
             logger.info(
                 f"[PendingSyncFlow] 완료: "
-                f"synced={sync_result.get('synced', 0)}, "
+                f"synced={synced}, "
                 f"skipped={sync_result.get('skipped', 0)}, "
                 f"mismatch={sync_result.get('date_mismatch', False)}"
+                f"{' (Direct API 폴백)' if not menu_ok and synced > 0 else ''}"
             )
 
-            # 탭 닫기
-            os_collector.close_menu()
+            # 탭 닫기 (메뉴 열렸을 때만)
+            if menu_ok:
+                os_collector.close_menu()
 
         except Exception as e:
             logger.error(f"[PendingSyncFlow] 실행 오류: {e}")
