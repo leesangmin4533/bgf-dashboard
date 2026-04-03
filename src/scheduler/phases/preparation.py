@@ -1,10 +1,10 @@
-"""Phase 1.68~1.96: 발주 준비
+"""Phase 1.68~1.95: 발주 준비
 
 daily_job.py run_optimized()에서 분리된 발주 준비 Phase.
 - Phase 1.68: DirectAPI 실시간 재고 갱신
 - Phase 1.7: 예측 로깅
 - Phase 1.95: 발주현황 -> OT 동기화
-- Phase 1.96: 발주 정합성 검증 (BGF 대조 → pending_confirmed)
+(발주 정합성 검증은 10:30 pending_sync에서 수행)
 """
 
 import time
@@ -186,50 +186,8 @@ def run_preparation_phases(ctx: Dict[str, Any], job: Any) -> Dict[str, Any]:
     elif ot_sync_done:
         logger.info("[Phase 1.95] 스킵 (Phase 1.2에서 OT 동기화 완료)")
 
-    # ★ Phase 1.96: 발주 정합성 검증 (Phase 1.95와 독립 — ot_sync_done 여부 무관)
-    # 어제 발주현황을 BGF에서 재수집하여 order_tracking과 대조
-    # BGF에 있는 건 → pending_confirmed=1 (미입고 보정 근거)
-    # BGF에 없는 건 → 무효화 (false positive 제거)
-    if run_auto_order and collection_success:
-        try:
-            with phase_timer("1.96", "Order Reconciliation",
-                             store_id=store_id, _logger=logger,
-                             timings=ctx.get("_phase_timings")):
-                driver = job.collector.get_driver()
-                if driver:
-                    from src.collectors.order_status_collector import OrderStatusCollector
-                    os_collector = OrderStatusCollector(
-                        driver=driver, store_id=store_id
-                    )
-
-                    from datetime import timedelta as _td
-                    yesterday_str = (datetime.now() - _td(days=1)).strftime("%Y-%m-%d")
-                    bgf_orders = os_collector.collect_yesterday_orders(yesterday_str)
-                    if bgf_orders is not None:
-                        bgf_item_set = {o['item_cd'] for o in bgf_orders}
-                        from src.infrastructure.database.repos.order_tracking_repo import OrderTrackingRepository
-                        tracking_repo = OrderTrackingRepository(store_id=store_id)
-                        reconcile_result = tracking_repo.reconcile_with_bgf_orders(
-                            order_date=yesterday_str,
-                            bgf_confirmed_items=bgf_item_set,
-                        )
-                        confirmed = reconcile_result.get('confirmed', 0)
-                        invalidated = reconcile_result.get('invalidated', 0)
-                        preserved = reconcile_result.get('preserved', 0)
-                        if confirmed > 0 or invalidated > 0 or preserved > 0:
-                            logger.info(
-                                f"[Phase 1.96] 발주정합성: "
-                                f"BGF확인={confirmed}건, "
-                                f"배송중보존={preserved}건, "
-                                f"무효화={invalidated}건"
-                            )
-                        else:
-                            logger.info("[Phase 1.96] 발주정합성: 대조 대상 없음")
-                    else:
-                        logger.info("[Phase 1.96] 어제 발주현황 조회 실패 (스킵)")
-                else:
-                    logger.debug("[Phase 1.96] 드라이버 없음, 정합성 검증 건너뜀")
-        except Exception as e:
-            logger.warning(f"[Phase 1.96] 발주정합성 검증 실패 (무시): {e}")
+    # Phase 1.96 제거: 발주 정합성 검증은 10:30 pending_sync에서 수행
+    # 7시에는 발주현황 화면이 닫혀있어 항상 실패하고,
+    # 조회 실패 시 어제 발주 전체를 무효화하는 이중발주 버그 유발 (2026-04-04 49965 89건 사례)
 
     return ctx
