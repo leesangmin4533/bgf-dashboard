@@ -217,16 +217,20 @@ def analyze_beer_pattern(
             cap_idx = max(0, int(len(daily_sales) * 0.95) - 1)
             cap_value = sorted(daily_sales)[cap_idx]
             capped_total = sum(min(s, cap_value) for s in daily_sales)
-            daily_avg = capped_total / data_days
+            daily_avg = capped_total / config["analysis_days"]
         else:
-            daily_avg = (total_sales / data_days) if data_days > 0 else 0.0
+            daily_avg = (total_sales / config["analysis_days"]) if data_days > 0 else 0.0
     else:
-        daily_avg = (total_sales / data_days) if data_days > 0 else 0.0
+        daily_avg = (total_sales / config["analysis_days"]) if data_days > 0 else 0.0
 
     conn.close()
 
     # 안전재고 수량
     safety_stock = daily_avg * safety_days
+
+    # 데이터 부족 시 최소 안전재고 1 보장 (신규 도입 맥주 결품 방지)
+    if not has_enough_data and safety_stock < 1 and data_days > 0:
+        safety_stock = 1.0
 
     # 최대 재고 상한선
     max_stock = daily_avg * config["max_stock_days"]

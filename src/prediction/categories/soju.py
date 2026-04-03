@@ -193,11 +193,15 @@ def analyze_soju_pattern(
     total_sales = row[1] or 0
     has_enough_data = data_days >= config["min_data_days"]
 
-    # 일평균 계산
-    daily_avg = (total_sales / data_days) if data_days > 0 else 0.0
+    # 일평균 계산 (달력일 기준 — 판매일만 평균하면 저빈도 상품 과대평가)
+    daily_avg = (total_sales / config["analysis_days"]) if data_days > 0 else 0.0
 
     # 안전재고 수량
     safety_stock = daily_avg * safety_days
+
+    # 데이터 부족 시 최소 안전재고 1 보장 (신규 도입 소주 결품 방지)
+    if not has_enough_data and safety_stock < 1 and data_days > 0:
+        safety_stock = 1.0
 
     # 최대 재고 상한선
     max_stock = daily_avg * config["max_stock_days"]
