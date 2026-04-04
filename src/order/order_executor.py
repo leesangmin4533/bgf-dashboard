@@ -1048,11 +1048,17 @@ class OrderExecutor:
                     logger.warning(f"[order_unit 보정] {item_nm}({item_cd}): 그리드={actual_order_unit_qty} → DB={db_order_unit_qty} 사용")
                     actual_order_unit_qty = db_order_unit_qty
 
+                # ★ 그리드에 ORD_ADAY 컬럼 없음 → null 반환 시 기존 DB 값 보존
+                if not orderable_day and db_data:
+                    orderable_day = db_data.get("orderable_day", "")
+                    grid_data["orderable_day"] = orderable_day
+                    logger.debug(f"[orderable_day 보존] {item_cd}: 그리드 없음 → DB값={orderable_day} 유지")
+
                 # ★ 발주가능요일 DB 비교 검증 (save_to_db 전에 실행)
                 if orderable_day:
                     self._verify_orderable_day(item_cd, orderable_day)
 
-                # DB에 저장 (최신 grid_data로 업데이트)
+                # DB에 저장 (최신 grid_data로 업데이트, orderable_day는 보존됨)
                 self.product_collector.save_to_db(item_cd, grid_data)
                 logger.info(f"그리드 상품명: {item_nm}, 배수단위: {actual_order_unit_qty}, 발주요일: {orderable_day}"
                             + (f", 실제발주일: {actual_order_date}" if actual_order_date else ""))
@@ -2928,7 +2934,7 @@ class OrderExecutor:
                             item_cd: foundItemCd,
                             item_nm: foundItemNm,
                             expiration_days: parseInt(data.EXPIRE_DAY || data.VAL_TERM || data.FRESH_TERM) || null,
-                            orderable_day: data.ORD_ADAY || data.ORD_DAY || '일월화수목금토',
+                            orderable_day: data.ORD_ADAY || data.ORD_DAY || null,
                             orderable_status: data.ORD_STAT_NM || '',
                             order_unit_name: data.ORD_UNIT_NM || '',
                             order_unit_qty: orderUnitQty,

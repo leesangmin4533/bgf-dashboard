@@ -105,6 +105,24 @@ class ProductInfoCollector:
         cursor = conn.cursor()
 
         try:
+            # 기존 레코드 확인 (orderable_day/order_unit_qty 보존용)
+            existing = cursor.execute(
+                "SELECT orderable_day, order_unit_qty FROM product_details WHERE item_cd = ?",
+                (item_cd,)
+            ).fetchone()
+
+            # ★ orderable_day: 새 값이 None이면 기존 DB 값 보존 (그리드에 ORD_ADAY 없는 경우)
+            new_orderable_day = data.get("orderable_day")
+            if not new_orderable_day and existing:
+                new_orderable_day = existing[0]
+            elif not new_orderable_day:
+                new_orderable_day = "일월화수목금토"  # 최초 신규만 기본값
+
+            # ★ order_unit_qty: 새 값이 1이고 기존이 더 크면 기존 보존 (그리드 읽기 실패 보호)
+            new_order_unit_qty = data.get("order_unit_qty", 1) or 1
+            if existing and new_order_unit_qty <= 1 < (existing[1] or 1):
+                new_order_unit_qty = existing[1]
+
             cursor.execute("""
                 INSERT OR REPLACE INTO product_details
                 (item_cd, item_nm, expiration_days, orderable_day, orderable_status,
@@ -115,10 +133,10 @@ class ProductInfoCollector:
                 item_cd,
                 data.get("item_nm"),
                 data.get("expiration_days"),
-                data.get("orderable_day", "일월화수목금토"),
+                new_orderable_day,
                 data.get("orderable_status"),
                 data.get("order_unit_name"),
-                data.get("order_unit_qty", 1),
+                new_order_unit_qty,
                 data.get("case_unit_qty", 1),
                 now,
                 now,
