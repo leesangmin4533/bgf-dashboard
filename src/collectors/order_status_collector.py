@@ -1978,6 +1978,23 @@ class OrderStatusCollector:
                 item_nm = str(r.get("ITEM_NM", ""))
                 mid_cd = str(r.get("MID_CD", ""))
 
+                # ★ 폐기 추적용 스냅샷 저장 (pending/001~003 skip 전, 전체 상품)
+                if ord_qty > 0:
+                    try:
+                        from src.alert.delivery_utils import get_delivery_type
+                        co_delivery = get_delivery_type(item_nm, item_cd=item_cd) or "1차"
+                        cursor.execute("""
+                            INSERT OR REPLACE INTO confirmed_orders
+                            (store_id, order_date, item_cd, item_nm, mid_cd,
+                             ord_qty, delivery_type, ord_input_id, confirmed_at)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """, (self.store_id, order_date, item_cd, item_nm, mid_cd,
+                              ord_qty, co_delivery, ord_input_id, confirmed_at))
+                        result.setdefault("snapshot_count", 0)
+                        result["snapshot_count"] += 1
+                    except Exception as e:
+                        logger.debug(f"[pending_sync] 스냅샷 저장 실패 ({item_cd}): {e}")
+
                 if pending <= 0:
                     result["skipped"] += 1
                     continue

@@ -188,7 +188,7 @@ class TestExpiryAlertReceivingBased:
 
     def test_s2_manual_order_2cha_14h(self, expiry_db, common_db):
         """S2 (핵심): 수동 발주 + 2차 입고 + 14:00 폐기 → 알림 대상
-        order_tracking에 없어도 receiving_history만으로 감지"""
+        order_tracking에 없어도 inventory_batches(입고 매칭 확정)로 감지"""
         today = datetime.now().strftime("%Y-%m-%d")
         yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
 
@@ -198,6 +198,20 @@ class TestExpiryAlertReceivingBased:
         ], sales=[
             {"item_cd": "ITEM_2CHA_001", "date": today, "stock_qty": 1, "mid_cd": "002"},
         ])
+
+        # inventory_batches에 입고 매칭 확정 배치 추가 (delivery_match_flow가 생성)
+        conn = sqlite3.connect(str(expiry_db))
+        now = datetime.now().isoformat()
+        expiry_dt = (datetime.strptime(yesterday, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d") + " 14:00:00"
+        conn.execute("""
+            INSERT INTO inventory_batches
+            (store_id, item_cd, receiving_date,
+             expiry_date, remaining_qty, status, delivery_type, created_at)
+            VALUES ('46513', 'ITEM_2CHA_001', ?,
+                    ?, 1, 'active', '2차', ?)
+        """, (yesterday, expiry_dt, now))
+        conn.commit()
+        conn.close()
 
         # order_tracking에는 아무 데이터도 없음 (수동 발주)
         checker = self._make_checker(expiry_db, common_db)

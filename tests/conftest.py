@@ -387,6 +387,25 @@ def in_memory_db():
         )
     """)
 
+    # confirmed_orders 테이블 (v72: 발주 확정 스냅샷)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS confirmed_orders (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            store_id TEXT NOT NULL,
+            order_date TEXT NOT NULL,
+            item_cd TEXT NOT NULL,
+            item_nm TEXT,
+            mid_cd TEXT,
+            ord_qty INTEGER NOT NULL,
+            delivery_type TEXT,
+            ord_input_id TEXT,
+            matched INTEGER DEFAULT 0,
+            matched_qty INTEGER DEFAULT 0,
+            confirmed_at TEXT NOT NULL,
+            UNIQUE(store_id, order_date, item_cd)
+        )
+    """)
+
     conn.commit()
     yield conn
     conn.close()

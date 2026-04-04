@@ -254,6 +254,19 @@ def run_collection_phases(ctx: Dict[str, Any], job: Any) -> Dict[str, Any]:
                         logger.info(f"입고 수집 (오늘): {today_recv}")
 
                         recv_collector.close_receiving_menu()
+
+                        # ★ 2차 입고 매칭: 어제 발주 스냅샷 vs 오늘 입고
+                        try:
+                            from src.application.use_cases.delivery_match_flow import (
+                                match_confirmed_with_receiving,
+                            )
+                            match_result = match_confirmed_with_receiving(
+                                job.store_id, "2차"
+                            )
+                            logger.info(f"2차 입고 매칭: {match_result}")
+                        except Exception as me:
+                            logger.warning(f"2차 입고 매칭 실패 (수집은 완료): {me}")
+
                     else:
                         logger.warning("센터매입 메뉴 이동 실패")
                 else:

@@ -680,6 +680,23 @@ def receiving_collect_wrapper(delivery_type: str) -> Callable[[], None]:
                         stats = recv_collector.collect_and_save(today_str)
                         recv_collector.close_receiving_menu()
                         logger.info(f"[{ctx.store_id}] 입고 수집 완료: {stats}")
+
+                        # ★ 입고 매칭: confirmed_orders vs receiving_history
+                        try:
+                            from src.application.use_cases.delivery_match_flow import (
+                                match_confirmed_with_receiving,
+                            )
+                            match_result = match_confirmed_with_receiving(
+                                ctx.store_id, delivery_type
+                            )
+                            logger.info(
+                                f"[{ctx.store_id}] 입고 매칭: {match_result}"
+                            )
+                        except Exception as me:
+                            logger.warning(
+                                f"[{ctx.store_id}] 입고 매칭 실패 (수집은 완료): {me}"
+                            )
+
                         return {"success": True, "stats": stats}
                     else:
                         logger.warning(f"[{ctx.store_id}] 센터매입 메뉴 이동 실패")

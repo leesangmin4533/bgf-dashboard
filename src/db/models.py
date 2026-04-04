@@ -1832,6 +1832,10 @@ ALTER TABLE action_proposals ADD COLUMN verified_result TEXT;
 -- v71: food_popularity_curve (매장 DB STORE_SCHEMA에서 자동 생성, common.db는 no-op)
 SELECT 1;
     """,
+    72: """
+-- v72: confirmed_orders 발��� 확정 스냅샷 (매장 DB STORE_SCHEMA에서 자동 생성, common.db는 no-op)
+SELECT 1;
+    """,
 }
 
 

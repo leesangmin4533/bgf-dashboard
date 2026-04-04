@@ -993,6 +993,23 @@ STORE_SCHEMA = [
         version INTEGER PRIMARY KEY,
         applied_at TEXT DEFAULT (datetime('now', 'localtime'))
     )""",
+
+    # confirmed_orders (10:30 발주 확정 스냅샷 — 입고 매칭용)
+    """CREATE TABLE IF NOT EXISTS confirmed_orders (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        store_id TEXT NOT NULL,
+        order_date TEXT NOT NULL,
+        item_cd TEXT NOT NULL,
+        item_nm TEXT,
+        mid_cd TEXT,
+        ord_qty INTEGER NOT NULL,
+        delivery_type TEXT,
+        ord_input_id TEXT,
+        matched INTEGER DEFAULT 0,
+        matched_qty INTEGER DEFAULT 0,
+        confirmed_at TEXT NOT NULL,
+        UNIQUE(store_id, order_date, item_cd)
+    )""",
 ]
 
 STORE_INDEXES = [
@@ -1105,6 +1122,9 @@ STORE_INDEXES = [
     # expiry_management
     "CREATE INDEX IF NOT EXISTS idx_em_expire ON expiry_management(store_id, expire_ymd)",
     "CREATE INDEX IF NOT EXISTS idx_em_item ON expiry_management(item_cd)",
+    # confirmed_orders
+    "CREATE INDEX IF NOT EXISTS idx_co_order_date ON confirmed_orders(store_id, order_date)",
+    "CREATE INDEX IF NOT EXISTS idx_co_matched ON confirmed_orders(matched, delivery_type)",
 ]
 
 
