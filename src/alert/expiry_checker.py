@@ -526,14 +526,21 @@ class ExpiryChecker:
 
                 # daily_sales.stock_qty 교차검증
                 stock_qty, ds_date = self._get_latest_stock_with_date(cursor, item_cd)
-                if stock_qty is not None and stock_qty == 0:
-                    # stock=0이지만 그 이후에 입고가 있으면 오판 방지
-                    if ds_date and ds_date < row['receiving_date']:
-                        stock_qty = recv_qty  # 입고 후 daily_sales 미반영 → 입고수량 사용
+                if stock_qty is not None and stock_qty <= 0:
+                    if stock_qty < 0:
+                        logger.debug(
+                            f"[ExpiryAlert] {item_cd} 제외: "
+                            f"stock={stock_qty} (마이너스 재고)"
+                        )
                     else:
-                        continue  # 입고 이후 stock=0 확인 → 실제 판매완료, 제외
+                        # stock=0: 판매완료 또는 미입고
+                        logger.debug(
+                            f"[ExpiryAlert] {item_cd} 제외: "
+                            f"stock=0, ds={ds_date} (재고 없음)"
+                        )
+                    continue
                 if stock_qty is None:
-                    continue  # daily_sales에 기록 없음 → 매장에 물리적으로 없는 상품 (교차오염 방어)
+                    continue  # daily_sales에 기록 없음 → 매장에 물리적으로 없는 상품
 
                 # inventory_batches FIFO 교차검증: 해당 입고일 배치가 이미 소진되었으면 제외
                 batch_remaining = self._get_batch_remaining_qty(
@@ -1005,6 +1012,22 @@ class ExpiryChecker:
             발송 성공 여부
         """
         self._pending_alert_ids = []  # 초기화
+
+        # 발송 전 요약 로그 (역추적용)
+        pre_items = self.get_items_expiring_at(expiry_hour)
+        if pre_items:
+            logger.info(
+                f"[ExpiryAlert] {self.store_id} {expiry_hour:02d}시 "
+                f"대상: {len(pre_items)}건 "
+                f"({sum(i.get('remaining_qty', 0) for i in pre_items)}개)"
+            )
+            for item in pre_items:
+                logger.debug(
+                    f"  {item['item_nm'][:20]:>20} "
+                    f"qty={item.get('remaining_qty', 0)} "
+                    f"dt={item.get('delivery_type', '')}"
+                )
+
         msg = self.generate_expiry_alert_message(expiry_hour)
 
         if not msg:
