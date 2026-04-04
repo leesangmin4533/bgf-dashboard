@@ -161,6 +161,7 @@ class DailyCollectionJob:
         run_auto_order: bool = True,
         use_improved_predictor: bool = True,
         target_dates: Optional[List[str]] = None,
+        dry_run: bool = False,
     ) -> Dict[str, Any]:
         """
         최적화된 전체 플로우 실행
@@ -170,11 +171,13 @@ class DailyCollectionJob:
             run_auto_order: 자동 발주 실행 여부
             use_improved_predictor: True면 개선된 예측기 사용 (31일 데이터 기반)
             target_dates: 발주할 날짜 목록 (YYYY-MM-DD). None이면 전체 발주
+            dry_run: True면 발주 저장 없이 시뮬레이션만 (07시와 동일 경로)
 
         Returns:
             실행 결과
         """
         self._target_dates = target_dates
+        self._dry_run = dry_run
         today = datetime.now()
         yesterday = today - timedelta(days=1)
 
@@ -185,7 +188,7 @@ class DailyCollectionJob:
         logger.info(LOG_SEPARATOR_WIDE)
         logger.info(f"Optimized flow started | store={self.store_id} | session={sid}")
         logger.info(f"Dates: {yesterday_str}, {today_str}")
-        logger.info(f"Auto-order: {run_auto_order}")
+        logger.info(f"Auto-order: {run_auto_order}, dry_run: {dry_run}")
         logger.info(f"Predictor: {'Improved (31-day)' if use_improved_predictor else 'Legacy'}")
         logger.info(LOG_SEPARATOR_WIDE)
 
@@ -208,6 +211,7 @@ class DailyCollectionJob:
             "run_auto_order": run_auto_order,
             "use_improved_predictor": use_improved_predictor,
             "target_dates": target_dates,
+            "dry_run": dry_run,
             "collection_success": False,
             "collection_results": {},
             "exclusion_stats": None,
@@ -451,6 +455,7 @@ class DailyCollectionJob:
         self, driver: Any, use_improved_predictor: bool = True,
         skip_exclusion_fetch: bool = False,
         target_dates: Optional[List[str]] = None,
+        dry_run: bool = False,
     ) -> Dict[str, Any]:
         """
         기존 드라이버로 자동 발주 실행 (DailyOrderFlow 위임)
@@ -460,12 +465,14 @@ class DailyCollectionJob:
             use_improved_predictor: True면 개선된 예측기 사용 (31일 데이터 기반)
             skip_exclusion_fetch: True면 자동/스마트발주 목록 사이트 재조회 건너뜀
             target_dates: 발주할 날짜 목록 (YYYY-MM-DD). None이면 전체 발주
+            dry_run: True면 발주 저장 없이 시뮬레이션만
         """
         try:
             from src.application.use_cases.daily_order_flow import DailyOrderFlow
             from src.settings.store_context import StoreContext
 
-            logger.info("AutoOrder: Starting with existing session (via DailyOrderFlow)...")
+            mode_str = " [DRY-RUN]" if dry_run else ""
+            logger.info(f"AutoOrder: Starting with existing session (via DailyOrderFlow)...{mode_str}")
             logger.info(f"AutoOrder: Predictor: {'Improved (31-day data)' if use_improved_predictor else 'Legacy'}")
 
             ctx = StoreContext.from_store_id(self.store_id)
@@ -475,7 +482,7 @@ class DailyCollectionJob:
                 use_improved_predictor=use_improved_predictor,
             )
             flow_result = flow.run_auto_order(
-                dry_run=False,
+                dry_run=dry_run,
                 min_order_qty=1,
                 max_items=None,
                 prefetch_pending=True,

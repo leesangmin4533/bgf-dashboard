@@ -29,6 +29,7 @@ def run_execution_phases(ctx: Dict[str, Any], job: Any) -> Dict[str, Any]:
     run_auto_order = ctx["run_auto_order"]
     collection_success = ctx["collection_success"]
     use_improved_predictor = ctx["use_improved_predictor"]
+    dry_run = ctx.get("dry_run", False)
     exclusion_stats = ctx.get("exclusion_stats")
     order_result = None
     fail_reason_result = None
@@ -68,6 +69,7 @@ def run_execution_phases(ctx: Dict[str, Any], job: Any) -> Dict[str, Any]:
                         driver, use_improved_predictor,
                         skip_exclusion_fetch=exclusion_cached,
                         target_dates=ctx.get("target_dates"),
+                        dry_run=dry_run,
                     )
 
                     # ★ Phase 2 발주 결과 요약 로그
@@ -118,5 +120,38 @@ def run_execution_phases(ctx: Dict[str, Any], job: Any) -> Dict[str, Any]:
 
     ctx["order_result"] = order_result
     ctx["fail_reason_result"] = fail_reason_result
+
+    # ★ dry_run 시 Excel 리포트 자동 생성
+    if dry_run and order_result:
+        try:
+            order_list = order_result.get("order_list", [])
+            if order_list:
+                from pathlib import Path
+                from datetime import datetime as _dt
+
+                export_dir = (
+                    Path(__file__).parent.parent.parent.parent / "data" / "exports"
+                )
+                export_dir.mkdir(parents=True, exist_ok=True)
+                timestamp = _dt.now().strftime("%Y%m%d_%H%M%S")
+                store_id = ctx.get("store_id", "unknown")
+                xlsx_path = str(
+                    export_dir / f"dry_order_{store_id}_{timestamp}.xlsx"
+                )
+
+                from scripts.run_full_flow import create_dryrun_excel
+                create_dryrun_excel(
+                    order_list, output_path=xlsx_path, store_id=store_id
+                )
+                logger.info(
+                    f"[DryRun] Excel 리포트 생성: {xlsx_path} "
+                    f"({len(order_list)}건)"
+                )
+            else:
+                logger.info("[DryRun] 발주 목록 없음 — Excel 생성 스킵")
+        except ImportError:
+            logger.debug("[DryRun] Excel 생성 함수 미사용 가능 (run_full_flow 미임포트)")
+        except Exception as e:
+            logger.warning(f"[DryRun] Excel 리포트 생성 실패 (무시): {e}")
 
     return ctx

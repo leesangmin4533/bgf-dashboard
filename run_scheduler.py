@@ -1889,6 +1889,11 @@ if __name__ == "__main__":
         help="Sync DB files to PythonAnywhere immediately"
     )
     parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="발주 저장 없이 시뮬레이션만 수행 (07시와 동일 경로, 저장만 건너뜀)"
+    )
+    parser.add_argument(
         "--store",
         type=str,
         default=None,
@@ -2077,7 +2082,9 @@ if __name__ == "__main__":
             run_expiry_alert_now(args.expiry)
         elif args.now:
             if args.store:
-                logger.info(f"Running job for store {args.store} immediately...")
+                dry_run = getattr(args, 'dry_run', False)
+                mode_str = " [DRY-RUN]" if dry_run else ""
+                logger.info(f"Running job for store {args.store} immediately...{mode_str}")
                 if args.order_date:
                     logger.info(f"Order date filter: {args.order_date}")
                 init_db()
@@ -2086,6 +2093,7 @@ if __name__ == "__main__":
                 result = job.run_optimized(
                     run_auto_order=True, use_improved_predictor=True,
                     target_dates=args.order_date,
+                    dry_run=dry_run,
                 )
                 if result.get("success"):
                     logger.info("Job completed successfully")
