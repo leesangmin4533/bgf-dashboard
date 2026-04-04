@@ -535,6 +535,13 @@ class ExpiryChecker:
                 if stock_qty is None:
                     continue  # daily_sales에 기록 없음 → 매장에 물리적으로 없는 상품 (교차오염 방어)
 
+                # inventory_batches FIFO 교차검증: 해당 입고일 배치가 이미 소진되었으면 제외
+                batch_remaining = self._get_batch_remaining_qty(
+                    cursor, item_cd, row['receiving_date']
+                )
+                if batch_remaining is not None and batch_remaining <= 0:
+                    continue  # 해당 배치 소진됨 → 현재 stock은 다른 배치 소속
+
                 # 폐기 시간 계산
                 from src.alert.delivery_utils import (
                     get_arrival_time, get_expiry_time_for_delivery,
@@ -587,6 +594,34 @@ class ExpiryChecker:
             return None, None
         except Exception:
             return None, None
+
+    def _get_batch_remaining_qty(self, cursor, item_cd: str, receiving_date: str) -> Optional[int]:
+        """inventory_batches에서 특정 입고일 배치의 잔량 조회
+
+        Args:
+            cursor: DB 커서
+            item_cd: 상품코드
+            receiving_date: 입고일 (YYYY-MM-DD)
+
+        Returns:
+            remaining_qty (None = 배치 기록 없음)
+        """
+        try:
+            store_filter = "AND store_id = ?" if self.store_id else ""
+            store_params = (self.store_id,) if self.store_id else ()
+            cursor.execute(f"""
+                SELECT SUM(remaining_qty) as total_remaining
+                FROM inventory_batches
+                WHERE item_cd = ?
+                  AND receiving_date = ?
+                  {store_filter}
+            """, (item_cd, receiving_date) + store_params)
+            row = cursor.fetchone()
+            if row and row['total_remaining'] is not None:
+                return row['total_remaining']
+            return None  # 배치 기록 없음 → 기존 로직 유지
+        except Exception:
+            return None  # 조회 실패 → 기존 로직 유지 (안전)
 
     def _get_batch_items_expiring_at(self, expiry_hour: int, target_date: str) -> List[Dict[str, Any]]:
         """inventory_batches에서 특정 폐기 시간 대상 조회 (입고 기반)"""
