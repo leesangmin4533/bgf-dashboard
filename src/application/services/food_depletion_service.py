@@ -72,10 +72,17 @@ class FoodDepletionService:
 
                 if not delivery_type or delivery_type not in ("1차", "2차"):
                     skipped += 1
+                    logger.debug(
+                        f"[DepletionCurve] {item_cd} 스킵: "
+                        f"delivery_type='{delivery_type}' (유효하지 않음)"
+                    )
                     continue
 
                 if order_qty <= 0:
                     skipped += 1
+                    logger.debug(
+                        f"[DepletionCurve] {item_cd} 스킵: order_qty={order_qty}"
+                    )
                     continue
 
                 # 시간대별 판매 데이터에서 소진율 계산
@@ -85,6 +92,10 @@ class FoodDepletionService:
 
                 if not hourly_rates:
                     skipped += 1
+                    logger.debug(
+                        f"[DepletionCurve] {item_cd} 스킵: "
+                        f"hourly 판매 데이터 없음 ({yesterday}, {delivery_type})"
+                    )
                     continue
 
                 # EMA 갱신
@@ -93,6 +104,16 @@ class FoodDepletionService:
                     alpha=DEPLETION_CURVE_EMA_ALPHA,
                 )
                 updated += 1
+
+                # 최종 소진율 로그 (역추적용)
+                max_h = max(hourly_rates.keys())
+                final_rate = hourly_rates[max_h]
+                logger.debug(
+                    f"[DepletionCurve] 갱신 {item_cd} "
+                    f"{delivery_type} qty={order_qty}: "
+                    f"final_rate={final_rate:.3f} "
+                    f"(경과{max_h}h, α={DEPLETION_CURVE_EMA_ALPHA})"
+                )
 
             except Exception as e:
                 logger.debug(f"[DepletionCurve] {order.get('item_cd', '?')} 오류: {e}")

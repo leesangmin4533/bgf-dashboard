@@ -155,6 +155,11 @@ def run_collection_phases(ctx: Dict[str, Any], job: Any) -> Dict[str, Any]:
                     bf_missing = [h for h in range(24) if h not in bf_collected]
                     if not bf_missing:
                         continue
+                    logger.debug(
+                        f"[Phase 1.05] backfill {bf_date}: "
+                        f"{len(bf_missing)}시간대 누락 감지 "
+                        f"(수집완료={len(bf_collected)}/24)"
+                    )
                     bf_results = hsd_collector.collect_all_hours(
                         bf_date.replace('-', ''), hours=bf_missing, delay=0.25
                     )

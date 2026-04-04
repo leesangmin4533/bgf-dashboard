@@ -232,11 +232,17 @@ def _try_curve_based_purity(
         for dt in ("1차", "2차"):
             rate, sample_count = repo.get_final_rate(item_cd, dt)
             if rate is not None and sample_count >= DEPLETION_CURVE_MIN_SAMPLE_DAYS:
-                # purity_factor 하한: 0.3 (너무 낮으면 예측이 0에 수렴)
-                return max(0.3, rate)
+                purity = max(0.3, rate)
+                logger.debug(
+                    f"[DepletionPurity] {item_cd} {dt}: "
+                    f"rate={rate:.3f}, samples={sample_count}, "
+                    f"purity={purity:.3f}"
+                )
+                return purity
 
         return None
-    except Exception:
+    except Exception as e:
+        logger.debug(f"[DepletionPurity] {item_cd} 조회 실패: {e}")
         return None
 
 
@@ -291,11 +297,20 @@ def _get_time_demand_ratio(
             if ratios:
                 ratio = ratios.get(delivery_type)
                 if ratio is not None:
+                    logger.debug(
+                        f"[FoodRatio] {delivery_type} mid_cd={mid_cd}: "
+                        f"전체비율={ratio:.3f} (mid_cd별 데이터 부족→폴백)"
+                    )
                     return ratio
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"[FoodRatio] DB 조회 실패: {e}")
     # 3차 폴백: 기존 고정값
-    return DELIVERY_TIME_DEMAND_RATIO.get(delivery_type, 1.0)
+    fallback = DELIVERY_TIME_DEMAND_RATIO.get(delivery_type, 1.0)
+    logger.debug(
+        f"[FoodRatio] {delivery_type} mid_cd={mid_cd}: "
+        f"고정값={fallback} (DB 데이터 없음→최종폴백)"
+    )
+    return fallback
 
 
 def _get_db_path(store_id: Optional[str] = None) -> str:
