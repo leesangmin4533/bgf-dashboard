@@ -185,6 +185,11 @@ class FoodDepletionService:
         base_hour = DELIVERY_BASE_HOUR.get(delivery_type, 7)
         track_hours = DELIVERY_TRACK_HOURS.get(delivery_type, 24)
 
+        # 날짜 형식 정규화 (20260329 → 2026-03-29)
+        od = order_date.replace('-', '')
+        if len(od) == 8:
+            order_date = f"{od[:4]}-{od[4:6]}-{od[6:8]}"
+
         # hourly_sales_detail에서 해당 상품의 판매 데이터 조회
         # 추적 범위: order_date 기준시각 ~ 다음날 06:59
         conn = hsd_repo._get_conn()
@@ -350,6 +355,11 @@ class FoodDepletionService:
         """커넥션 재사용 버전의 소진율 계산 (bootstrap용)"""
         base_hour = DELIVERY_BASE_HOUR.get(delivery_type, 7)
         track_hours = DELIVERY_TRACK_HOURS.get(delivery_type, 24)
+
+        # 날짜 형식 정규화 (20260329 → 2026-03-29)
+        od = order_date.replace('-', '')
+        if len(od) == 8:
+            order_date = f"{od[:4]}-{od[4:6]}-{od[6:8]}"
 
         next_date = (
             datetime.strptime(order_date, '%Y-%m-%d') + timedelta(days=1)
