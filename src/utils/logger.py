@@ -19,7 +19,7 @@ import uuid
 from contextlib import contextmanager
 from pathlib import Path
 from datetime import datetime, timedelta
-from logging.handlers import RotatingFileHandler
+from logging.handlers import RotatingFileHandler, TimedRotatingFileHandler
 from typing import Any, Callable, Optional, Set
 
 
@@ -68,6 +68,47 @@ class SafeRotatingFileHandler(RotatingFileHandler):
             super().doRollover()
         except PermissionError:
             # 로테이션 실패 → stream이 닫혀있으면 다시 열기
+            if self.stream is None and not self.delay:
+                self.stream = self._open()
+
+
+class DailyFileHandler(TimedRotatingFileHandler):
+    """일별 로그 파일 관리 핸들러
+
+    logs/bgf_auto.log → 자정에 logs/bgf_auto_2026-04-04.log 로 로테이션.
+    Windows OneDrive 파일 잠금에 안전하며, 30일 이상 된 파일은 자동 삭제.
+
+    파일명 패턴: {basename}_{YYYY-MM-DD}.log
+    예) bgf_auto_2026-04-04.log, prediction_2026-04-03.log
+    """
+
+    def __init__(self, filename, backup_count=30, encoding='utf-8'):
+        super().__init__(
+            filename,
+            when='midnight',
+            interval=1,
+            backupCount=backup_count,
+            encoding=encoding,
+            utc=False,
+        )
+        # 접미사: _YYYY-MM-DD (기본 .YYYY-MM-DD 대신)
+        self.suffix = "%Y-%m-%d"
+        self.namer = self._daily_namer
+
+    @staticmethod
+    def _daily_namer(default_name: str) -> str:
+        """bgf_auto.log.2026-04-04 → bgf_auto_2026-04-04.log 로 변환"""
+        # default_name 예: /path/logs/bgf_auto.log.2026-04-04
+        base, ext = default_name.rsplit('.log.', 1) if '.log.' in default_name else (default_name, '')
+        if ext:
+            return f"{base}_{ext}.log"
+        return default_name
+
+    def doRollover(self):
+        try:
+            super().doRollover()
+        except PermissionError:
+            # Windows OneDrive 잠금 시 기존 파일에 계속 쓰기
             if self.stream is None and not self.delay:
                 self.stream = self._open()
 
@@ -182,34 +223,55 @@ def setup_logger(
     formatter = logging.Formatter(LOG_FORMAT, DATE_FORMAT)
     simple_formatter = logging.Formatter(LOG_FORMAT_SIMPLE, DATE_FORMAT)
 
-    # 파일 핸들러 (로테이션)
+    # 파일 핸들러 (일별 로테이션 — 자정에 bgf_auto_YYYY-MM-DD.log 로 회전)
     file_path = LOG_FILES.get(log_file, LOG_FILES["main"])
     try:
-        file_handler = SafeRotatingFileHandler(
+        file_handler = DailyFileHandler(
             file_path,
-            maxBytes=max_bytes,
-            backupCount=backup_count,
-            encoding='utf-8'
+            backup_count=backup_count,
+            encoding='utf-8',
         )
         file_handler.setFormatter(formatter)
         file_handler.setLevel(level)
         logger.addHandler(file_handler)
     except Exception as e:
-        print(f"[WARN] 로그 파일 핸들러 설정 실패: {e}")
+        # DailyFileHandler 실패 시 SafeRotatingFileHandler 폴백
+        try:
+            file_handler = SafeRotatingFileHandler(
+                file_path,
+                maxBytes=max_bytes,
+                backupCount=backup_count,
+                encoding='utf-8'
+            )
+            file_handler.setFormatter(formatter)
+            file_handler.setLevel(level)
+            logger.addHandler(file_handler)
+        except Exception as e2:
+            print(f"[WARN] 로그 파일 핸들러 설정 실패: {e2}")
 
-    # 에러 전용 파일 핸들러
+    # 에러 전용 파일 핸들러 (일별 로테이션)
     try:
-        error_handler = SafeRotatingFileHandler(
+        error_handler = DailyFileHandler(
             LOG_FILES["error"],
-            maxBytes=max_bytes,
-            backupCount=backup_count,
-            encoding='utf-8'
+            backup_count=backup_count,
+            encoding='utf-8',
         )
         error_handler.setFormatter(formatter)
         error_handler.setLevel(logging.ERROR)
         logger.addHandler(error_handler)
     except Exception as e:
-        print(f"[WARN] 에러 로그 파일 핸들러 설정 실패: {e}")
+        try:
+            error_handler = SafeRotatingFileHandler(
+                LOG_FILES["error"],
+                maxBytes=max_bytes,
+                backupCount=backup_count,
+                encoding='utf-8'
+            )
+            error_handler.setFormatter(formatter)
+            error_handler.setLevel(logging.ERROR)
+            logger.addHandler(error_handler)
+        except Exception as e2:
+            print(f"[WARN] 에러 로그 파일 핸들러 설정 실패: {e2}")
 
     # 콘솔 핸들러 (UTF-8 래핑된 stdout 사용)
     if console:
@@ -420,32 +482,40 @@ def debug(msg: str) -> None:
 def cleanup_old_logs(max_age_days: int = 30, max_file_mb: int = 50) -> None:
     """앱 시작 시 오래된 로그 파일 정리 + 비대해진 로그 파일 잘라내기
 
-    OneDrive 파일 잠금으로 인해 RotatingFileHandler의 doRollover()가
-    실패하여 로그 파일이 무한 성장하는 문제를 보완한다.
+    일별 로테이션 파일(_YYYY-MM-DD.log)과 레거시 백업(.log.N) 모두 처리.
 
     Args:
-        max_age_days: 이 일수보다 오래된 .log.N 파일 삭제
-        max_file_mb: 이 크기(MB) 초과 시 로그 파일 잘라내기 (마지막 2MB 유지)
+        max_age_days: 이 일수보다 오래된 일별/백업 파일 삭제
+        max_file_mb: 이 크기(MB) 초과 시 현재 로그 파일 잘라내기 (마지막 2MB 유지)
     """
     if not LOG_DIR.exists():
         return
 
     cutoff = datetime.now() - timedelta(days=max_age_days)
     max_bytes_limit = max_file_mb * 1024 * 1024
+    import re
 
     for log_file in LOG_DIR.iterdir():
         if not log_file.is_file():
             continue
 
         try:
-            # 1. 오래된 백업 파일(.log.1, .log.2 등) 삭제
+            # 1. 일별 로테이션 파일 (_YYYY-MM-DD.log) 정리
+            date_match = re.search(r'_(\d{4}-\d{2}-\d{2})\.log$', log_file.name)
+            if date_match:
+                file_date = datetime.strptime(date_match.group(1), '%Y-%m-%d')
+                if file_date < cutoff:
+                    log_file.unlink()
+                continue
+
+            # 2. 레거시 백업 파일(.log.1, .log.2 등) 삭제
             if log_file.suffix and log_file.suffix[1:].isdigit():
                 mtime = datetime.fromtimestamp(log_file.stat().st_mtime)
                 if mtime < cutoff:
                     log_file.unlink()
                     continue
 
-            # 2. 메인 로그 파일이 max_file_mb 초과 시 잘라내기
+            # 3. 현재 로그 파일이 max_file_mb 초과 시 잘라내기
             if log_file.suffix == ".log" and log_file.stat().st_size > max_bytes_limit:
                 _truncate_log_file(log_file, keep_bytes=2 * 1024 * 1024)
 
