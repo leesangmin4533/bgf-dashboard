@@ -594,8 +594,6 @@ class HourlySalesDetailCollector:
             try:
                 built = self.driver.execute_script("""
                     try {
-                        var app = nexacro.getApplication();
-                        var storeId = app.GV_CHANNELVAL || '';
                         var today = new Date();
                         var y = today.getFullYear();
                         var m = String(today.getMonth()+1).padStart(2,'0');
@@ -613,6 +611,15 @@ class HourlySalesDetailCollector:
                             if (p.length >= 2) {
                                 cookies[p[0].trim()] = p.slice(1).join('=');
                             }
+                        }
+
+                        // strStoreCd: 쿠키 SS_STORE_CD 우선 (GV_CHANNELVAL은 빈 값일 수 있음)
+                        var storeId = cookies['SS_STORE_CD'] || '';
+                        if (!storeId) {
+                            try {
+                                var app = nexacro.getApplication();
+                                storeId = app.GV_CHANNELVAL || '';
+                            } catch(e2) {}
                         }
 
                         var parts = ['SSV:utf-8', 'GV_USERFLAG=HOME'];
