@@ -286,6 +286,21 @@ def in_memory_db():
         )
     """)
 
+    # food_popularity_curve 테이블 (v71)
+    conn.execute("""
+        CREATE TABLE food_popularity_curve (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            item_cd TEXT NOT NULL,
+            delivery_type TEXT NOT NULL,
+            elapsed_hours INTEGER NOT NULL,
+            avg_sold_rate REAL NOT NULL DEFAULT 0.0,
+            sample_count INTEGER NOT NULL DEFAULT 0,
+            last_updated TEXT NOT NULL,
+            store_id TEXT,
+            UNIQUE(item_cd, delivery_type, elapsed_hours)
+        )
+    """)
+
     # waste_slips 테이블
     conn.execute("""
         CREATE TABLE waste_slips (

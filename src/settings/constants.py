@@ -252,7 +252,15 @@ BATCH_EXPIRY_ALERT_DAYS = 1             # 폐기 N일 전 알림
 
 # DB 스키마 버전
 # =====================================================================
-DB_SCHEMA_VERSION = 70  # v70: action_proposals 실행/검증 컬럼 + 자전 시스템
+DB_SCHEMA_VERSION = 71  # v71: food_popularity_curve 소진율 곡선 테이블
+
+# =====================================================================
+# 소진율 곡선 설정 (Phase 1.06 / 3단계)
+# =====================================================================
+DEPLETION_CURVE_ENABLED = True           # 소진율 곡선 기반 보정 활성화
+DEPLETION_CURVE_MIN_SAMPLE_DAYS = 30     # 최소 샘플 수 (미만 시 기존 로직 폴백)
+DEPLETION_CURVE_FOOD_ONLY = True         # 푸드 카테고리 한정
+DEPLETION_CURVE_EMA_ALPHA = 0.1          # EMA 블렌딩 계수 (안정적 이동평균)
 
 # =====================================================================
 # 자전 시스템 (self-healing) 실행 분류

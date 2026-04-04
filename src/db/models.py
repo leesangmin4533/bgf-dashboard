@@ -1828,6 +1828,10 @@ ALTER TABLE action_proposals ADD COLUMN executed_at TIMESTAMP;
 ALTER TABLE action_proposals ADD COLUMN verified_at TIMESTAMP;
 ALTER TABLE action_proposals ADD COLUMN verified_result TEXT;
     """,
+    71: """
+-- v71: food_popularity_curve (매장 DB STORE_SCHEMA에서 자동 생성, common.db는 no-op)
+SELECT 1;
+    """,
 }
 
 

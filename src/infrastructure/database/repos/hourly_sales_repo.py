@@ -236,3 +236,84 @@ class HourlySalesRepository(BaseRepository):
         except Exception as e:
             logger.warning(f"[HourlySales] 동적 비율 계산 실패: {e}")
             return {}
+
+    def calculate_time_demand_ratio_by_mid(
+        self, mid_cd: str, days: int = 14
+    ) -> Dict[str, float]:
+        """중분류별 배송차수 시간대 수요 비율 계산
+
+        기존 calculate_time_demand_ratio()와 동일 로직이지만,
+        특정 mid_cd로 필터링하여 카테고리별 실측 비율을 반환합니다.
+
+        예) 도시락(001)은 점심 피크 → 1차 0.55, 빵(012)은 종일 분산 → 1차 0.80
+
+        Args:
+            mid_cd: 중분류 코드 (001, 002, ...)
+            days: 조회 기간 (기본 14일)
+
+        Returns:
+            {'1차': float, '2차': 1.00} 또는 {} (데이터 부족)
+        """
+        try:
+            conn = self._get_conn()
+            try:
+                # 1차 상품 (item_nm LIKE '%1', 특정 mid_cd)
+                rows_1 = conn.execute("""
+                    SELECT h.hour, SUM(h.sale_qty) as qty
+                    FROM hourly_sales_detail h
+                    WHERE h.item_cd IN (
+                        SELECT DISTINCT item_cd FROM daily_sales
+                        WHERE item_nm LIKE '%1'
+                          AND mid_cd = ?
+                    )
+                    AND h.sales_date >= date('now', ?)
+                    AND h.sales_date < date('now')
+                    GROUP BY h.hour
+                """, (mid_cd, f"-{days} days")).fetchall()
+
+                # 2차 상품 (item_nm LIKE '%2', 특정 mid_cd)
+                rows_2 = conn.execute("""
+                    SELECT h.hour, SUM(h.sale_qty) as qty
+                    FROM hourly_sales_detail h
+                    WHERE h.item_cd IN (
+                        SELECT DISTINCT item_cd FROM daily_sales
+                        WHERE item_nm LIKE '%2'
+                          AND mid_cd = ?
+                    )
+                    AND h.sales_date >= date('now', ?)
+                    AND h.sales_date < date('now')
+                    GROUP BY h.hour
+                """, (mid_cd, f"-{days} days")).fetchall()
+            finally:
+                conn.close()
+
+            def _calc_daytime_ratio(rows) -> Optional[float]:
+                """07~19시 주간 비중 계산 (0.35~0.95 클램프)"""
+                if not rows:
+                    return None
+                dist = {int(r[0]): float(r[1]) for r in rows}
+                total = sum(dist.values())
+                if total <= 0:
+                    return None
+                daytime = sum(dist.get(h, 0) for h in range(7, 20))
+                ratio = round(daytime / total, 3)
+                # mid_cd별은 범위를 넓게 허용 (카테고리 특성 반영)
+                return max(0.35, min(0.95, ratio))
+
+            ratio_1 = _calc_daytime_ratio(rows_1)
+            ratio_2 = _calc_daytime_ratio(rows_2)
+
+            result = {}
+            if ratio_1 is not None:
+                result["1차"] = ratio_1
+            if ratio_2 is not None:
+                logger.debug(
+                    f"[HourlySales] mid_cd={mid_cd} 2차 주간비중={ratio_2} (참조용)"
+                )
+            # 2차는 항상 1.00 (하루 전체 수요 대응)
+            result["2차"] = 1.00
+
+            return result if result else {}
+        except Exception as e:
+            logger.debug(f"[HourlySales] mid_cd={mid_cd} 비율 계산 실패: {e}")
+            return {}

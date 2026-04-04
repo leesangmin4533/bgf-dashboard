@@ -192,26 +192,76 @@ def calculate_delivery_gap_consumption(
         except Exception:
             pass
 
-    # 시간대별 수요 비율 적용 (실제 매출 분포 기반 동적 비율 우선)
-    time_demand_ratio = _get_time_demand_ratio(delivery_type, store_id)
+    # 시간대별 수요 비율 적용 (mid_cd별 실측 비율 → 전체 → 고정값 3단 폴백)
+    time_demand_ratio = _get_time_demand_ratio(delivery_type, store_id, mid_cd)
     gap_consumption = daily_avg * time_demand_ratio * coefficient
     return round(gap_consumption, 2)
 
 
-def _get_time_demand_ratio(
-    delivery_type: str, store_id: Optional[str] = None
-) -> float:
-    """동적 시간대 수요 비율 조회 (DB 우선, 폴백: 고정값)
+def _try_curve_based_purity(
+    item_cd: Optional[str],
+    store_id: Optional[str] = None,
+) -> Optional[float]:
+    """소진율 곡선에서 purity_factor 조회
 
-    최근 7일 시간대별 매출 데이터로 배송차수별 비율을 계산합니다.
-    데이터가 없거나 에러 시 기존 DELIVERY_TIME_DEMAND_RATIO 고정값을 사용합니다.
+    소진율 곡선의 최종 경과시간 소진율을 purity_factor로 사용합니다.
+    이 값은 "순수 당일 수요 비율"을 나타냅니다.
+
+    예: 1차배송 상품이 24시간 후 소진율 0.72 → 28%는 전일 잔여재고
+        purity_factor = 0.72 → daily_avg를 72%로 보정
+
+    Returns:
+        purity_factor (0.0~1.0) 또는 None (데이터 부족/비활성)
+    """
+    from src.settings.constants import (
+        DEPLETION_CURVE_ENABLED,
+        DEPLETION_CURVE_MIN_SAMPLE_DAYS,
+    )
+
+    if not DEPLETION_CURVE_ENABLED or not item_cd or not store_id:
+        return None
+
+    try:
+        from src.infrastructure.database.repos.food_popularity_curve_repo import (
+            FoodPopularityCurveRepository,
+        )
+        repo = FoodPopularityCurveRepository(store_id=store_id)
+
+        # 상품명에서 배송차수 판별 (item_cd로 조회)
+        # 1차/2차 모두 시도, 데이터 있는 쪽 사용
+        for dt in ("1차", "2차"):
+            rate, sample_count = repo.get_final_rate(item_cd, dt)
+            if rate is not None and sample_count >= DEPLETION_CURVE_MIN_SAMPLE_DAYS:
+                # purity_factor 하한: 0.3 (너무 낮으면 예측이 0에 수렴)
+                return max(0.3, rate)
+
+        return None
+    except Exception:
+        return None
+
+
+def _get_time_demand_ratio(
+    delivery_type: str,
+    store_id: Optional[str] = None,
+    mid_cd: Optional[str] = None,
+) -> float:
+    """동적 시간대 수요 비율 조회 (mid_cd별 → 전체 → 고정값 3단 폴백)
+
+    최근 14일 시간대별 매출 데이터로 배송차수별 비율을 계산합니다.
+    mid_cd가 주어지면 해당 카테고리 실측 비율을 우선 사용합니다.
+
+    폴백 순서:
+    1. mid_cd별 비율 (카테고리 특성 반영, 예: 도시락 0.55, 빵 0.80)
+    2. 전체 푸드류 비율 (mid_cd 데이터 부족 시)
+    3. 고정값 DELIVERY_TIME_DEMAND_RATIO (DB 데이터 없을 시)
 
     Args:
         delivery_type: '1차' 또는 '2차'
         store_id: 매장 코드
+        mid_cd: 중분류 코드 (001, 002, ... 012)
 
     Returns:
-        시간대 수요 비율 (float). 예: 1차=0.72, 2차=1.00
+        시간대 수요 비율 (float). 예: 1차=0.55~0.80, 2차=1.00
     """
     if store_id:
         try:
@@ -219,6 +269,24 @@ def _get_time_demand_ratio(
                 HourlySalesRepository,
             )
             repo = HourlySalesRepository(store_id=store_id)
+
+            # 1차 시도: mid_cd별 비율 (가장 정확)
+            if mid_cd:
+                mid_ratios = repo.calculate_time_demand_ratio_by_mid(mid_cd)
+                if mid_ratios:
+                    mid_ratio = mid_ratios.get(delivery_type)
+                    if mid_ratio is not None:
+                        # 기존 전체 비율과 비교 로그
+                        fallback = DELIVERY_TIME_DEMAND_RATIO.get(delivery_type, 1.0)
+                        if abs(mid_ratio - fallback) > 0.05:
+                            logger.debug(
+                                f"[FoodRatio] mid_cd={mid_cd} {delivery_type}: "
+                                f"{mid_ratio:.3f} (고정={fallback:.2f}, "
+                                f"차이={mid_ratio - fallback:+.3f})"
+                            )
+                        return mid_ratio
+
+            # 2차 시도: 전체 푸드류 비율
             ratios = repo.calculate_time_demand_ratio()
             if ratios:
                 ratio = ratios.get(delivery_type)
@@ -226,7 +294,7 @@ def _get_time_demand_ratio(
                     return ratio
         except Exception:
             pass
-    # 폴백: 기존 고정값
+    # 3차 폴백: 기존 고정값
     return DELIVERY_TIME_DEMAND_RATIO.get(delivery_type, 1.0)
 
 
@@ -1202,6 +1270,16 @@ def get_safety_stock_with_food_pattern(
     if not is_food_category(mid_cd):
         safety_days = FOOD_EXPIRY_SAFETY_CONFIG["default_safety_days"]
         return daily_avg * safety_days, None
+
+    # ★ 소진율 곡선 기반 daily_avg 보정 (purity_factor)
+    purity_factor = _try_curve_based_purity(item_cd, store_id)
+    if purity_factor is not None and purity_factor < 1.0:
+        original_avg = daily_avg
+        daily_avg = daily_avg * purity_factor
+        logger.debug(
+            f"[DepletionPurity] {item_cd}: daily_avg {original_avg:.2f} "
+            f"× purity {purity_factor:.3f} = {daily_avg:.2f}"
+        )
 
     # 푸드류: 동적 안전재고 계산
     if item_cd and FOOD_EXPIRY_SAFETY_CONFIG["enabled"]:

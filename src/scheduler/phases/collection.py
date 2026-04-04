@@ -109,49 +109,93 @@ def run_collection_phases(ctx: Dict[str, Any], job: Any) -> Dict[str, Any]:
             logger.warning(f"[Phase 1.04] 시간대별 매출 수집 실패 (발주 플로우 계속): {e}")
 
     # ★ Phase 1.05: 시간대별 매출 상세(품목별) 수집 (selPrdT3)
+    # ※ collection_success 독립: Direct API는 Phase 1.0 팝업과 독립, driver만 필요
+    try:
+        with phase_timer("1.05", "Hourly Sales Detail Collection (selPrdT3)",
+                         store_id=job.store_id, _logger=logger,
+                         timings=ctx.get("_phase_timings")):
+            driver = job.collector.get_driver()
+            if driver:
+                from src.collectors.hourly_sales_detail_collector import HourlySalesDetailCollector
+                from src.infrastructure.database.repos.hourly_sales_detail_repo import HourlySalesDetailRepository
+                hsd_collector = HourlySalesDetailCollector(driver=driver)
+                hsd_repo = HourlySalesDetailRepository(store_id=job.store_id)
+                hsd_repo.ensure_table()
+
+                # 당일 + 어제 수집 (기존 동작)
+                for date_str in [yesterday_str, today_str]:
+                    collected = hsd_repo.get_collected_hours(date_str)
+                    if date_str == today_str:
+                        from datetime import datetime as _dt
+                        target_hours = [h for h in range(0, _dt.now().hour) if h not in collected]
+                    else:
+                        target_hours = [h for h in range(24) if h not in collected]
+                    if not target_hours:
+                        logger.debug(f"[Phase 1.05] {date_str}: 이미 수집 완료")
+                        continue
+                    results = hsd_collector.collect_all_hours(
+                        date_str.replace('-', ''), hours=target_hours, delay=0.25
+                    )
+                    total_items = 0
+                    for hour, items in results.items():
+                        if items:
+                            hsd_repo.save_detail(date_str, hour, items)
+                            total_items += len(items)
+                    logger.info(
+                        f"[Phase 1.05] {date_str}: "
+                        f"{len(results)}/{len(target_hours)}시간대, {total_items}품목"
+                    )
+
+                # ★ 최근 3일 누락 시간대 자동 보충 (backfill)
+                from datetime import timedelta as _td
+                backfill_total = 0
+                for offset in range(2, 5):  # D-2, D-3, D-4
+                    bf_date = (datetime.now() - _td(days=offset)).strftime('%Y-%m-%d')
+                    bf_collected = hsd_repo.get_collected_hours(bf_date)
+                    bf_missing = [h for h in range(24) if h not in bf_collected]
+                    if not bf_missing:
+                        continue
+                    bf_results = hsd_collector.collect_all_hours(
+                        bf_date.replace('-', ''), hours=bf_missing, delay=0.25
+                    )
+                    bf_items = 0
+                    for hour, items in bf_results.items():
+                        if items:
+                            hsd_repo.save_detail(bf_date, hour, items)
+                            bf_items += len(items)
+                    if bf_items > 0:
+                        backfill_total += bf_items
+                        logger.info(
+                            f"[Phase 1.05] backfill {bf_date}: "
+                            f"{len(bf_results)}/{len(bf_missing)}시간대, {bf_items}품목"
+                        )
+                if backfill_total > 0:
+                    logger.info(f"[Phase 1.05] backfill 총 {backfill_total}품목 보충")
+
+                # 재시도
+                if hsd_collector.failed_count > 0:
+                    hsd_collector.retry_failed()
+            else:
+                logger.debug("[Phase 1.05] 드라이버 없음, 건너뜀")
+    except Exception as e:
+        logger.warning(f"[Phase 1.05] 시간대별 매출 상세 수집 실패 (발주 플로우 계속): {e}")
+
+    # ★ Phase 1.06: 소진율 곡선 갱신 (food_popularity_curve)
     if collection_success:
         try:
-            with phase_timer("1.05", "Hourly Sales Detail Collection (selPrdT3)",
+            with phase_timer("1.06", "Food Depletion Curve Update",
                              store_id=job.store_id, _logger=logger,
                              timings=ctx.get("_phase_timings")):
-                driver = job.collector.get_driver()
-                if driver:
-                    from src.collectors.hourly_sales_detail_collector import HourlySalesDetailCollector
-                    from src.infrastructure.database.repos.hourly_sales_detail_repo import HourlySalesDetailRepository
-                    hsd_collector = HourlySalesDetailCollector(driver=driver)
-                    hsd_repo = HourlySalesDetailRepository(store_id=job.store_id)
-                    hsd_repo.ensure_table()
-                    for date_str in [yesterday_str, today_str]:
-                        # 미수집 시간대만 수집
-                        collected = hsd_repo.get_collected_hours(date_str)
-                        if date_str == today_str:
-                            from datetime import datetime as _dt
-                            target_hours = [h for h in range(0, _dt.now().hour) if h not in collected]
-                        else:
-                            target_hours = [h for h in range(24) if h not in collected]
-                        if not target_hours:
-                            logger.debug(f"[Phase 1.05] {date_str}: 이미 수집 완료")
-                            continue
-                        # Direct API 딜레이 축소: 0.5초 → 0.25초 (~10-15초 절약)
-                        results = hsd_collector.collect_all_hours(
-                            date_str.replace('-', ''), hours=target_hours, delay=0.25
-                        )
-                        total_items = 0
-                        for hour, items in results.items():
-                            if items:
-                                hsd_repo.save_detail(date_str, hour, items)
-                                total_items += len(items)
-                        logger.info(
-                            f"[Phase 1.05] {date_str}: "
-                            f"{len(results)}/{len(target_hours)}시간대, {total_items}품목"
-                        )
-                    # 재시도
-                    if hsd_collector.failed_count > 0:
-                        hsd_collector.retry_failed()
-                else:
-                    logger.debug("[Phase 1.05] 드라이버 없음, 건너뜀")
+                from src.application.services.food_depletion_service import FoodDepletionService
+                service = FoodDepletionService(store_id=job.store_id)
+                curve_result = service.update_curves_daily()
+                logger.info(
+                    f"[Phase 1.06] 곡선 갱신: "
+                    f"{curve_result.get('updated', 0)}건, "
+                    f"{curve_result.get('skipped', 0)}건 스킵"
+                )
         except Exception as e:
-            logger.warning(f"[Phase 1.05] 시간대별 매출 상세 수집 실패 (발주 플로우 계속): {e}")
+            logger.warning(f"[Phase 1.06] 소진율 곡선 갱신 실패 (발주 플로우 계속): {e}")
 
     # ★ Phase 1.01: 이상치 탐지 (D-2)
     if collection_success:

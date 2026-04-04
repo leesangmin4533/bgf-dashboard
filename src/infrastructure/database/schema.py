@@ -974,6 +974,20 @@ STORE_SCHEMA = [
         UNIQUE (store_id, item_cd, expire_ymd)
     )""",
 
+    # food_popularity_curve (소진율 곡선 — v71)
+    # 상품별 입고 후 시간대별 누적 소진율을 EMA로 축적
+    """CREATE TABLE IF NOT EXISTS food_popularity_curve (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        item_cd TEXT NOT NULL,
+        delivery_type TEXT NOT NULL,
+        elapsed_hours INTEGER NOT NULL,
+        avg_sold_rate REAL NOT NULL DEFAULT 0.0,
+        sample_count INTEGER NOT NULL DEFAULT 0,
+        last_updated TEXT NOT NULL,
+        store_id TEXT,
+        UNIQUE(item_cd, delivery_type, elapsed_hours)
+    )""",
+
     # schema_version (매장 DB 스키마 버전 추적)
     """CREATE TABLE IF NOT EXISTS schema_version (
         version INTEGER PRIMARY KEY,
