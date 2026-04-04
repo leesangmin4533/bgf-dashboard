@@ -235,6 +235,65 @@ def get_explore_failed_items(
 # =============================================================================
 # 상품 분류 (검증/신상품)
 # =============================================================================
+def _inject_depletion_rates(
+    order_list: List[Dict[str, Any]],
+    store_id: Optional[str] = None,
+) -> None:
+    """발주 목록에 소진율(depletion_rate) 필드를 주입
+
+    food_popularity_curve에서 배치 조회하여 각 상품에
+    depletion_rate 필드를 추가합니다.
+    sample_count 10 미만이면 None (tiebreaker에서 0.0으로 처리).
+
+    Args:
+        order_list: 발주 목록 (in-place 수정)
+        store_id: 매장 코드
+    """
+    if not store_id or not order_list:
+        return
+
+    try:
+        from src.infrastructure.database.connection import DBRouter
+        conn = DBRouter.get_store_connection(store_id)
+        try:
+            item_codes = [i.get("item_cd") for i in order_list if i.get("item_cd")]
+            if not item_codes:
+                return
+
+            placeholders = ','.join('?' * len(item_codes))
+            rows = conn.execute(f"""
+                SELECT item_cd, avg_sold_rate, sample_count
+                FROM food_popularity_curve
+                WHERE item_cd IN ({placeholders})
+                  AND sample_count >= 10
+                  AND elapsed_hours IN (16, 24)
+                ORDER BY item_cd, elapsed_hours DESC
+            """, item_codes).fetchall()
+
+            # item_cd → (rate, sample) 매핑 (가장 긴 경과시간 우선)
+            rate_map = {}
+            for item_cd, rate, sample in rows:
+                if item_cd not in rate_map:
+                    rate_map[item_cd] = rate
+
+            injected = 0
+            for item in order_list:
+                icd = item.get("item_cd")
+                if icd and icd in rate_map:
+                    item["depletion_rate"] = rate_map[icd]
+                    injected += 1
+
+            if injected > 0:
+                logger.debug(
+                    f"[CapSort] 소진율 주입: {injected}/{len(order_list)}개 "
+                    f"(store={store_id})"
+                )
+        finally:
+            conn.close()
+    except Exception as e:
+        logger.debug(f"[CapSort] 소진율 조회 실패 (무시): {e}")
+
+
 def classify_items(
     order_list: List[Dict[str, Any]],
     mid_cd: str,
@@ -277,8 +336,16 @@ def classify_items(
             # 6 > data_days >= 5: 중간 영역 → proven으로 분류
             proven_items.append(item)
 
-    # 정렬: data_days 내림차순 (데이터 많은 순)
-    proven_items.sort(key=lambda x: -(x.get("data_days", 0) or 0))
+    # 소진율 데이터 배치 조회 (캡 내 우선순위에 활용)
+    _inject_depletion_rates(order_list, store_id)
+
+    # 정렬: data_days 우선 + 소진율 tiebreaker (안 B)
+    # data_days가 같은 상품 사이에서만 소진율이 차별화 역할
+    # → 기존 동작 보전하면서, 동률 내 인기 상품 우선
+    proven_items.sort(key=lambda x: (
+        -(x.get("data_days", 0) or 0),
+        -(x.get("depletion_rate") or 0.0),
+    ))
     new_items.sort(key=lambda x: -(x.get("data_days", 0) or 0))
 
     # 탐색 실패 상품 필터링 (최근 N일 연속 판매 0인 신상품 제외)

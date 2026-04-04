@@ -257,6 +257,8 @@ class FoodDepletionService:
         Phase 1.06 배포 직후 1회성으로 실행하여
         기존 데이터로 sample_count를 즉시 축적합니다.
 
+        성능 최적화: 단일 커넥션으로 전체 처리 (N+1 문제 방지)
+
         Args:
             lookback_days: 소급 기간 (기본 60일)
 
@@ -266,24 +268,20 @@ class FoodDepletionService:
         from src.infrastructure.database.repos.food_popularity_curve_repo import (
             FoodPopularityCurveRepository,
         )
-        from src.infrastructure.database.repos.hourly_sales_detail_repo import (
-            HourlySalesDetailRepository,
-        )
+        from src.infrastructure.database.connection import DBRouter
 
         curve_repo = FoodPopularityCurveRepository(store_id=self.store_id)
         curve_repo.ensure_table()
-        hsd_repo = HourlySalesDetailRepository(store_id=self.store_id)
 
         total_orders = 0
         updated = 0
         skipped = 0
 
-        # lookback 기간 내 모든 푸드 발주 조회
         start_date = (
             datetime.now() - timedelta(days=lookback_days)
         ).strftime('%Y-%m-%d')
 
-        from src.infrastructure.database.connection import DBRouter
+        # 단일 커넥션으로 발주 + hourly 데이터 모두 처리
         conn = DBRouter.get_store_connection(self.store_id)
         try:
             placeholders = ','.join(['?' for _ in FOOD_MID_CDS])
@@ -296,40 +294,42 @@ class FoodDepletionService:
                   AND order_qty > 0
                 ORDER BY order_date
             """, (start_date, *FOOD_MID_CDS)).fetchall()
+
+            logger.info(
+                f"[DepletionCurve] bootstrap: {len(orders)}건 발주, "
+                f"{start_date}~{datetime.now().strftime('%Y-%m-%d')}"
+            )
+
+            for r in orders:
+                total_orders += 1
+                order_date, item_cd, item_nm, order_qty = r[0], r[1], r[2] or '', r[3]
+                delivery_type = r[4]
+
+                if not delivery_type:
+                    last_char = item_nm.strip()[-1] if item_nm.strip() else ''
+                    delivery_type = "2차" if last_char == "2" else "1차"
+
+                # 커넥션 재사용으로 hourly 조회
+                hourly_rates = self._calc_rates_with_conn(
+                    conn, item_cd, order_date, delivery_type, order_qty
+                )
+                if hourly_rates:
+                    curve_repo.upsert_curves_bulk(
+                        item_cd, delivery_type, hourly_rates, alpha=0.2
+                    )
+                    updated += 1
+                else:
+                    skipped += 1
+
+                if total_orders % 200 == 0:
+                    logger.info(
+                        f"[DepletionCurve] bootstrap 진행: "
+                        f"{total_orders}/{len(orders)} "
+                        f"(갱신={updated}, 스킵={skipped})"
+                    )
+
         finally:
             conn.close()
-
-        logger.info(
-            f"[DepletionCurve] bootstrap: {len(orders)}건 발주, "
-            f"{start_date}~{datetime.now().strftime('%Y-%m-%d')}"
-        )
-
-        for r in orders:
-            total_orders += 1
-            order_date, item_cd, item_nm, order_qty = r[0], r[1], r[2] or '', r[3]
-            delivery_type = r[4]
-
-            if not delivery_type:
-                last_char = item_nm.strip()[-1] if item_nm.strip() else ''
-                delivery_type = "2차" if last_char == "2" else "1차"
-
-            hourly_rates = self._calculate_depletion_rates(
-                hsd_repo, item_cd, order_date, delivery_type, order_qty
-            )
-            if hourly_rates:
-                # bootstrap은 alpha=0.2로 약간 빠르게 수렴
-                curve_repo.upsert_curves_bulk(
-                    item_cd, delivery_type, hourly_rates, alpha=0.2
-                )
-                updated += 1
-            else:
-                skipped += 1
-
-            if total_orders % 100 == 0:
-                logger.info(
-                    f"[DepletionCurve] bootstrap 진행: "
-                    f"{total_orders}/{len(orders)}"
-                )
 
         result = {
             "total_orders": total_orders,
@@ -337,4 +337,54 @@ class FoodDepletionService:
             "skipped": skipped,
         }
         logger.info(f"[DepletionCurve] bootstrap 완료: {result}")
+        return result
+
+    def _calc_rates_with_conn(
+        self,
+        conn: Any,
+        item_cd: str,
+        order_date: str,
+        delivery_type: str,
+        order_qty: int,
+    ) -> Dict[int, float]:
+        """커넥션 재사용 버전의 소진율 계산 (bootstrap용)"""
+        base_hour = DELIVERY_BASE_HOUR.get(delivery_type, 7)
+        track_hours = DELIVERY_TRACK_HOURS.get(delivery_type, 24)
+
+        next_date = (
+            datetime.strptime(order_date, '%Y-%m-%d') + timedelta(days=1)
+        ).strftime('%Y-%m-%d')
+
+        rows = conn.execute("""
+            SELECT sales_date, hour, sale_qty
+            FROM hourly_sales_detail
+            WHERE item_cd = ?
+              AND (
+                  (sales_date = ? AND hour >= ?)
+                  OR
+                  (sales_date = ? AND hour < 7)
+              )
+              AND sale_qty > 0
+            ORDER BY sales_date, hour
+        """, (item_cd, order_date, base_hour, next_date)).fetchall()
+
+        if not rows:
+            return {}
+
+        hourly_sales = {}
+        for sales_date, hour, qty in rows:
+            elapsed = self._calc_elapsed(sales_date, hour, order_date, base_hour)
+            if 1 <= elapsed <= track_hours:
+                hourly_sales[elapsed] = hourly_sales.get(elapsed, 0) + qty
+
+        if not hourly_sales:
+            return {}
+
+        cumulative = 0.0
+        result = {}
+        for h in range(1, track_hours + 1):
+            cumulative += hourly_sales.get(h, 0)
+            rate = min(cumulative / order_qty, 1.0)
+            result[h] = round(rate, 4)
+
         return result
