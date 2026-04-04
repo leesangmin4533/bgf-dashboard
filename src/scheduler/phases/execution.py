@@ -121,10 +121,31 @@ def run_execution_phases(ctx: Dict[str, Any], job: Any) -> Dict[str, Any]:
     ctx["order_result"] = order_result
     ctx["fail_reason_result"] = fail_reason_result
 
-    # ★ dry_run 시 Excel 리포트 자동 생성
+    # ★ dry_run 시 요약 로그 + Excel 리포트 자동 생성
     if dry_run and order_result:
+        # 발주 결과 요약 로그 (카테고리별)
+        order_list = order_result.get("order_list", [])
+        if order_list:
+            from collections import Counter
+            mid_counts = Counter()
+            mid_qty = Counter()
+            purity_count = 0
+            for item in order_list:
+                mid = item.get("mid_cd", "???")
+                mid_counts[mid] += 1
+                mid_qty[mid] += item.get("final_order_qty", 1)
+                if item.get("depletion_rate") is not None:
+                    purity_count += 1
+
+            logger.info(f"[DryRun] ===== 발주 시뮬레이션 요약 =====")
+            logger.info(f"[DryRun] 총 {len(order_list)}건, "
+                        f"소진율 적용 {purity_count}건")
+            for mid, cnt in sorted(mid_counts.items()):
+                logger.info(
+                    f"[DryRun]   {mid}: {cnt}품목, {mid_qty[mid]}개"
+                )
+
         try:
-            order_list = order_result.get("order_list", [])
             if order_list:
                 from pathlib import Path
                 from datetime import datetime as _dt

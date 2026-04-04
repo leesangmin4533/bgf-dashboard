@@ -1004,14 +1004,27 @@ class DirectApiOrderSaver:
     def _dry_run(
         self, orders: List[Dict], date_str: str, start_time: float
     ) -> SaveResult:
-        """dry-run: 저장하지 않고 body만 생성"""
+        """dry-run: 저장하지 않고 body만 생성 + 상세 로그 출력"""
         orders_for_log = [
-            {'item_cd': o.get('item_cd'), 'multiplier': self._calc_multiplier(o)}
+            {
+                'item_cd': o.get('item_cd'),
+                'item_nm': (o.get('item_nm') or '')[:20],
+                'qty': o.get('final_order_qty', o.get('order_qty', 0)),
+                'multiplier': self._calc_multiplier(o),
+                'mid_cd': o.get('mid_cd', ''),
+            }
             for o in orders
         ]
         elapsed = (time.time() - start_time) * 1000
-        logger.info(f"[DirectApiSaver] dry-run: {len(orders)}건")
-        logger.debug(f"[DirectApiSaver] dry-run orders: {orders_for_log[:5]}")
+        logger.info(f"[DryRun] 발주 시뮬레이션: {len(orders)}건, {date_str}")
+        # 상세 발주 목록 (INFO 레벨로 출력)
+        for i, item in enumerate(orders_for_log[:30], 1):
+            logger.info(
+                f"  [{i:>2}] {item['mid_cd']} {item['item_nm']:>20} "
+                f"qty={item['qty']} x{item['multiplier']}"
+            )
+        if len(orders_for_log) > 30:
+            logger.info(f"  ... 외 {len(orders_for_log) - 30}건")
         return SaveResult(
             success=True,
             saved_count=len(orders),
