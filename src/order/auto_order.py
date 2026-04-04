@@ -1642,7 +1642,8 @@ class AutoOrderSystem:
             logger.info("1단계: 초기 발주 목록 생성 (미입고 미반영)...")
             order_list = self.get_recommendations(
                 min_order_qty=min_order_qty,
-                max_items=max_items
+                max_items=max_items,
+                skip_db_write=dry_run,  # dry_run 시 prediction_logs/eval_outcomes 저장 스킵
             )
 
             if not order_list:
@@ -1700,7 +1701,8 @@ class AutoOrderSystem:
             # prefetch_pending=False이거나 pending_collector 없는 경우
             order_list = self.get_recommendations(
                 min_order_qty=min_order_qty,
-                max_items=max_items
+                max_items=max_items,
+                skip_db_write=dry_run,
             )
 
         # 캐시 초기화
