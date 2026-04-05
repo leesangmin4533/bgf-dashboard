@@ -7,3 +7,4 @@
 | self-healing-executor | - | 2026-04 |
 | new-product-detection | 100% | 2026-04-02 |
 | issue-chain-template | 97.5% | 2026-04-05 |
+| ops-issue-pipeline | 100% | 2026-04-05 |
