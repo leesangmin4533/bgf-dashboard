@@ -23,6 +23,7 @@ logger = get_logger(__name__)
 _PROJECT_DIR = Path(__file__).parent.parent.parent  # bgf_auto/
 _PENDING_PATH = _PROJECT_DIR / ".claude" / "pending_issues.json"
 _OUTPUT_DIR = _PROJECT_DIR / "data" / "auto_respond"
+_CLAUDE_BIN = Path.home() / ".local" / "bin" / "claude"  # 절대 경로
 
 
 class ClaudeResponder:
@@ -83,9 +84,10 @@ class ClaudeResponder:
 
     def _call_claude(self, prompt: str) -> str:
         """claude CLI 비대화형 호출 (읽기 전용)"""
+        claude_cmd = str(_CLAUDE_BIN) if _CLAUDE_BIN.exists() else "claude"
         result = subprocess.run(
             [
-                "claude",
+                claude_cmd,
                 "-p", prompt,
                 "--output-format", "text",
                 "--model", CLAUDE_AUTO_RESPOND_MODEL,
@@ -99,7 +101,10 @@ class ClaudeResponder:
             encoding="utf-8",
         )
         if result.returncode != 0:
-            raise RuntimeError(f"claude exit={result.returncode}: {result.stderr[:200]}")
+            stderr = (result.stderr or "").strip()
+            raise RuntimeError(
+                f"claude exit={result.returncode}: {stderr[:200] if stderr else '(no stderr)'}"
+            )
         return result.stdout
 
     def _build_prompt(self, issues: dict) -> str:

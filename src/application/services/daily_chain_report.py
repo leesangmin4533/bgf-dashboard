@@ -181,8 +181,8 @@ class DailyChainReport:
     def _send_kakao(self, report_text: str) -> None:
         """카카오 통합 리포트 발송"""
         try:
-            from src.notification.kakao_notifier import KakaoNotifier
-            notifier = KakaoNotifier()
+            from src.notification.kakao_notifier import KakaoNotifier, DEFAULT_REST_API_KEY
+            notifier = KakaoNotifier(DEFAULT_REST_API_KEY)
             notifier.send_message(report_text, category="daily_chain")
         except Exception as e:
             logger.warning(f"[ChainReport] 카카오 실패 (무시): {e}")

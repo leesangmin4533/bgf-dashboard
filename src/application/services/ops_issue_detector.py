@@ -132,7 +132,7 @@ class OpsIssueDetector:
     def _send_alert(self, anomalies: list):
         """카카오 알림 발송"""
         try:
-            from src.notification.kakao_notifier import KakaoNotifier
+            from src.notification.kakao_notifier import KakaoNotifier, DEFAULT_REST_API_KEY
 
             p1_list = [a for a in anomalies if a.priority == "P1"]
             p2_list = [a for a in anomalies if a.priority == "P2"]
@@ -148,8 +148,8 @@ class OpsIssueDetector:
                     lines.append(f"  - {a.title}")
 
             message = "\n".join(lines)
-            notifier = KakaoNotifier()
-            notifier.send_to_me(message)
+            notifier = KakaoNotifier(DEFAULT_REST_API_KEY)
+            notifier.send_message(message, category="daily_chain")
             logger.info(f"[OpsIssueDetector] 카카오 알림 발송 ({len(anomalies)}건)")
         except Exception as e:
             logger.warning(f"[OpsIssueDetector] 카카오 알림 실패 (무시): {e}")

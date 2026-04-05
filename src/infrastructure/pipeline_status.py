@@ -141,13 +141,13 @@ def _save(data: dict) -> None:
 def _send_failure_alert(step_name: str, error_msg: str) -> None:
     """단계 실패 시 즉시 카카오 긴급 알림"""
     try:
-        from src.notification.kakao_notifier import KakaoNotifier
+        from src.notification.kakao_notifier import KakaoNotifier, DEFAULT_REST_API_KEY
         message = (
             f"[파이프라인 실패] {step_name}\n"
             f"시각: {datetime.now().strftime('%H:%M')}\n"
             f"오류: {error_msg[:150]}"
         )
-        notifier = KakaoNotifier()
+        notifier = KakaoNotifier(DEFAULT_REST_API_KEY)
         notifier.send_message(message, category="daily_chain")
     except Exception as e:
         logger.debug(f"[PipelineStatus] 긴급 알림 실패 (무시): {e}")
