@@ -35,19 +35,22 @@ BGF 리테일(CU 편의점) 다매장 자동 발주 시스템
 
 ## 활성 이슈 (이슈 체인 갱신 시 같이 갱신)
 
+<!-- ISSUE_TABLE_START -->
 | 상태 | 우선순위 | 이슈 | 파일 | 비고 |
 |:---:|:---:|------|------|------|
-| WATCHING | - | 과도기 알림 누락 가능성 | expiry-tracking.md | 04-07 Gap 분석 |
-| WATCHING | - | action_proposals v70 컬럼 미적용 | scheduling.md | 04-06 자동 검증 |
-| PLANNED | P2 | ML is_payday DB 반영 효과 검증 | prediction.md | 2주 운영 후 |
-| PLANNED | P2 | GHOST_STOCK 자동실행 승격 검토 | scheduling.md | 2주 오탐률 확인 |
-| PLANNED | P2 | 하네스 Week 3 — AI 요약 서비스 | scheduling.md | executed_at 검증 후 |
-| PLANNED | P2 | 행사 종료 임박 감량 자동화 | order-execution.md | promo 정확성 확인 |
-| PLANNED | P3 | PaydayAnalyzer→ML 학습 데이터 통합 | prediction.md | P2 효과 확인 후 |
-| PLANNED | P3 | hourly 소급 수집 안정화 | data-collection.md | 독립 작업 |
-| PLANNED | P3 | 폐기 알림 OT 폴백 완전 제거 | expiry-tracking.md | WATCHING 해결 후 |
+| WATCHING | - | action_proposals v70 컬럼 매장 DB 미적용 | scheduling.md | 내일(04-06) 07:00 로그에서 [Verify] executed_a |
+| WATCHING | - | 과도기 알림 누락 가능성 | expiry-tracking.md | 4/7 Gap 분석에서 누락 건수 확인 |
+| PLANNED | P2 | CLEAR_GHOST_STOCK 자동실행 승격 검토 | scheduling.md | integrity_checks 2주 누적 데이터에서 food_ghost_ |
+| PLANNED | P2 | ML is_payday DB 반영 효과 검증 | prediction.md | f0657a8 커밋 반영 후 최소 2주 운영 데이터 필요 |
+| PLANNED | P2 | 하네스 엔지니어링 Week 3 — AI 요약 서비스 | scheduling.md | executed_at 검증 완료 (WATCHING 이슈 해결) |
+| PLANNED | P2 | 행사 종료 임박 상품 발주 감량 자동화 | order-execution.md | promotions 테이블의 promo_end_date 정확성 확인 (p |
+| PLANNED | P3 | PaydayAnalyzer 결과를 ML 학습 데이터에도 반영 | prediction.md | P2 효과 검증 완료 후 양수 효과 확인 시 |
+| PLANNED | P3 | hourly 시간대별 판매 소급 수집 안정화 | data-collection.md | 없음 (독립 작업) |
+| PLANNED | P3 | 폐기 알림 OT 폴백 완전 제거 | expiry-tracking.md | [WATCHING] 과도기 알림 누락 → [RESOLVED] 전환 후 |
+<!-- ISSUE_TABLE_END -->
 
-> 이슈 체인에서 [PLANNED]/[OPEN]/[WATCHING] 변경 시 이 테이블도 갱신. [RESOLVED] 전환 시 삭제.
+> 이 테이블은 `python scripts/sync_issue_table.py`로 자동 갱신됩니다.
+> 이슈 체인 파일(docs/05-issues/) 변경 커밋 시 PostToolUse hook이 자동 실행합니다.
 
 ---
 
