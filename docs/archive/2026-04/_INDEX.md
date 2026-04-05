@@ -3,6 +3,7 @@
 | Feature | Match Rate | Archived |
 |---------|:----------:|----------|
 | db-router-unify | - | 2026-04 |
-| order-overstock-guard | - | 2026-04 |
+| order-overstock-guard | 98% | 2026-04-03 |
 | self-healing-executor | - | 2026-04 |
 | new-product-detection | 100% | 2026-04-02 |
+| issue-chain-template | 97.5% | 2026-04-05 |
