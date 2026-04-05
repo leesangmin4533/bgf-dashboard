@@ -2701,7 +2701,12 @@ class ImprovedPredictor:
             except Exception:
                 pass  # 조회 실패 시 기본값 유지
             _target_day = target_date.day
-            _is_payday_ml = 1 if _target_day in (10, 11, 12, 25, 26, 27) else 0
+            # DB 우선 (PaydayAnalyzer 매장별 분석 결과) → 하드코딩 폴백
+            _payday_boost, _ = self.coefficient_adjuster._load_payday_windows(target_date_str)
+            if _payday_boost is not None:
+                _is_payday_ml = 1 if _target_day in _payday_boost else 0
+            else:
+                _is_payday_ml = 1 if _target_day in (10, 11, 12, 25, 26, 27) else 0
 
             # 시간대 Feature (캐시: item_cd별 1회)
             if not hasattr(self, '_hourly_cache'):
