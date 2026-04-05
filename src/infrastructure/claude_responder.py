@@ -5,6 +5,8 @@
 """
 
 import json
+import os
+import shutil
 import subprocess
 from datetime import date, datetime
 from pathlib import Path
@@ -23,7 +25,7 @@ logger = get_logger(__name__)
 _PROJECT_DIR = Path(__file__).parent.parent.parent  # bgf_auto/
 _PENDING_PATH = _PROJECT_DIR / ".claude" / "pending_issues.json"
 _OUTPUT_DIR = _PROJECT_DIR / "data" / "auto_respond"
-_CLAUDE_BIN = Path.home() / ".local" / "bin" / "claude"  # 절대 경로
+_CLAUDE_BIN = shutil.which("claude") or "claude"  # shutil.which로 정확한 경로
 
 
 class ClaudeResponder:
@@ -47,8 +49,13 @@ class ClaudeResponder:
             logger.warning(f"[AutoRespond] pending_issues.json 파싱 실패: {e}")
             return {"responded": False, "output_path": None, "summary": None}
 
-        if not issues.get("anomalies"):
-            _PENDING_PATH.unlink(missing_ok=True)
+        # anomaly도 없고 milestone KPI 미달도 없으면 스킵
+        has_anomalies = bool(issues.get("anomalies"))
+        has_milestone_issue = any(
+            isinstance(v, dict) and v.get("status") not in ("ACHIEVED", None)
+            for v in (issues.get("milestone") or {}).values()
+        )
+        if not has_anomalies and not has_milestone_issue:
             return {"responded": False, "output_path": None, "summary": None}
 
         # 마일스톤 최신 스냅샷 병합
@@ -84,7 +91,8 @@ class ClaudeResponder:
 
     def _call_claude(self, prompt: str) -> str:
         """claude CLI 비대화형 호출 (읽기 전용)"""
-        claude_cmd = str(_CLAUDE_BIN) if _CLAUDE_BIN.exists() else "claude"
+        claude_cmd = _CLAUDE_BIN
+        env = {**os.environ, "PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8"}
         result = subprocess.run(
             [
                 claude_cmd,
@@ -99,6 +107,8 @@ class ClaudeResponder:
             text=True,
             timeout=CLAUDE_AUTO_RESPOND_TIMEOUT,
             encoding="utf-8",
+            errors="replace",
+            env=env,
         )
         if result.returncode != 0:
             stderr = (result.stderr or "").strip()
