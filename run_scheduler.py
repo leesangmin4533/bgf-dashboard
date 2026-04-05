@@ -1438,6 +1438,7 @@ def monthly_store_analysis_wrapper() -> None:
 
 def ops_issue_detect_wrapper() -> None:
     """운영 지표 이상 감지 -> 이슈 자동 등록 (매일 23:55)"""
+    from src.infrastructure.pipeline_status import record_step
     try:
         from src.application.services.ops_issue_detector import OpsIssueDetector
         result = OpsIssueDetector().run_all_stores()
@@ -1445,12 +1446,17 @@ def ops_issue_detect_wrapper() -> None:
             logger.info(f"[OpsIssue] {result['registered']}건 이슈 자동 등록")
         else:
             logger.info(f"[OpsIssue] 이상 없음 (검사: {result['total_anomalies']}건)")
+        record_step("ops_detect", True,
+                     f"이상 {result['unique_anomalies']}건, 등록 {result['registered']}건",
+                     result)
     except Exception as e:
         logger.warning(f"[OpsIssue] 실패 (무시): {e}")
+        record_step("ops_detect", False, str(e))
 
 
 def daily_chain_report_wrapper() -> None:
     """일일 체인 리포트 (매일 00:02, 파이프라인 최종 단계)"""
+    from src.infrastructure.pipeline_status import record_step
     try:
         from src.settings.constants import DAILY_CHAIN_REPORT_ENABLED
         if not DAILY_CHAIN_REPORT_ENABLED:
@@ -1464,25 +1470,36 @@ def daily_chain_report_wrapper() -> None:
                 f"이상 {result.get('anomaly_count', 0)}건, "
                 f"이슈 등록 {result.get('registered_issues', 0)}건"
             )
+        record_step("chain_report", True,
+                     f"이상 {result.get('anomaly_count', 0)}건, 이슈 등록 {result.get('registered_issues', 0)}건",
+                     result)
     except Exception as e:
         logger.warning(f"[ChainReport] 실패 (무시): {e}")
+        record_step("chain_report", False, str(e))
 
 
 def claude_auto_respond_wrapper() -> None:
     """Claude 자동 대응 (매일 23:58, 이상 감지 3분 후)"""
+    from src.infrastructure.pipeline_status import record_step
     try:
         from src.settings.constants import CLAUDE_AUTO_RESPOND_ENABLED
         if not CLAUDE_AUTO_RESPOND_ENABLED:
+            record_step("claude_respond", True, "비활성화 (ENABLED=False)")
             return
 
         from src.infrastructure.claude_responder import ClaudeResponder
         result = ClaudeResponder().respond_if_needed()
         if result.get("responded"):
             logger.info(f"[AutoRespond] 분석 완료: {result.get('output_path', '')}")
+            record_step("claude_respond", True,
+                         f"분석 완료: {result.get('summary', '')[:80]}",
+                         {"output_path": result.get("output_path")})
         else:
             logger.debug("[AutoRespond] pending 없음, 스킵")
+            record_step("claude_respond", True, "pending 없음, 스킵")
     except Exception as e:
         logger.warning(f"[AutoRespond] 실패 (무시): {e}")
+        record_step("claude_respond", False, str(e))
 
 
 def milestone_report_wrapper() -> None:
