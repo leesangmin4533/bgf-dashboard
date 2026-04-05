@@ -50,8 +50,9 @@ class OpsIssueDetector:
             self._sync_table()
             self._send_alert(unique)
 
-        if unique:
-            self._save_pending_issues(unique)
+        # 파이프라인 체인: anomaly 유무와 무관하게 항상 pending 저장
+        # (milestone/claude_responder/chain_report가 이어서 처리)
+        self._save_pending_issues(unique)
 
         return {
             "total_anomalies": len(all_anomalies),

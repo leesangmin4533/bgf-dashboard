@@ -61,7 +61,8 @@ class ClaudeResponder:
             output = self._call_claude(prompt)
         except Exception as e:
             logger.warning(f"[AutoRespond] Claude 호출 실패: {e}")
-            _PENDING_PATH.unlink(missing_ok=True)
+            # pending 삭제하지 않음 — DailyChainReport가 최종 처리
+            self._append_analysis_to_pending(str(e), None, [])
             return {"responded": False, "output_path": None, "summary": str(e)}
 
         # 결과 저장
@@ -70,12 +71,12 @@ class ClaudeResponder:
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(output, encoding="utf-8")
 
-        # 카카오 요약 발송
+        # 요약 추출 + pending에 analysis 결과 병합 (카카오는 체인 리포트에서 통합 발송)
         summary = self._extract_summary(output)
-        self._send_kakao(today, summary)
+        suggested_issues = self._extract_suggested_issues(output)
+        self._append_analysis_to_pending(summary, str(output_path), suggested_issues)
 
-        # pending 삭제
-        _PENDING_PATH.unlink(missing_ok=True)
+        # pending 삭제하지 않음 — DailyChainReport가 최종 처리
 
         logger.info(f"[AutoRespond] 분석 완료: {output_path}")
         return {"responded": True, "output_path": str(output_path), "summary": summary}
@@ -131,6 +132,10 @@ class ClaudeResponder:
             "2. docs/05-issues/ 이슈체인에서 관련 PLANNED 항목 확인",
             "3. 즉시 적용 가능한 대응 제안 (상수 조정, 기존 로직 활용 등)",
             "4. 코드 변경이 필요하면 구체적 방향 제시 (수정은 하지 마세요)",
+            "5. 신규 이슈가 필요하면 아래 JSON 형식으로 제안 (```json 블록):",
+            '   [{"metric_name": "...", "issue_chain_file": "prediction.md 또는 order-execution.md 등", '
+            '"title": "...", "priority": "P2", "description": "..."}]',
+            "   기존 이슈체인(docs/05-issues/)에 이미 있는 내용이면 제안하지 마세요.",
             "",
             "결과를 마크다운으로 작성하되, 첫 3줄에 핵심 요약을 넣어주세요.",
         ])
@@ -172,12 +177,38 @@ class ClaudeResponder:
             logger.debug(f"[AutoRespond] 마일스톤 조회 실패 (무시): {e}")
             return None
 
-    def _send_kakao(self, today: str, summary: str) -> None:
-        """카카오로 AI 분석 요약 발송"""
+    def _extract_suggested_issues(self, full_text: str) -> list:
+        """분석 결과에서 ```json 블록의 suggested_issues 추출"""
+        import re
+        pattern = re.compile(r"```json\s*\n(.*?)\n```", re.DOTALL)
+        for match in pattern.finditer(full_text):
+            try:
+                data = json.loads(match.group(1))
+                if isinstance(data, list) and data and "title" in data[0]:
+                    return data
+            except (json.JSONDecodeError, KeyError, IndexError):
+                continue
+        return []
+
+    def _append_analysis_to_pending(
+        self, summary: str, output_path: Optional[str], suggested_issues: list
+    ) -> None:
+        """pending_issues.json에 analysis 결과 병합"""
         try:
-            from src.notification.kakao_notifier import KakaoNotifier
-            message = f"[AI 분석] {today}\n{summary}"
-            notifier = KakaoNotifier()
-            notifier.send_message(message, category="ai_analysis")
+            if _PENDING_PATH.exists():
+                data = json.loads(_PENDING_PATH.read_text(encoding="utf-8"))
+            else:
+                data = {"anomalies": []}
+
+            data["analysis"] = {
+                "responded": output_path is not None,
+                "summary": summary,
+                "output_path": output_path,
+                "suggested_issues": suggested_issues,
+            }
+
+            _PENDING_PATH.write_text(
+                json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
         except Exception as e:
-            logger.warning(f"[AutoRespond] 카카오 발송 실패 (무시): {e}")
+            logger.debug(f"[AutoRespond] pending 병합 실패 (무시): {e}")

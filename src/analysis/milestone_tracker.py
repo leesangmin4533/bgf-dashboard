@@ -4,7 +4,9 @@
 K1~K4 목표 달성 여부를 판정하고, milestone_snapshots에 저장.
 """
 
+import json
 from datetime import date, datetime
+from pathlib import Path
 from typing import Dict, List, Optional
 
 from src.analysis.ops_metrics import OpsMetrics
@@ -62,7 +64,37 @@ class MilestoneTracker:
                 f"[Milestone] 3단계 완료! 연속 {consecutive}주 달성"
             )
 
+        # 파이프라인 체인: pending_issues.json에 milestone 결과 병합
+        self._append_to_pending(kpis)
+
         return result
+
+    # ── 파이프라인 체인 ──
+
+    def _append_to_pending(self, kpis: dict) -> None:
+        """pending_issues.json에 milestone 결과 병합"""
+        pending_path = Path(__file__).parent.parent.parent / ".claude" / "pending_issues.json"
+        try:
+            if pending_path.exists():
+                data = json.loads(pending_path.read_text(encoding="utf-8"))
+            else:
+                data = {"anomalies": []}
+
+            # KPI를 직렬화 가능한 형태로 변환
+            data["milestone"] = {}
+            for k, v in kpis.items():
+                if isinstance(v, dict):
+                    data["milestone"][k] = {
+                        "value": v.get("value") or v.get("food"),
+                        "status": v.get("status"),
+                    }
+
+            pending_path.parent.mkdir(parents=True, exist_ok=True)
+            pending_path.write_text(
+                json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
+        except Exception as e:
+            logger.debug(f"[Milestone] pending 병합 실패 (무시): {e}")
 
     # ── 데이터 수집 ──
 

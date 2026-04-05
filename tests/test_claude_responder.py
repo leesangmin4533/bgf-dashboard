@@ -35,10 +35,10 @@ class TestRespondIfNeeded:
     @patch("src.infrastructure.claude_responder._OUTPUT_DIR")
     @patch("src.infrastructure.claude_responder._PENDING_PATH")
     @patch.object(ClaudeResponder, "_call_claude")
-    @patch.object(ClaudeResponder, "_send_kakao")
+    @patch.object(ClaudeResponder, "_append_analysis_to_pending")
     @patch.object(ClaudeResponder, "_get_latest_milestone")
     def test_calls_claude_with_pending(
-        self, mock_milestone, mock_kakao, mock_claude, mock_pending, mock_outdir
+        self, mock_milestone, mock_append, mock_claude, mock_pending, mock_outdir
     ):
         """pending 있으면 Claude 호출"""
         mock_pending.exists.return_value = True
@@ -60,7 +60,7 @@ class TestRespondIfNeeded:
         result = ClaudeResponder().respond_if_needed()
         assert result["responded"] is True
         mock_claude.assert_called_once()
-        mock_kakao.assert_called_once()
+        mock_append.assert_called_once()
 
     @patch("src.infrastructure.claude_responder._PENDING_PATH")
     @patch.object(ClaudeResponder, "_call_claude")

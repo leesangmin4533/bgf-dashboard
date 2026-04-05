@@ -1449,6 +1449,25 @@ def ops_issue_detect_wrapper() -> None:
         logger.warning(f"[OpsIssue] 실패 (무시): {e}")
 
 
+def daily_chain_report_wrapper() -> None:
+    """일일 체인 리포트 (매일 00:02, 파이프라인 최종 단계)"""
+    try:
+        from src.settings.constants import DAILY_CHAIN_REPORT_ENABLED
+        if not DAILY_CHAIN_REPORT_ENABLED:
+            return
+
+        from src.application.services.daily_chain_report import DailyChainReport
+        result = DailyChainReport().run()
+        if result.get('sent'):
+            logger.info(
+                f"[ChainReport] 발송 완료 — "
+                f"이상 {result.get('anomaly_count', 0)}건, "
+                f"이슈 등록 {result.get('registered_issues', 0)}건"
+            )
+    except Exception as e:
+        logger.warning(f"[ChainReport] 실패 (무시): {e}")
+
+
 def claude_auto_respond_wrapper() -> None:
     """Claude 자동 대응 (매일 23:58, 이상 감지 3분 후)"""
     try:
@@ -1808,6 +1827,10 @@ def run_scheduler(schedule_time: str = "07:00", multi_store: bool = True) -> Non
     # 18. Claude 자동 대응 (매일 23:58, 이상 감지 3분 후)
     schedule.every().day.at("23:58").do(claude_auto_respond_wrapper)
     logger.info("[Schedule] Claude auto-respond: 23:58")
+
+    # 19. 일일 체인 리포트 (매일 00:02, 파이프라인 최종)
+    schedule.every().day.at("00:02").do(daily_chain_report_wrapper)
+    logger.info("[Schedule] Daily chain report: 00:02")
 
     logger.info("=" * 60)
 
