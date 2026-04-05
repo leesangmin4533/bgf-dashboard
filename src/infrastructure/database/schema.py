@@ -1266,6 +1266,10 @@ _STORE_COLUMN_PATCHES = [
         resolved_at    TEXT
     )""",
     "CREATE INDEX IF NOT EXISTS idx_action_proposals_date ON action_proposals(store_id, proposal_date, status)",
+    # v70: 자전 시스템 실행/검증 컬럼 (action_proposals)
+    "ALTER TABLE action_proposals ADD COLUMN executed_at TIMESTAMP",
+    "ALTER TABLE action_proposals ADD COLUMN verified_at TIMESTAMP",
+    "ALTER TABLE action_proposals ADD COLUMN verified_result TEXT",
 ]
 
 
