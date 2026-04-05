@@ -631,3 +631,9 @@ MILESTONE_COMPLETION_WEEKS = 2         # 연속 달성 주 수 (완료 조건)
 
 # ── 행사 종료 감량 (promotion_adjuster.py) ──
 PROMO_END_REDUCTION_DAYS = 5           # 행사 종료 N일 전부터 감량 시작
+
+# ── Claude 자동 대응 (claude_responder.py) ──
+CLAUDE_AUTO_RESPOND_ENABLED = True         # False로 즉시 비활성화
+CLAUDE_AUTO_RESPOND_MODEL = "sonnet"       # 비용 절감 (sonnet 사용)
+CLAUDE_AUTO_RESPOND_MAX_TURNS = 10         # 무한 루프 방지
+CLAUDE_AUTO_RESPOND_TIMEOUT = 300          # 5분 타임아웃 (초)

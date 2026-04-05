@@ -3,8 +3,10 @@
 매장별 운영 지표 수집 -> 이상 판정 -> 이슈 등록 -> 알림
 """
 
+import json
 import subprocess
 import sys
+from datetime import datetime
 from pathlib import Path
 
 from src.settings.store_context import StoreContext
@@ -43,10 +45,13 @@ class OpsIssueDetector:
         writer = IssueChainWriter()
         registered = writer.write_anomalies(unique)
 
-        # CLAUDE.md 테이블 동기화 + 알림
+        # CLAUDE.md 테이블 동기화 + 알림 + Claude 자동 대응용 파일 저장
         if registered > 0:
             self._sync_table()
             self._send_alert(unique)
+
+        if unique:
+            self._save_pending_issues(unique)
 
         return {
             "total_anomalies": len(all_anomalies),
@@ -93,6 +98,35 @@ class OpsIssueDetector:
             logger.info("[OpsIssueDetector] CLAUDE.md 이슈 테이블 동기화 완료")
         except Exception as e:
             logger.warning(f"[OpsIssueDetector] sync_issue_table.py 실패 (무시): {e}")
+
+    def _save_pending_issues(self, anomalies: list) -> None:
+        """Claude 자동 대응용 pending_issues.json 저장"""
+        try:
+            from src.settings.constants import CLAUDE_AUTO_RESPOND_ENABLED
+            if not CLAUDE_AUTO_RESPOND_ENABLED:
+                return
+
+            path = _SCRIPTS_DIR.parent / ".claude" / "pending_issues.json"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            data = {
+                "generated_at": datetime.now().isoformat(),
+                "anomalies": [
+                    {
+                        "metric_name": a.metric_name,
+                        "title": a.title,
+                        "priority": a.priority,
+                        "description": a.description,
+                        "evidence": a.evidence,
+                    }
+                    for a in anomalies
+                ],
+            }
+            path.write_text(
+                json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
+            logger.info(f"[OpsIssueDetector] pending_issues.json 저장 ({len(anomalies)}건)")
+        except Exception as e:
+            logger.warning(f"[OpsIssueDetector] pending_issues 저장 실패 (무시): {e}")
 
     def _send_alert(self, anomalies: list):
         """카카오 알림 발송"""

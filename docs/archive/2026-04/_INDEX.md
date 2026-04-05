@@ -10,3 +10,4 @@
 | ops-issue-pipeline | 100% | 2026-04-05 |
 | milestone | 100% | 2026-04-05 |
 | promo-end-reduction | 100% | 2026-04-05 |
+| claude-auto-respond | 100% | 2026-04-05 |

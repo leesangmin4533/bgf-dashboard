@@ -432,7 +432,7 @@ class KakaoNotifier:
         return self.selenium_auto_authorize()
 
     # 나에게 보내기 허용 카테고리 (이 외의 알림은 차단)
-    ALLOWED_CATEGORIES = {"food_expiry", "promotion", "receiving_mismatch", "milestone", "test"}
+    ALLOWED_CATEGORIES = {"food_expiry", "promotion", "receiving_mismatch", "milestone", "ai_analysis", "test"}
 
     def send_message(self, text: str, link_title: Optional[str] = None, link_url: Optional[str] = None, _retry: bool = True, category: str = "") -> bool:
         """

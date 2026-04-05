@@ -1449,6 +1449,23 @@ def ops_issue_detect_wrapper() -> None:
         logger.warning(f"[OpsIssue] 실패 (무시): {e}")
 
 
+def claude_auto_respond_wrapper() -> None:
+    """Claude 자동 대응 (매일 23:58, 이상 감지 3분 후)"""
+    try:
+        from src.settings.constants import CLAUDE_AUTO_RESPOND_ENABLED
+        if not CLAUDE_AUTO_RESPOND_ENABLED:
+            return
+
+        from src.infrastructure.claude_responder import ClaudeResponder
+        result = ClaudeResponder().respond_if_needed()
+        if result.get("responded"):
+            logger.info(f"[AutoRespond] 분석 완료: {result.get('output_path', '')}")
+        else:
+            logger.debug("[AutoRespond] pending 없음, 스킵")
+    except Exception as e:
+        logger.warning(f"[AutoRespond] 실패 (무시): {e}")
+
+
 def milestone_report_wrapper() -> None:
     """마일스톤 KPI 측정 -> 판정 -> 카카오 리포트 (매주 일요일 00:00)"""
     try:
@@ -1787,6 +1804,10 @@ def run_scheduler(schedule_time: str = "07:00", multi_store: bool = True) -> Non
     # 17. 마일스톤 ���간 리포트 (매주 일요일 00:00)
     schedule.every().sunday.at("00:00").do(milestone_report_wrapper)
     logger.info("[Schedule] Milestone weekly report: Sunday 00:00")
+
+    # 18. Claude 자동 대응 (매일 23:58, 이상 감지 3분 후)
+    schedule.every().day.at("23:58").do(claude_auto_respond_wrapper)
+    logger.info("[Schedule] Claude auto-respond: 23:58")
 
     logger.info("=" * 60)
 
