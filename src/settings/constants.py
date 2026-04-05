@@ -252,7 +252,7 @@ BATCH_EXPIRY_ALERT_DAYS = 1             # 폐기 N일 전 알림
 
 # DB 스키마 버전
 # =====================================================================
-DB_SCHEMA_VERSION = 72  # v72: confirmed_orders 발주 확정 스냅샷 테이블
+DB_SCHEMA_VERSION = 73  # v73: milestone_snapshots 주간 KPI 스냅샷
 
 # =====================================================================
 # 소진율 곡선 설정 (Phase 1.06 / 3단계)
@@ -616,3 +616,15 @@ OPS_COLLECTION_CONSECUTIVE_DAYS = 3      # 수집 3일 연속 실패
 OPS_INTEGRITY_CONSECUTIVE_DAYS = 7       # 자전 7일 연속 미해결
 OPS_COOLDOWN_DAYS = 14                   # RESOLVED 후 재감지 쿨다운
 OPS_DUPLICATE_KEYWORD_THRESHOLD = 2      # 중복 키워드 매칭 임계값
+
+# ── 마일스톤 KPI 목표 (milestone_tracker.py) ──
+# 2주 실측 후 조정 예정 (04-19 기준)
+MILESTONE_TARGETS = {
+    "K1_prediction_stability": 1.05,    # mae_7d/mae_14d 비율 상한
+    "K2_waste_rate_food": 0.03,         # food 폐기율 상한 (3%)
+    "K2_waste_rate_total": 0.02,        # 전체 폐기율 상한 (2%)
+    "K3_order_failure_rate": 0.05,      # 발주 실패율 상한 (5%)
+    "K4_integrity_max_consecutive": 3,  # 무결성 연속 이상일 상한
+}
+MILESTONE_APPROACHING_RATIO = 1.2      # 목표의 120% 이내면 APPROACHING
+MILESTONE_COMPLETION_WEEKS = 2         # 연속 달성 주 수 (완료 조건)

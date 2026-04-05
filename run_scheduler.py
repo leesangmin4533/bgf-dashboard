@@ -1449,6 +1449,36 @@ def ops_issue_detect_wrapper() -> None:
         logger.warning(f"[OpsIssue] 실패 (무시): {e}")
 
 
+def milestone_report_wrapper() -> None:
+    """마일스톤 KPI 측정 -> 판정 -> 카카오 리포트 (매주 일요일 00:00)"""
+    try:
+        from src.analysis.milestone_tracker import MilestoneTracker
+        from src.settings.constants import MILESTONE_COMPLETION_WEEKS
+
+        result = MilestoneTracker().evaluate()
+
+        if result.get("error"):
+            logger.warning(f"[Milestone] 데이터 없음: {result['error']}")
+            return
+
+        achieved = result.get("achieved_count", 0)
+        consecutive = result.get("consecutive_weeks", 0)
+
+        if result.get("all_achieved") and consecutive >= MILESTONE_COMPLETION_WEEKS:
+            logger.info(f"[Milestone] 3단계 완료! 연속 {consecutive}주 달성")
+        else:
+            logger.info(f"[Milestone] 달성 {achieved}/4, 연속 {consecutive}주")
+
+        # 카카오 리포트 발송
+        message = result.get("report_message", "")
+        if message:
+            from src.notification.kakao_notifier import KakaoNotifier
+            notifier = KakaoNotifier()
+            notifier.send_message(message, category="milestone")
+    except Exception as e:
+        logger.warning(f"[Milestone] 실패 (무시): {e}")
+
+
 def pending_sync_wrapper() -> None:
     """발주 확정 pending 동기화 (매일 10:30)
 
@@ -1753,6 +1783,10 @@ def run_scheduler(schedule_time: str = "07:00", multi_store: bool = True) -> Non
     # 16. 운영 이상 감지 -> 이슈 자동 등록 (매일 23:55)
     schedule.every().day.at("23:55").do(ops_issue_detect_wrapper)
     logger.info("[Schedule] Ops issue detection: 23:55")
+
+    # 17. 마일스톤 ���간 리포트 (매주 일요일 00:00)
+    schedule.every().sunday.at("00:00").do(milestone_report_wrapper)
+    logger.info("[Schedule] Milestone weekly report: Sunday 00:00")
 
     logger.info("=" * 60)
 

@@ -1836,6 +1836,27 @@ SELECT 1;
 -- v72: confirmed_orders 발��� 확정 스냅샷 (매장 DB STORE_SCHEMA에서 자동 생성, common.db는 no-op)
 SELECT 1;
     """,
+    73: """
+-- v73: milestone_snapshots 주간 KPI 스냅샷 (common.db)
+CREATE TABLE IF NOT EXISTS milestone_snapshots (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    snapshot_date TEXT NOT NULL,
+    stage TEXT NOT NULL DEFAULT '3',
+    k1_value REAL,
+    k1_status TEXT,
+    k2_food_value REAL,
+    k2_total_value REAL,
+    k2_status TEXT,
+    k3_value REAL,
+    k3_status TEXT,
+    k4_value REAL,
+    k4_status TEXT,
+    all_achieved INTEGER DEFAULT 0,
+    consecutive_weeks INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now', 'localtime')),
+    UNIQUE(snapshot_date, stage)
+);
+    """,
 }
 
 

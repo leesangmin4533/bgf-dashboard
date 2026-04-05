@@ -215,6 +215,26 @@ COMMON_INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_product_details_small ON product_details(small_cd)",
     # v68: ai_summaries 인덱스
     "CREATE INDEX IF NOT EXISTS idx_ai_summaries_date ON ai_summaries(summary_date, summary_type)",
+
+    # milestone_snapshots — 주간 마일스톤 KPI 스냅샷
+    """CREATE TABLE IF NOT EXISTS milestone_snapshots (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        snapshot_date TEXT NOT NULL,
+        stage TEXT NOT NULL DEFAULT '3',
+        k1_value REAL,
+        k1_status TEXT,
+        k2_food_value REAL,
+        k2_total_value REAL,
+        k2_status TEXT,
+        k3_value REAL,
+        k3_status TEXT,
+        k4_value REAL,
+        k4_status TEXT,
+        all_achieved INTEGER DEFAULT 0,
+        consecutive_weeks INTEGER DEFAULT 0,
+        created_at TEXT DEFAULT (datetime('now', 'localtime')),
+        UNIQUE(snapshot_date, stage)
+    )""",
 ]
 
 

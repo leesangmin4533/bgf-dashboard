@@ -116,7 +116,15 @@ class OpsMetrics:
             """)
             prev_7d = cursor.fetchone()["cnt"]
 
-            return {"recent_7d": recent_7d, "prev_7d": prev_7d}
+            # 최근 7일 총 발주 건수 (마일스톤 K3 계산용)
+            cursor.execute("""
+                SELECT COUNT(DISTINCT item_cd) as cnt
+                FROM order_history
+                WHERE order_date >= date('now', '-7 days')
+            """)
+            total_7d = cursor.fetchone()["cnt"]
+
+            return {"recent_7d": recent_7d, "prev_7d": prev_7d, "total_order_7d": total_7d}
         except Exception as e:
             logger.warning(f"[OpsMetrics] {self.store_id} order_failure 실패: {e}")
             return {"insufficient_data": True}
