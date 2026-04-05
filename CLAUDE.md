@@ -500,7 +500,7 @@ Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
    - 이전에 같은 문제를 시도한 적 있는지 확인
    - 이전 시도가 왜 실패했는지 확인
    - 같은 접근을 반복하지 않기 위함
-2. 이슈 체인 문서가 없으면 새로 생성
+2. 이슈 체인 문서가 없으면 `docs/05-issues/_TEMPLATE.md`를 복사하여 새로 생성
 
 ### 수정 후
 3. **이슈 체인 문서 갱신** — 아래 형식으로 기록:
@@ -509,12 +509,26 @@ Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
    - 원인/동기: {왜 이 수정을 했는지}
    - 수정: {뭘 바꿨는지}
    - **결과**: {성공 ✓ / 실패 ✗ + 왜 안 됐는지}
+   - **실패 패턴**: #{태그} (해당 시)
    ```
-4. 해결되면 `[RESOLVED]`, 미해결이면 `[OPEN]` 태그
-5. **교훈 섹션** 추가 — 다음 수정자가 같은 삽질을 피하도록
+4. 상태 태그: `[RESOLVED]` 해결됨 / `[OPEN]` 미해결 / `[WATCHING]` 모니터링 중
+5. **교훈 섹션** 필수 — 다음 수정자가 같은 삽질을 피하도록
+6. **검증 체크포인트** 필수 — 해결 후 확인 일정을 체크리스트로 기록
+7. **연관 이슈 링크** — 다른 영역에 영향 있으면 `→ {파일}#{이슈명}` 형식으로 연결
 
-### 현재 이슈 체인 문서
-- `docs/05-issues/expiry-tracking.md` — 폐기 추적 (5단계 패치 이력 + 입고 기반 재설계)
+### 실패 패턴 태그 (공통)
+`#stale-data` `#data-format` `#no-consumption-tracking` `#timing-gap` `#cross-contamination` `#one-shot-fix` `#patch-on-patch`
+
+### 영역 분류
+| 파일 | 대상 |
+|------|------|
+| `expiry-tracking.md` | 폐기 추적, 유통기한 알림, inventory_batches |
+| `prediction.md` | 수요 예측, ML 앙상블, 계수 조정 |
+| `order-execution.md` | 발주 실행, Direct API, Selenium 저장 |
+| `data-collection.md` | 판매/입고/폐기전표 수집, BGF 사이트 접속 |
+| `scheduling.md` | 스케줄러, Phase 순서, 타이밍 충돌 |
+
+새 영역은 이슈 3건 이상 시 분리. 템플릿: `docs/05-issues/_TEMPLATE.md`
 
 ---
 
