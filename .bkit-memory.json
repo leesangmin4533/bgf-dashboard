@@ -1,6 +1,6 @@
 {
-  "currentFeature": null,
-  "phase": null,
+  "currentFeature": "ops-issue-pipeline",
+  "phase": "plan",
   "matchRate": null,
-  "lastUpdated": "2026-03-31T00:00:00Z"
+  "lastUpdated": "2026-04-05T15:30:00Z"
 }
