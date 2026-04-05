@@ -9,6 +9,7 @@
 
 **문제**: order_tracking.remaining_qty가 판매 후에도 안 줄어듦
 **영향**: 이미 팔린 상품에 폐기 알림 발송 (동양점 14시 12건→1건이 정상)
+**설계 의도**: 유통기한 임박 상품을 정확히 감지하여 폐기 전 알림 발송. 발주 주체(AI/수동) 무관하게 입고된 모든 상품 대상.
 **연관**: → order-execution.md#수동발주-OT-미등록 (수동발주가 OT에 expiry_time='' 저장)
 
 ### 시도 1: update_receiving remaining_qty 덮어쓰기 수정 (599ac29, 03-29)
@@ -42,6 +43,12 @@
   - 센터매입 교차오염 → DB 수동 정리 (32b4caf) ✗
 - **실패 패턴**: #no-consumption-tracking #stale-data #cross-contamination #patch-on-patch
 
+### 의도 점검 (시도 5회 실패 후, 04-05 수행)
+- [x] 원래 설계 의도를 아직 따르고 있는가? → **아니오.** "발주 건별 잔량 추적"에서 "입고 이력 역산"으로 drift
+- [x] 패치가 아닌 구조 재설계가 필요한가? → **예.** 5단계 패치 누적이 #patch-on-patch 징후
+- [x] 현재 접근의 근본 가정이 여전히 유효한가? → **아니오.** "OT remaining_qty가 정확하다"는 가정이 틀림
+> 점검 결과: **의도 전환** — "발주 건별 추적" → "입고 확인 기반 배치 추적"으로 재설계
+
 ### 교훈
 - OT remaining_qty 자체가 신뢰 불가 (사용자 변경 미반영 + FR-01 보정 없음)
 - receiving_history는 이력만 있고 잔량 추적 없음 → 배치 소진 구분 불가
@@ -53,10 +60,10 @@
 - 20:30/07:00 입고 수집 후 스냅샷과 매칭 → 입고 확인된 것만 배치 생성
 - expiry_checker: OT/receiving_history 폴백 제거 → batches only
 - 검증:
-  - [x] 4매장 스냅샷 저장 확인 (04-05, 314건)
-  - [ ] D+2 첫 정확한 알림 확인 — 001~003 (04-07)
-  - [ ] Gap 분석 (스케줄 태스크: expiry-tracking-gap-analysis, 04-07)
-  - [ ] 1주일 운영 후 matched/unmatched 비율 (04-12)
+  - [x] 4매장 스냅샷 저장 확인 (완료: 04-05, 314건)
+  - [ ] D+2 첫 정확한 알림 확인 — 001~003 (예정: 04-07, 수동)
+  - [ ] Gap 분석 (예정: 04-07, 스케줄: expiry-tracking-gap-analysis)
+  - [ ] 1주일 운영 후 matched/unmatched 비율 (예정: 04-12, 수동)
 
 ---
 
