@@ -16,8 +16,8 @@ for f in "$ISSUES_DIR"/*.md; do
     basename=$(basename "$f")
     [ "$basename" = "_TEMPLATE.md" ] && continue
 
-    # [OPEN] 또는 [WATCHING] 블록 추출
-    matches=$(grep -n '\[OPEN\]\|\[WATCHING\]' "$f" 2>/dev/null || true)
+    # [PLANNED], [OPEN], [WATCHING] 블록 추출
+    matches=$(grep -n '\[PLANNED\]\|\[OPEN\]\|\[WATCHING\]' "$f" 2>/dev/null || true)
     if [ -n "$matches" ]; then
         ACTIVE="${ACTIVE}
 --- ${basename} ---

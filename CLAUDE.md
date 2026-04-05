@@ -38,8 +38,9 @@ BGF 리테일(CU 편의점) 다매장 자동 발주 시스템
 | 상태 | 이슈 | 파일 | 다음 검증 |
 |:---:|------|------|----------|
 | WATCHING | 과도기 알림 누락 가능성 | expiry-tracking.md | 04-07 Gap 분석 |
+| WATCHING | action_proposals v70 컬럼 미적용 | scheduling.md | 04-06 07:35 자동 검증 |
 
-> 이슈 체인에서 [OPEN]/[WATCHING] 변경 시 이 테이블도 갱신. [RESOLVED] 전환 시 삭제.
+> 이슈 체인에서 [PLANNED]/[OPEN]/[WATCHING] 변경 시 이 테이블도 갱신. [RESOLVED] 전환 시 삭제.
 
 ---
 
@@ -501,9 +502,9 @@ Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
 
 ---
 
-## 이슈 체인 규칙 (버그 수정 시 반드시 준수)
+## 이슈 체인 규칙 (버그 수정 + 기능 계획 통합 관리)
 
-> **`docs/05-issues/`에 기능 영역별 이슈 체인 문서가 있다. 버그 수정/구조 변경 시 반드시 참조하고 갱신한다.**
+> **`docs/05-issues/`에 기능 영역별 이슈 체인 문서가 있다. 버그 수정/구조 변경/기능 계획 시 반드시 참조하고 갱신한다.**
 
 ### 수정 전
 1. **해당 영역의 이슈 체인 문서 읽기** — `docs/05-issues/{영역}.md`
@@ -536,8 +537,13 @@ Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
    - **결과**: ✗ {왜 안 됐는지} / ✓
    - **실패 패턴**: #{태그}
    ```
-4. 상태 태그: `[RESOLVED]` 해결됨 / `[OPEN]` 미해결 / `[WATCHING]` 모니터링 중
-   - **상태 변경 시 CLAUDE.md "활성 이슈" 테이블도 갱신** ([OPEN]/[WATCHING] 추가, [RESOLVED] 삭제)
+4. 상태 태그 (5종):
+   - `[PLANNED]` 계획됨 — 목표와 우선순위만 정의, 미착수. 우선순위: P1(긴급) > P2(중요) > P3(개선)
+   - `[OPEN]` 착수함 — 작업 중이지만 미해결
+   - `[WATCHING]` 모니터링 — 수정 완료, 검증 대기
+   - `[RESOLVED]` 해결 완료 — 검증까지 끝남
+   - `[DEFERRED]` 보류 — 의도적으로 미룸 (사유 필수)
+   - **상태 변경 시 CLAUDE.md "활성 이슈" 테이블도 갱신** ([PLANNED]/[OPEN]/[WATCHING] 추가, [RESOLVED] 삭제)
 5. **교훈 섹션** 필수 — 다음 수정자가 같은 삽질을 피하도록
 6. **검증 체크포인트** 필수 — 해결 후 확인 일정을 체크리스트로 기록
    - 스케줄 태스크 연동 시: `(스케줄: {태스크ID})` 형식으로 ID 기록
