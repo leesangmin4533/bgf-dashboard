@@ -1436,6 +1436,19 @@ def monthly_store_analysis_wrapper() -> None:
         logger.error("[스케줄] 월간 상권분석 오류: %s", e)
 
 
+def ops_issue_detect_wrapper() -> None:
+    """운영 지표 이상 감지 -> 이슈 자동 등록 (매일 23:55)"""
+    try:
+        from src.application.services.ops_issue_detector import OpsIssueDetector
+        result = OpsIssueDetector().run_all_stores()
+        if result["registered"] > 0:
+            logger.info(f"[OpsIssue] {result['registered']}건 이슈 자동 등록")
+        else:
+            logger.info(f"[OpsIssue] 이상 없음 (검사: {result['total_anomalies']}건)")
+    except Exception as e:
+        logger.warning(f"[OpsIssue] 실패 (무시): {e}")
+
+
 def pending_sync_wrapper() -> None:
     """발주 확정 pending 동기화 (매일 10:30)
 
@@ -1737,6 +1750,10 @@ def run_scheduler(schedule_time: str = "07:00", multi_store: bool = True) -> Non
     schedule.every().day.at("04:00").do(monthly_store_analysis_wrapper)
     logger.info("[Schedule] Monthly store analysis: daily 04:00 (1st only)")
 
+    # 16. 운영 이상 감지 -> 이슈 자동 등록 (매일 23:55)
+    schedule.every().day.at("23:55").do(ops_issue_detect_wrapper)
+    logger.info("[Schedule] Ops issue detection: 23:55")
+
     logger.info("=" * 60)
 
     # 등록된 작업 수 표시
@@ -1925,6 +1942,11 @@ if __name__ == "__main__":
              "Can be specified multiple times. (e.g., --order-date 2026-03-01)"
     )
     parser.add_argument(
+        "--ops-detect",
+        action="store_true",
+        help="Run ops issue detection immediately"
+    )
+    parser.add_argument(
         "--backfill-hourly-detail",
         type=int,
         nargs='?',
@@ -2068,6 +2090,9 @@ if __name__ == "__main__":
             init_db()
             cats = args.beverage_decision if args.beverage_decision else ["A", "B", "C", "D"]
             beverage_decision_wrapper(cats)
+        elif args.ops_detect:
+            init_db()
+            ops_issue_detect_wrapper()
         elif args.pending_sync:
             init_db()
             pending_sync_wrapper()

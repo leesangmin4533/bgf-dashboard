@@ -607,3 +607,12 @@ DISUSE_COEF_FLOOR = 0.65             # 최소 계수 (최대 35% 감량, was 0.5
 DISUSE_COEF_MULTIPLIER = 1.2         # 폐기율 승수 (was 1.5)
 DISUSE_MIN_BATCH_COUNT = 14          # 상품별 블렌딩 최소 배치 수 (was 7)
 DISUSE_IB_LOOKBACK_DAYS = 30         # inventory_batches 조회 기간 (일)
+
+# ── 운영 이상 감지 임계값 (ops_anomaly.py) ──
+OPS_PREDICTION_ACCURACY_RATIO = 1.2      # MAE 20% 악화
+OPS_ORDER_FAILURE_RATIO = 1.5            # 실패 50% 증가
+OPS_WASTE_RATE_RATIO = 1.5               # 폐기율 1.5배
+OPS_COLLECTION_CONSECUTIVE_DAYS = 3      # 수집 3일 연속 실패
+OPS_INTEGRITY_CONSECUTIVE_DAYS = 7       # 자전 7일 연속 미해결
+OPS_COOLDOWN_DAYS = 14                   # RESOLVED 후 재감지 쿨다운
+OPS_DUPLICATE_KEYWORD_THRESHOLD = 2      # 중복 키워드 매칭 임계값
