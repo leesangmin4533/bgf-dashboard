@@ -1456,7 +1456,7 @@ def ops_issue_detect_wrapper() -> None:
 
 def daily_chain_report_wrapper() -> None:
     """일일 체인 리포트 (매일 00:02, 파이프라인 최종 단계)"""
-    from src.infrastructure.pipeline_status import record_step
+    from src.infrastructure.pipeline_status import record_step, get_pipeline_summary
     try:
         from src.settings.constants import DAILY_CHAIN_REPORT_ENABLED
         if not DAILY_CHAIN_REPORT_ENABLED:
@@ -1464,15 +1464,19 @@ def daily_chain_report_wrapper() -> None:
 
         from src.application.services.daily_chain_report import DailyChainReport
         result = DailyChainReport().run()
+
+        # 파이프라인 전체 요약을 리포트에 포함
+        pipeline_summary = get_pipeline_summary()
         if result.get('sent'):
             logger.info(
                 f"[ChainReport] 발송 완료 — "
                 f"이상 {result.get('anomaly_count', 0)}건, "
-                f"이슈 등록 {result.get('registered_issues', 0)}건"
+                f"이슈 등록 {result.get('registered_issues', 0)}건, "
+                f"파이프라인: {pipeline_summary}"
             )
         record_step("chain_report", True,
                      f"이상 {result.get('anomaly_count', 0)}건, 이슈 등록 {result.get('registered_issues', 0)}건",
-                     result)
+                     {**result, "pipeline_summary": pipeline_summary})
     except Exception as e:
         logger.warning(f"[ChainReport] 실패 (무시): {e}")
         record_step("chain_report", False, str(e))
@@ -1480,8 +1484,16 @@ def daily_chain_report_wrapper() -> None:
 
 def claude_auto_respond_wrapper() -> None:
     """Claude 자동 대응 (매일 23:58, 이상 감지 3분 후)"""
-    from src.infrastructure.pipeline_status import record_step
+    from src.infrastructure.pipeline_status import record_step, check_dependencies
     try:
+        # 이전 단계(ops_detect) 성공 여부 확인
+        dep = check_dependencies("claude_respond")
+        if not dep["can_proceed"]:
+            msg = f"스킵 — {dep['reason']}"
+            logger.warning(f"[AutoRespond] {msg}")
+            record_step("claude_respond", True, msg)  # 스킵은 성공 처리 (본인 오류 아님)
+            return
+
         from src.settings.constants import CLAUDE_AUTO_RESPOND_ENABLED
         if not CLAUDE_AUTO_RESPOND_ENABLED:
             record_step("claude_respond", True, "비활성화 (ENABLED=False)")
