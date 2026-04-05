@@ -22,10 +22,27 @@
 2. **BGF 데이터 구조**: 묶음발주 상품은 ORD_UNIT_QTY가 아닌 다른 필드(CASE_QTY, ORD_MUL_QTY 등)에 입수 저장?
 3. **그리드 vs API 차이**: Selenium 그리드에서는 16이 보이지만 selSearch API에서는 1 반환?
 
-### 대응 방향
-1. **즉시**: 49965점 48개 발주 취소 또는 수량 조정 (수동)
-2. **단기**: BGF 그리드에서 읽은 입수값과 DB값 비교 → 불일치 로깅 + DB 보정
-3. **중기**: 수집 로직에서 묶음발주 상품의 입수를 정확히 가져오도록 수정
+### 근본 원인 (04-06 조사 완료)
+
+**3단계 잠금 패턴**:
+1. `direct_api_fetcher.py:138` — `_safe_int(row.get('ORD_UNIT_QTY', '1')) or 1` → 빈값→0→1
+2. `product_detail_repo.py:479` — SQL CASE가 기존값 <=1이면 새값으로 교체하지만, 새값도 1이면 무의미
+3. 한번 1이 들어가면 모든 수집 경로가 1을 "정상"으로 취급 → 복구 불가
+
+**영향 범위**: 면류(032) 51건 + 다른 카테고리 미확인
+
+### 시도 1: 수집 폴백 제거 + DB 리셋 (커밋 대기, 04-06)
+- **왜**: `or 1` 폴백이 빈값→0→1로 변환하여 잘못된 값을 DB에 잠금
+- **수정**:
+  - `direct_api_fetcher.py:138`: `_safe_int(...) or 1` → `_safe_int(...) if > 0 else None`
+  - `order_prep_collector.py:703`: JS `|| 1` → `|| null`
+  - `order_prep_collector.py:526`: 신규 저장 시 `order_unit_qty: None`
+  - 면류(032) 51건 `order_unit_qty` → NULL 리셋 (다음 수집 시 올바른 값 채움)
+- **결과**: 검증 대기
+
+### 해결 검증
+- [ ] 내일(04-07) 07:00 발주에서 면류 상품 PYUN_QTY/ORD_UNIT_QTY 로그 확인
+- [ ] 멸치칼국수사발컵 order_unit_qty가 NULL→16으로 갱신되었는지 확인
 
 ---
 

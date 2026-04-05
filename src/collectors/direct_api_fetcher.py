@@ -135,7 +135,9 @@ def extract_item_data(parsed: Dict[str, Any], item_cd: str) -> Dict[str, Any]:
         result['item_cd'] = row.get('ITEM_CD', item_cd)
         result['item_nm'] = row.get('ITEM_NM', '')
         result['current_stock'] = _safe_int(row.get('NOW_QTY', '0'))
-        result['order_unit_qty'] = _safe_int(row.get('ORD_UNIT_QTY', '1')) or 1
+        # ORD_UNIT_QTY: 빈값/0이면 None 유지 (1로 폴백하면 입수 불일치 과발주)
+        _raw_unit = _safe_int(row.get('ORD_UNIT_QTY'))
+        result['order_unit_qty'] = _raw_unit if _raw_unit and _raw_unit > 0 else None
         result['expiration_days'] = _safe_int(row.get('EXPIRE_DAY', '')) or None
         result['success'] = True
     elif ds_item and not ds_item['rows']:

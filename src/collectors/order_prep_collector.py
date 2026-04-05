@@ -517,13 +517,13 @@ class OrderPrepCollector:
                     'margin_rate': margin_rate,
                 }
             else:
-                # 신규 저장 (최소 정보)
+                # 신규 저장 (최소 정보, order_unit_qty는 None — 1 폴백 금지)
                 info = {
                     'item_nm': '',
                     'expiration_days': expiration_days,
                     'orderable_day': '일월화수목금토',
                     'orderable_status': '',
-                    'order_unit_qty': 1,
+                    'order_unit_qty': None,
                     'sell_price': sell_price,
                     'margin_rate': margin_rate,
                 }
@@ -700,7 +700,7 @@ class OrderPrepCollector:
                             item_cd: getVal(wf.dsItem, 0, 'ITEM_CD'),
                             item_nm: getVal(wf.dsItem, 0, 'ITEM_NM'),
                             now_qty: parseInt(getVal(wf.dsItem, 0, 'NOW_QTY')) || 0,
-                            order_unit_qty: parseInt(getVal(wf.dsItem, 0, 'ORD_UNIT_QTY')) || 1,
+                            order_unit_qty: parseInt(getVal(wf.dsItem, 0, 'ORD_UNIT_QTY')) || null,
                             expire_day: parseInt(getVal(wf.dsItem, 0, 'EXPIRE_DAY')) || null
                         };
                     }
