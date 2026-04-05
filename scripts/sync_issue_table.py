@@ -32,8 +32,10 @@ PRIORITY_ORDER = {"P1": 0, "P2": 1, "P3": 2, "-": 3}
 
 
 def parse_issue_files():
-    """이슈 체인 파일에서 활성 항목 추출"""
+    """이슈 체인 파일에서 활성 항목 추출 + 전체 이력(RESOLVED 포함) 밀도 계산"""
     items = []
+    # 영역별 전체 이슈 수 (RESOLVED 포함) — 밀도 계산용
+    area_total_count = {}
 
     for f in sorted(ISSUES_DIR.glob("*.md")):
         if f.name == "_TEMPLATE.md":
@@ -41,7 +43,11 @@ def parse_issue_files():
 
         text = f.read_text(encoding="utf-8")
 
-        # ## [STATUS] 제목 (P숫자) 또는 ## [STATUS] 제목 (날짜~)
+        # 전체 이슈 블록 수 카운트 (RESOLVED/DEFERRED 포함)
+        all_issues = re.findall(r"^## \[(\w+)\]", text, re.MULTILINE)
+        area_total_count[f.name] = len(all_issues)
+
+        # 활성 항목만 추출
         pattern = r"^## \[(\w+)\]\s+(.+?)$"
         for match in re.finditer(pattern, text, re.MULTILINE):
             status = match.group(1)
@@ -82,12 +88,50 @@ def parse_issue_files():
                 "note": note,
             })
 
+    # 영역별 밀도 기반 자동 승격
+    items = _auto_promote(items, area_total_count)
+
     # 정렬: 상태 → 우선순위 → 제목
     items.sort(key=lambda x: (
         STATUS_ORDER.get(x["status"], 9),
         PRIORITY_ORDER.get(x["priority"], 9),
         x["title"],
     ))
+
+    return items
+
+
+# ── 영역별 밀도 기반 자동 승격 ──────────────────────────────────────
+
+# 이슈 밀도 임계값: 이 이상이면 해당 영역의 PLANNED P3→P2 자동 승격
+DENSITY_THRESHOLD = 3
+
+
+def _auto_promote(items, area_total_count):
+    """같은 영역에 이슈가 DENSITY_THRESHOLD건 이상이면 P3→P2 자동 승격
+
+    승격 조건:
+      1. 해당 영역(파일)의 전체 이슈 수(RESOLVED 포함) >= DENSITY_THRESHOLD
+      2. 항목이 [PLANNED] 상태이고 P3인 경우
+    승격 시 비고에 "(밀도 승격)" 표시
+    """
+    # 밀도가 높은 영역 식별
+    hot_areas = {f for f, cnt in area_total_count.items() if cnt >= DENSITY_THRESHOLD}
+
+    if not hot_areas:
+        return items
+
+    promoted = 0
+    for item in items:
+        if (item["file"] in hot_areas
+                and item["status"] == "PLANNED"
+                and item["priority"] == "P3"):
+            item["priority"] = "P2"
+            item["note"] = f"(밀도 승격) {item['note']}".strip()
+            promoted += 1
+
+    if promoted > 0:
+        print(f"밀도 승격: {promoted}건 P3→P2 ({', '.join(sorted(hot_areas))})")
 
     return items
 
