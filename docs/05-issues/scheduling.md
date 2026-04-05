@@ -1,7 +1,7 @@
 # 스케줄링 이슈 체인
 
 > 최종 갱신: 2026-04-05
-> 현재 상태: 자전 시스템 executed_at 컬럼 누락 수정 완료
+> 현재 상태: executed_at 수정 완료 + GHOST_STOCK 승격/하네스 Week3 계획
 
 ---
 
@@ -25,5 +25,23 @@
 ### 해결: _STORE_COLUMN_PATCHES 동기화 (2bd24bf, 04-05)
 - 검증:
   - [ ] 내일(04-06) 07:00 로그에서 [Verify] executed_at 오류 소멸 확인 (스케줄: eb6c54ca)
+
+---
+
+## [PLANNED] CLEAR_GHOST_STOCK 자동실행 승격 검토 (P2)
+
+**목표**: 유령 재고 보정(CLEAR_GHOST_STOCK)을 LOW(승인 필요) → HIGH(자동 실행)로 승격
+**동기**: 현재 LOW 분류라 매번 카카오 승인 필요. 2주 오탐률 확인 후 안전하면 자동화
+**선행조건**: integrity_checks 2주 누적 데이터에서 food_ghost_stock 오탐률 < 5%
+**예상 영향**: constants.py AUTO_EXEC_HIGH/LOW, auto_executor.py _execute_action()
+
+---
+
+## [PLANNED] 하네스 엔지니어링 Week 3 — AI 요약 서비스 (P2)
+
+**목표**: integrity 체크 + 발주 결과를 규칙 기반 템플릿으로 요약해서 카카오 리포트에 포함
+**동기**: 매일 카카오 알림이 원시 데이터만 전달 → 의사결정에 필요한 요약 부족
+**선행조건**: executed_at 검증 완료 (WATCHING 이슈 해결)
+**예상 영향**: schema.py (ai_summaries DDL), notification/summary_report_service.py (신규), daily_job.py Phase 3, kakao_notifier.py
 
 ---

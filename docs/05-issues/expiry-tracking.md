@@ -74,3 +74,12 @@
 - 검증:
   - [ ] 4/7 Gap 분석에서 누락 건수 확인
   - [ ] 누락 0건 확인 시 [RESOLVED]로 전환
+
+---
+
+## [PLANNED] 폐기 알림 OT 폴백 완전 제거 (P3)
+
+**목표**: confirmed_orders + delivery_match 기반 안정화 확인 후 레거시 OT/receiving_history 폴백 코드 제거
+**동기**: 현재 FR-03 배치 생성에 OT 폴백이 남아있어 코드 복잡도 증가. 입고 기반 전환(04-02) 완료 후 과도기 코드 정리 필요
+**선행조건**: [WATCHING] 과도기 알림 누락 → [RESOLVED] 전환 후
+**예상 영향**: alert/expiry_checker.py, collectors/receiving_collector.py

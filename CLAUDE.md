@@ -35,10 +35,17 @@ BGF 리테일(CU 편의점) 다매장 자동 발주 시스템
 
 ## 활성 이슈 (이슈 체인 갱신 시 같이 갱신)
 
-| 상태 | 이슈 | 파일 | 다음 검증 |
-|:---:|------|------|----------|
-| WATCHING | 과도기 알림 누락 가능성 | expiry-tracking.md | 04-07 Gap 분석 |
-| WATCHING | action_proposals v70 컬럼 미적용 | scheduling.md | 04-06 07:35 자동 검증 |
+| 상태 | 우선순위 | 이슈 | 파일 | 비고 |
+|:---:|:---:|------|------|------|
+| WATCHING | - | 과도기 알림 누락 가능성 | expiry-tracking.md | 04-07 Gap 분석 |
+| WATCHING | - | action_proposals v70 컬럼 미적용 | scheduling.md | 04-06 자동 검증 |
+| PLANNED | P2 | ML is_payday DB 반영 효과 검증 | prediction.md | 2주 운영 후 |
+| PLANNED | P2 | GHOST_STOCK 자동실행 승격 검토 | scheduling.md | 2주 오탐률 확인 |
+| PLANNED | P2 | 하네스 Week 3 — AI 요약 서비스 | scheduling.md | executed_at 검증 후 |
+| PLANNED | P2 | 행사 종료 임박 감량 자동화 | order-execution.md | promo 정확성 확인 |
+| PLANNED | P3 | PaydayAnalyzer→ML 학습 데이터 통합 | prediction.md | P2 효과 확인 후 |
+| PLANNED | P3 | hourly 소급 수집 안정화 | data-collection.md | 독립 작업 |
+| PLANNED | P3 | 폐기 알림 OT 폴백 완전 제거 | expiry-tracking.md | WATCHING 해결 후 |
 
 > 이슈 체인에서 [PLANNED]/[OPEN]/[WATCHING] 변경 시 이 테이블도 갱신. [RESOLVED] 전환 시 삭제.
 
