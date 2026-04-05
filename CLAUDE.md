@@ -508,6 +508,16 @@ Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
 - **이슈 체인** = "왜 이렇게 됐는지" (판단 근거, 시도 간 인과관계, 교훈, 검증)
 - 이슈 체인에서 커밋 해시로 참조만. diff나 변경 내용을 복사하지 않는다.
 
+### 양방향 링크
+- **커밋 → 이슈 체인**: 커밋 메시지 footer에 트레일러 추가
+  ```
+  Issue-Chain: {영역}#{이슈-kebab-case}
+  ```
+  예: `Issue-Chain: expiry-tracking#remaining_qty-미갱신`
+- **이슈 체인 → 커밋**: 시도 N에 커밋 해시 기록 (기존)
+- 시도 번호(N)는 이슈 체인 문서에서만 관리. 커밋에는 번호 안 넣음.
+- `git log --grep="Issue-Chain: expiry"` 로 특정 이슈의 모든 커밋 검색 가능
+
 ### 수정 후
 3. **이슈 체인 문서 갱신** — 아래 형식으로 기록:
    ```
