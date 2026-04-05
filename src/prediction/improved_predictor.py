@@ -2608,6 +2608,9 @@ class ImprovedPredictor:
             ctx["_promo_branch"] = _promo_branch
             ctx["_promo_daily_demand"] = _promo_demand
             ctx["_promo_current"] = _promo_current
+            ctx["_promo_days_until_end"] = (
+                promo_status.days_until_end if promo_status else None
+            )
             if order_qty == _initial_qty:
                 ctx["_promo_result"] = "스킵"
             else:

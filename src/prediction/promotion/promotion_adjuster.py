@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 
 from .promotion_manager import PromotionManager, PromotionStatus
+from src.settings.constants import PROMO_END_REDUCTION_DAYS
 
 
 @dataclass
@@ -41,8 +42,10 @@ class PromotionAdjuster:
         print(f"사유: {result.adjustment_reason}")
     """
 
-    # 행사 종료 시 발주 감소율
+    # 행사 종료 시 발주 감소율 (PROMO_END_REDUCTION_DAYS=5 기준)
     END_ADJUSTMENT = {
+        5: 0.85,    # D-5: 85%로 감소 (15% 감량)
+        4: 0.70,    # D-4: 70%로 감소 (30% 감량)
         3: 0.50,    # D-3: 50%로 감소
         2: 0.30,    # D-2: 30%로 감소
         1: 0.10,    # D-1: 10%로 감소 (거의 중단)
@@ -97,10 +100,10 @@ class PromotionAdjuster:
         reason = "조정 없음"
         factor = 1.0
 
-        # === 케이스 1: 행사 종료 임박 (D-3 이내, 다음 행사 없음) ===
+        # === 케이스 1: 행사 종료 임박 (D-N 이내, 다음 행사 없음) ===
         if (status.current_promo
                 and status.days_until_end is not None
-                and status.days_until_end <= 3):
+                and status.days_until_end <= PROMO_END_REDUCTION_DAYS):
             # 연장 감지: DB의 end_date가 status보다 뒤면 이미 연장됨 → 감소 스킵
             if self._is_promo_extended(item_cd, status):
                 reason = f"행사 연장 감지 ({status.current_promo}), 감소 스킵"
@@ -291,7 +294,7 @@ class PromotionAdjuster:
 
             # 종료 임박 (다음 행사 없는 경우만)
             if status.current_promo and status.days_until_end is not None:
-                if status.days_until_end <= 3 and not status.next_promo:
+                if status.days_until_end <= PROMO_END_REDUCTION_DAYS and not status.next_promo:
                     result['ending_soon'].append({
                         'item_cd': item_cd,
                         'item_nm': status.item_nm,

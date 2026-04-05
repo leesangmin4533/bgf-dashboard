@@ -628,3 +628,6 @@ MILESTONE_TARGETS = {
 }
 MILESTONE_APPROACHING_RATIO = 1.2      # 목표의 120% 이내면 APPROACHING
 MILESTONE_COMPLETION_WEEKS = 2         # 연속 달성 주 수 (완료 조건)
+
+# ── 행사 종료 감량 (promotion_adjuster.py) ──
+PROMO_END_REDUCTION_DAYS = 5           # 행사 종료 N일 전부터 감량 시작

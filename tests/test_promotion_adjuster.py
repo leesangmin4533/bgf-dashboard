@@ -890,3 +890,109 @@ class TestPromotionExtension:
             result = collector.check_and_update_extensions()
 
         assert result == []
+
+
+# ─────────────────────────────────────────────
+# promo-end-reduction: D-5 확장 테스트
+# ─────────────────────────────────────────────
+
+
+class TestPromoEndReductionD5:
+    """행사 종료 감량 D-3 → D-5 확장 테스트"""
+
+    def test_end_d5_factor(self, adjuster, mock_manager):
+        """D-5: 85%로 감소 (promo_avg=0 → factor 기반)"""
+        status = _make_status(
+            current_promo="1+1",
+            current_end_date="2026-04-10",
+            days_until_end=5,
+            next_promo=None,
+            promo_avg=0.0,
+        )
+        mock_manager.get_promotion_status.return_value = status
+
+        result = adjuster.adjust_order_quantity("TEST001", base_qty=10)
+        # factor=0.85 → 10 * 0.85 = 8
+        assert result.adjusted_qty == 8
+        assert "D-5" in result.adjustment_reason
+
+    def test_end_d4_factor(self, adjuster, mock_manager):
+        """D-4: 70%로 감소"""
+        status = _make_status(
+            current_promo="2+1",
+            current_end_date="2026-04-09",
+            days_until_end=4,
+            next_promo=None,
+            promo_avg=0.0,
+        )
+        mock_manager.get_promotion_status.return_value = status
+
+        result = adjuster.adjust_order_quantity("TEST001", base_qty=10)
+        # factor=0.70 → 10 * 0.70 = 7
+        assert result.adjusted_qty == 7
+        assert "D-4" in result.adjustment_reason
+
+    def test_d6_no_reduction(self, adjuster, mock_manager):
+        """D-6: 감량 범위 밖 → 케이스 3(행사 중) 적용"""
+        status = _make_status(
+            current_promo="1+1",
+            current_end_date="2026-04-11",
+            days_until_end=6,
+            next_promo=None,
+            promo_multiplier=1.8,
+        )
+        mock_manager.get_promotion_status.return_value = status
+
+        result = adjuster.adjust_order_quantity("TEST001", base_qty=10)
+        # 케이스 3: factor=1.8 → 10 * 1.8 = 18
+        assert result.adjusted_qty == 18
+        assert "행사 중" in result.adjustment_reason
+
+    def test_d5_with_promo_stats(self, adjuster, mock_manager):
+        """D-5 + promo_avg 있음 → 정밀 계산"""
+        status = _make_status(
+            current_promo="1+1",
+            current_end_date="2026-04-10",
+            days_until_end=5,
+            next_promo=None,
+            normal_avg=2.0,
+            promo_avg=4.0,
+        )
+        mock_manager.get_promotion_status.return_value = status
+
+        result = adjuster.adjust_order_quantity(
+            "TEST001", base_qty=10, current_stock=10, pending_qty=5
+        )
+        # expected_sales = 4.0 * 5 = 20
+        # target_stock = 2.0 * 2 = 4
+        # needed = 20 + 4 - 10 - 5 = 9
+        assert result.adjusted_qty == 9
+
+    def test_d5_extended_promo_skips(self, adjuster, mock_manager):
+        """D-5이지만 행사 연장 감지 → 감량 스킵"""
+        status = _make_status(
+            current_promo="1+1",
+            current_end_date="2026-04-10",
+            days_until_end=5,
+            next_promo=None,
+        )
+        mock_manager.get_promotion_status.return_value = status
+        mock_manager.get_active_end_date.return_value = "2026-04-20"
+
+        result = adjuster.adjust_order_quantity("TEST001", base_qty=10)
+        assert result.adjusted_qty == 10
+        assert "연장" in result.adjustment_reason
+
+    def test_d5_next_promo_same_type(self, adjuster, mock_manager):
+        """D-5 + 동일 행사 연속 → 감량 없음"""
+        status = _make_status(
+            current_promo="1+1",
+            current_end_date="2026-04-10",
+            days_until_end=5,
+            next_promo="1+1",
+        )
+        mock_manager.get_promotion_status.return_value = status
+
+        result = adjuster.adjust_order_quantity("TEST001", base_qty=10)
+        assert result.adjusted_qty == 10
+        assert "동일 행사 연속" in result.adjustment_reason
