@@ -31,14 +31,16 @@
 
 **영향 범위**: 면류(032) 51건 + 다른 카테고리 미확인
 
-### 시도 1: 수집 폴백 제거 + DB 리셋 (커밋 대기, 04-06)
+### 시도 1: 수집 폴백 제거 + DB 리셋 (04-06)
 - **왜**: `or 1` 폴백이 빈값→0→1로 변환하여 잘못된 값을 DB에 잠금
 - **수정**:
   - `direct_api_fetcher.py:138`: `_safe_int(...) or 1` → `_safe_int(...) if > 0 else None`
   - `order_prep_collector.py:703`: JS `|| 1` → `|| null`
   - `order_prep_collector.py:526`: 신규 저장 시 `order_unit_qty: None`
-  - 면류(032) 51건 `order_unit_qty` → NULL 리셋 (다음 수집 시 올바른 값 채움)
-- **결과**: 검증 대기
+  - 면류(032) 51건 → NULL 리셋
+  - 짐빔하이볼(605) 4건 → NULL 리셋
+  - **카테고리 내 이상치 일괄 519건** → NULL 리셋 (대다수 unit>1인데 unit=1인 상품)
+- **결과**: 검증 대기 (스케줄: noodle-unit-qty-verify 04-07)
 
 ### 해결 검증
 - [ ] 내일(04-07) 07:00 발주에서 면류 상품 PYUN_QTY/ORD_UNIT_QTY 로그 확인
