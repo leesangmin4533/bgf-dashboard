@@ -132,6 +132,25 @@ class DailyChainReport:
             # 실패했지만 에러 메시지 있음
             lines.append(f"AI 분석: 실패 ({analysis['summary'][:50]})")
 
+        # job-health-monitor 요약 (최근 24h)
+        try:
+            from src.infrastructure.database.repos.job_run_repo import JobRunRepository
+            summary = JobRunRepository().summary_last_24h()
+            if summary:
+                succ = summary.get("success", 0)
+                failed = summary.get("failed", 0)
+                missed = summary.get("missed", 0)
+                timeout = summary.get("timeout", 0)
+                problems = failed + missed + timeout
+                if problems > 0:
+                    lines.append(
+                        f"스케줄(24h): ✓{succ} ✗{failed} 누락{missed} 타임아웃{timeout}"
+                    )
+                elif succ > 0:
+                    lines.append(f"스케줄(24h): 전부 정상 ({succ}건 성공)")
+        except Exception as e:
+            logger.debug(f"[ChainReport] job_runs 요약 실패 (무시): {e}")
+
         # 이상 없고 마일스톤도 없으면 최소 리포트
         if not anomalies and not milestone and not analysis:
             lines.append("모든 지표 정상")

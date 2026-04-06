@@ -1594,10 +1594,31 @@ def beverage_monthly_wrapper() -> None:
     beverage_decision_wrapper(["C", "D"])
 
 
+def _monthly_analysis_scheduled_for() -> str:
+    from src.infrastructure.job_health.job_run_tracker import compute_scheduled_for
+    return compute_scheduled_for(schedule_str="04:00")
+
+
 def monthly_store_analysis_wrapper() -> None:
     """매월 1일 전체 매장 상권 재분석 (매일 04:00, 1일에만 실제 동작)"""
     if datetime.now().day != 1:
         return
+    # job-health-monitor: non-multi_store 잡 추적 (Path B)
+    try:
+        from src.infrastructure.job_health.job_run_tracker import track_single_job
+        _impl = track_single_job(
+            "monthly_store_analysis",
+            _monthly_analysis_scheduled_for,
+        )(_monthly_store_analysis_impl)
+        _impl()
+        return
+    except Exception as e:
+        logger.warning(f"[monthly_store_analysis] Tracker 래핑 실패, 원본 실행: {e}")
+        _monthly_store_analysis_impl()
+
+
+def _monthly_store_analysis_impl() -> None:
+    """실제 매월 1일 분석 로직 (Tracker가 이 함수를 감싼다)."""
     logger.info("[스케줄] 월간 상권 분석 시작")
     try:
         from src.infrastructure.database.connection import DBRouter
