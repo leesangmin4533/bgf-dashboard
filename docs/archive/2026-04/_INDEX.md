@@ -15,3 +15,4 @@
 | slow-periodic-rop | 100% | 2026-04-06 |
 | delivery-rematch | 100% | 2026-04-06 |
 | weekend-food-reduction | 100% | 2026-04-06 |
+| collection-indent-fix | 100% | 2026-04-07 |
