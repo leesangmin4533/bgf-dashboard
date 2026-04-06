@@ -8,6 +8,165 @@
 - WasteSlipCollector의 헤더 수집 이후 상세 데이터를 보강할 때
 - dsGsTmp 캐싱 문제로 팝업 데이터가 반복되는 문제를 해결할 때
 
+---
+
+## ★ 일괄 Direct API 조회 (2026-04-06 발견)
+
+### 핵심 발견
+
+`/stgj020/searchDetailType1` 엔드포인트의 `strChitNoList` 파라미터는
+**같은 날짜의 복수 전표를 SQL IN절 형식으로 한번에 조회**할 수 있다.
+
+### 성능 비교
+
+| 방식 | API 호출 수 | 소요시간 | 비고 |
+|------|------------|---------|------|
+| 팝업 반복 (Selenium) | 전표당 1회 | ~7.8초/건 | 팝업 open/close 오버헤드 |
+| 기존 Direct API | 전표당 1회 | ~0.3초/건 + 0.3초 딜레이 | 순차 호출 |
+| **일괄 Direct API** | **날짜당 1회** | **~0.29초/전체** | 날짜별 병렬, 30배 향상 |
+
+실측: 6일간 29건 전표, 64개 품목 → **6회 병렬 API 호출, 0.29초 완료**
+
+### 제약사항
+
+1. **`strChitYmd` 필수** — 빈값이면 0건 반환. 날짜별 그룹핑 필수
+2. **`strChitDiv` = `04`** — 폐기 전표의 CHIT_ID (CHIT_FLAG `10`과 다름!)
+3. **`strChitNo`는 빈값** — 서버가 `strChitNoList`만 참조
+4. 응답의 `CHIT_NO` 컬럼으로 어느 전표의 품목인지 구분 가능
+
+### strChitNoList 형식
+
+```
+('전표번호1','전표번호2','전표번호3')
+```
+
+SQL IN절과 동일한 형식. 작은따옴표 필수.
+
+```
+단건: ('10047110011')
+복수: ('10047050011','10047060011','10047070011')
+```
+
+### 요청 Body 구조 (SSV 형식)
+
+```
+SSV:utf-8{RS}
+GV_USERFLAG=HOME{RS}
+_xm_webid_1_={웹ID}{RS}
+_xm_tid_1_={트랜잭션ID}{RS}
+SS_STORE_CD={점포코드}{RS}
+SS_PRE_STORE_CD={이전점포코드}{RS}
+SS_STORE_NM={점포명_base64}{RS}
+... (세션 변수들) ...
+GV_MENU_ID=0001,STGJ020_M0{RS}
+GV_USERFLAG=HOME{RS}
+GV_CHANNELTYPE=HOME{RS}
+Dataset:dsSearch{RS}
+_RowType_{US}strChitDiv:STRING(256){US}strChitNo:STRING(256){US}strChitNoList:STRING(256){US}strChitYmd:STRING(256){US}strStoreCd:STRING(256){RS}
+N{US}04{US}{US}('전표1','전표2',...){US}YYYYMMDD{US}점포코드
+```
+
+> `{RS}` = `\u001e` (Record Separator), `{US}` = `\u001f` (Unit Separator)
+
+### 응답 구조
+
+```
+SSV:UTF-8{RS}
+ErrorCode:string=0{RS}
+ErrorMsg:string={RS}
+Dataset:dsListType1{RS}
+_RowType_{US}CHIT_NO:string(11){US}CHIT_SEQ:bigdecimal(3){US}ITEM_CD:string(13){US}ITEM_NM:string(36){US}LARGE_CD:string(3){US}LARGE_NM:string(20){US}QTY:bigdecimal(9){US}WONGA_PRICE:bigdecimal(15){US}WONGA_AMT:bigdecimal(15){US}MAEGA_PRICE:bigdecimal(15){US}MAEGA_AMT:bigdecimal(15){US}CUST_NM:string(30){US}CENTER_NM:string(20){RS}
+N{US}10047050011{US}1{US}8800271903473{US}삼)참치소고기고추장더블1{US}...{RS}
+N{US}10047060011{US}1{US}...
+```
+
+- `dsListType1`에 모든 전표의 품목이 평탄화(flatten)되어 반환됨
+- `CHIT_NO`로 전표 구분, `CHIT_SEQ`로 순번 구분
+
+### 구현 패턴 (Python/Selenium)
+
+```python
+def fetch_all_details_batch(self, slip_list, delay=0.1):
+    """날짜별 일괄 Direct API 조회"""
+    # 1) 날짜별 그룹핑
+    by_date = {}
+    for slip in slip_list:
+        ymd = slip['CHIT_YMD']
+        if ymd not in by_date:
+            by_date[ymd] = []
+        by_date[ymd].append(slip['CHIT_NO'])
+    
+    all_items = []
+    for ymd, chit_nos in by_date.items():
+        # 2) strChitNoList 조립
+        chit_no_list = "('" + "','".join(chit_nos) + "')"
+        
+        # 3) 템플릿의 strChitNoList, strChitYmd 치환 후 API 호출
+        body = self._replace_template(chit_no_list, ymd)
+        ssv_text = self.driver.execute_script("""
+            var body = arguments[0];
+            var resp = await fetch('/stgj020/searchDetailType1', {
+                method: 'POST',
+                headers: {'Content-Type': 'text/plain;charset=UTF-8'},
+                body: body,
+                signal: AbortSignal.timeout(10000)
+            });
+            return await resp.text();
+        """, body)
+        
+        # 4) SSV 파싱 → 품목 리스트
+        items = parse_waste_slip_detail(ssv_text)
+        for item in items:
+            item['CHIT_YMD'] = ymd  # 날짜 부착
+        all_items.extend(items)
+        
+        time.sleep(delay)
+    
+    return all_items
+```
+
+### 병렬 호출 패턴 (JavaScript, 최대 성능)
+
+```javascript
+// 날짜별 Promise.all로 병렬 실행
+var promises = dates.map(function(ymd) {
+    var chitNoList = "('" + byDate[ymd].join("','") + "')";
+    var body = buildBody(chitNoList, ymd, storeCd);
+    return fetch('/stgj020/searchDetailType1', {
+        method: 'POST',
+        headers: {'Content-Type': 'text/plain;charset=UTF-8'},
+        body: body
+    }).then(function(r) { return r.text(); });
+});
+var results = await Promise.all(promises);
+// results[i] = 날짜별 SSV 응답
+```
+
+### 검증 결과 (2026-04-06, 46513 매장)
+
+```
+날짜       | 전표수 | 품목수 | 응답시간
+20260401  |   5건  |   5건  |  186ms
+20260402  |   6건  |   8건  |  233ms
+20260403  |   6건  |   9건  |  254ms
+20260404  |   5건  |  16건  |  290ms
+20260405  |   6건  |  21건  |  289ms
+20260406  |   1건  |   5건  |  165ms
+-----------------------------------
+합계       |  29건  |  64건  | 292ms (병렬)
+```
+
+### 코드 참조
+
+| 코드 | 위치 | 비고 |
+|------|------|------|
+| `strChitNoList` 치환 | `direct_frame_fetcher.py` `replaceCol()` | `('전표번호')` 형식 |
+| `fetch_slip_details()` | `DirectWasteSlipDetailFetcher` | 현재 단건 조회 |
+| `fetch_all_slip_details()` | `DirectWasteSlipDetailFetcher` | 현재 순차 조회, 일괄 개선 대상 |
+| `parse_waste_slip_detail()` | `direct_frame_fetcher.py:788` | SSV → dict 파싱 |
+
+---
+
 ## Common Pitfalls
 
 - :x: 그리드 더블클릭으로 팝업 열기 시도 -> ActionChains 더블클릭은 nexacro 팝업을 트리거하지 못함
@@ -317,21 +476,48 @@ nexacro 팝업은 close() 후에도 프레임이 메모리에 남아있어
 | `src/settings/ui_config.py` | FRAME_IDS["WASTE_SLIP"]="STGJ020_M0" 설정 |
 | `src/utils/nexacro_helpers.py` | navigate_menu() 유틸리티 |
 
-## 향후 통합 대상
+## 향후 개선 대상
 
-WasteSlipCollector에 `_collect_detail_items()` 메서드 추가하여
-헤더 수집 후 각 전표의 팝업을 열어 상세 품목까지 자동 수집하도록 확장 필요:
+### 우선순위 1: 일괄 Direct API 적용 (★ 추천)
+
+`DirectWasteSlipDetailFetcher.fetch_all_slip_details()`를 날짜별 일괄 조회 방식으로 변경:
+
+```python
+def fetch_all_slip_details_batch(self, slip_list: List[Dict], delay: float = 0.1) -> List[Dict]:
+    """날짜별 일괄 Direct API 조회 (30배 속도 향상)
+    
+    기존: 전표당 1회 API 호출 (29건 → 29회, ~8.7초)
+    개선: 날짜당 1회 API 호출 (29건/6일 → 6회, ~0.3초)
+    """
+    # 1) 날짜별 그룹핑
+    by_date = defaultdict(list)
+    for slip in slip_list:
+        by_date[slip['CHIT_YMD']].append(slip['CHIT_NO'])
+    
+    all_items = []
+    for ymd, chit_nos in by_date.items():
+        # 2) strChitNoList = ('NO1','NO2',...)
+        chit_no_list = "('" + "','".join(chit_nos) + "')"
+        # 3) 템플릿 치환 + API 호출
+        items = self._fetch_batch(chit_no_list, ymd)
+        for item in items:
+            item['CHIT_YMD'] = ymd
+        all_items.extend(items)
+        time.sleep(delay)
+    return all_items
+```
+
+### 우선순위 2: 팝업 기반 폴백 (현재 구현 유지)
+
+일괄 API 실패 시 기존 팝업 반복 방식으로 폴백:
 
 ```python
 def _collect_detail_items(self, slip_list: List[Dict]) -> List[Dict]:
-    """각 전표의 상세 품목 데이터 수집 (팝업 기반)"""
+    """각 전표의 상세 품목 데이터 수집 (팝업 기반 폴백)"""
     all_items = []
     for idx, slip in enumerate(slip_list):
-        # 1) dsGs 설정
-        # 2) 기존 팝업 닫기
-        # 3) gfn_openPopup("STGJ020_P1", ...)
-        # 4) dsGsTmp 강제 갱신 + fn_selSearch()
-        # 5) dsListType0~4에서 품목 추출
+        # 1) dsGs 설정 → 2) 팝업 닫기 → 3) 팝업 열기
+        # 4) dsGsTmp 갱신 + fn_selSearch → 5) dsListType0~4 추출
         items = self._extract_popup_items(slip, idx)
         all_items.extend(items)
     return all_items
