@@ -1250,8 +1250,9 @@ def get_food_weekday_coefficient(
         target_avg = weekday_avgs.get(weekday, overall_avg)
         raw_coef = target_avg / overall_avg
 
-        # 안전 범위: 0.80 ~ 1.25 (과도한 변동 방지)
-        return round(max(0.80, min(1.25, raw_coef)), 3)
+        # 안전 범위: FOOD_WEEKDAY_COEF_MIN ~ MAX (3월 분석 기반 확대)
+        from src.settings.constants import FOOD_WEEKDAY_COEF_MIN, FOOD_WEEKDAY_COEF_MAX
+        return round(max(FOOD_WEEKDAY_COEF_MIN, min(FOOD_WEEKDAY_COEF_MAX, raw_coef)), 3)
 
     except Exception as e:
         logger.debug(f"[푸드요일계수] DB 조회 실패 ({mid_cd}): {e}")

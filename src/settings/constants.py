@@ -635,6 +635,10 @@ PROMO_END_REDUCTION_DAYS = 5           # 행사 종료 N일 전부터 감량 시
 # ── SLOW 주기 판매 ROP (improved_predictor.py) ──
 SLOW_PERIODIC_MIN_SALES = 2            # 60일 내 N회 이상 판매 → 주기적 SLOW (ROP 유지)
 
+# ── food 요일계수 범위 (food.py get_food_weekday_coefficient) ──
+FOOD_WEEKDAY_COEF_MIN = 0.60           # 최소 계수 (기존 0.80 → 0.60)
+FOOD_WEEKDAY_COEF_MAX = 1.50           # 최대 계수 (기존 1.25 → 1.50)
+
 # ── Claude 자동 대응 (claude_responder.py) ──
 CLAUDE_AUTO_RESPOND_ENABLED = True         # False로 즉시 비활성화
 CLAUDE_AUTO_RESPOND_MODEL = "sonnet"       # 비용 절감 (sonnet 사용)

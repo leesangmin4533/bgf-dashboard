@@ -14,3 +14,4 @@
 | daily-chain-report | 100% | 2026-04-05 |
 | slow-periodic-rop | 100% | 2026-04-06 |
 | delivery-rematch | 100% | 2026-04-06 |
+| weekend-food-reduction | 100% | 2026-04-06 |
