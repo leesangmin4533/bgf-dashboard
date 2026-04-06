@@ -58,48 +58,48 @@ def run_collection_phases(ctx: Dict[str, Any], job: Any) -> Dict[str, Any]:
     else:
         # Phase 1.0: 기본 수집 (판매/날씨/캘린더)
         with phase_timer("1.0", "Data Collection",
-                     store_id=job.store_id, _logger=logger,
-                     timings=ctx.get("_phase_timings")):
-        dates_to_collect = [yesterday_str, today_str]
-        ctx["dates_to_collect"] = dates_to_collect
+                         store_id=job.store_id, _logger=logger,
+                         timings=ctx.get("_phase_timings")):
+            dates_to_collect = [yesterday_str, today_str]
+            ctx["dates_to_collect"] = dates_to_collect
 
-        def save_callback(date_str: str, data: List[Dict[str, Any]]) -> Dict[str, Any]:
-            stats = job.repository.save_daily_sales(
-                sales_data=data,
-                sales_date=date_str,
-                store_id=job.store_id,
-                collected_at=datetime.now().isoformat()
+            def save_callback(date_str: str, data: List[Dict[str, Any]]) -> Dict[str, Any]:
+                stats = job.repository.save_daily_sales(
+                    sales_data=data,
+                    sales_date=date_str,
+                    store_id=job.store_id,
+                    collected_at=datetime.now().isoformat()
+                )
+                job.repository.log_collection(
+                    collected_at=datetime.now().isoformat(),
+                    sales_date=date_str,
+                    stats=stats,
+                    status="success",
+                    duration=0
+                )
+                return stats
+
+            collection_results = job.collector.collect_multiple_dates(
+                dates=dates_to_collect,
+                save_callback=save_callback
             )
-            job.repository.log_collection(
-                collected_at=datetime.now().isoformat(),
-                sales_date=date_str,
-                stats=stats,
-                status="success",
-                duration=0
+            ctx["collection_results"] = collection_results
+
+            # 날씨/캘린더 저장
+            weather = job.collector.weather_data
+            if weather:
+                job._save_weather_data(today_str, weather)
+            try:
+                save_calendar_info(today_str, job.weather_repo)
+            except Exception as e:
+                logger.warning(f"스케줄러 정리 실패: {e}")
+
+            # 수집 성공 여부 확인
+            collection_success = any(
+                r.get("success") for r in collection_results.values()
             )
-            return stats
-
-        collection_results = job.collector.collect_multiple_dates(
-            dates=dates_to_collect,
-            save_callback=save_callback
-        )
-        ctx["collection_results"] = collection_results
-
-        # 날씨/캘린더 저장
-        weather = job.collector.weather_data
-        if weather:
-            job._save_weather_data(today_str, weather)
-        try:
-            save_calendar_info(today_str, job.weather_repo)
-        except Exception as e:
-            logger.warning(f"스케줄러 정리 실패: {e}")
-
-        # 수집 성공 여부 확인
-        collection_success = any(
-            r.get("success") for r in collection_results.values()
-        )
-        ctx["collection_success"] = collection_success
-        logger.info(f"수집 결과: {list(collection_results.keys())}, 성공={collection_success}")
+            ctx["collection_success"] = collection_success
+            logger.info(f"수집 결과: {list(collection_results.keys())}, 성공={collection_success}")
 
     # ── collect_only 가드: None이면 전체 모드 ──
     _full = collect_only is None
