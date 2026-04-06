@@ -61,7 +61,7 @@
 
 ---
 
-## [OPEN] delivery_match 타이밍 불일치 → 2차 매칭 실패 (04-06 ~)
+## [WATCHING] delivery_match 타이밍 불일치 → 2차 매칭 실패 (04-06 ~)
 
 **문제**: 2차 매칭(07:00 실행)이 receiving_history 수집(20:30) 이전에 실행 → 매칭률 0%
 **영향**: 49965 2차 53건 전부 미매칭, 3매장도 유사. 46513만 1차 84% (유일하게 1차 수집 타이밍 맞음)
@@ -90,9 +90,14 @@
 - 매칭 로직은 `actual_qty > 0`일 때만 매칭 → qty=0이면 "미입고" 판정
 - 수집 자체는 성공 (165건), 하지만 입고 수량이 0
 
-### 대응 방향
-1. **20:30 receiving 수집 시 2차 미매칭 건 재매칭** (receiving_qty 갱신 후 재실행)
-2. 또는 별도 스케줄(14:00)에서 2차 매칭만 재실행
+### 시도 1: rematch_unmatched 추가 (커밋 대기, 04-06)
+- **왜**: 20:30에는 2차 배송 도착 완료 → receiving_qty > 0 → 재매칭 가능
+- **수정**: `delivery_match_flow.py`에 `rematch_unmatched()` 추가, 20:30 wrapper에서 호출
+- **결과**: 검증 대기
+
+### 검증
+- [ ] 오늘(04-06) 20:30 재매칭 로그 확인 (스케줄: delivery-rematch-verify)
+- [ ] 04-07 09:00 expiry-tracking-gap-analysis에서 matched 비율 확인
 
 ---
 

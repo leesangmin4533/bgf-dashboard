@@ -685,6 +685,7 @@ def receiving_collect_wrapper(delivery_type: str) -> Callable[[], None]:
                         try:
                             from src.application.use_cases.delivery_match_flow import (
                                 match_confirmed_with_receiving,
+                                rematch_unmatched,
                             )
                             match_result = match_confirmed_with_receiving(
                                 ctx.store_id, delivery_type
@@ -692,6 +693,13 @@ def receiving_collect_wrapper(delivery_type: str) -> Callable[[], None]:
                             logger.info(
                                 f"[{ctx.store_id}] 입고 매칭: {match_result}"
                             )
+
+                            # ★ 미매칭 재시도 (07:00에 qty=0이었던 2차 등)
+                            rematch_result = rematch_unmatched(ctx.store_id)
+                            if rematch_result.get("matched", 0) > 0:
+                                logger.info(
+                                    f"[{ctx.store_id}] 재매칭: {rematch_result}"
+                                )
                         except Exception as me:
                             logger.warning(
                                 f"[{ctx.store_id}] 입고 매칭 실패 (수집은 완료): {me}"

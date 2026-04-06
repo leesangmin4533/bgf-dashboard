@@ -199,3 +199,120 @@ def match_confirmed_with_receiving(
             conn.close()
 
     return result
+
+
+def rematch_unmatched(store_id: str, conn=None) -> Dict[str, Any]:
+    """미매칭(matched=0) confirmed_orders 전체 재매칭 (delivery_type 무관)
+
+    20:30 receiving_collect 후 호출. 07:00에 receiving_qty=0이었던 상품이
+    이 시점에는 입고 완료되어 qty > 0이므로 매칭 가능.
+    """
+    today = datetime.now().strftime("%Y-%m-%d")
+    yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+    result: Dict[str, Any] = {
+        "matched": 0, "still_unmatched": 0, "errors": 0, "store_id": store_id,
+    }
+
+    own_conn = conn is None
+    if own_conn:
+        from src.infrastructure.database.connection import DBRouter
+        conn = DBRouter.get_connection(store_id=store_id, table="confirmed_orders")
+    try:
+        cursor = conn.cursor()
+
+        # 1. 미매칭 전부 (오늘+어제)
+        cursor.execute("""
+            SELECT id, item_cd, item_nm, mid_cd, ord_qty, delivery_type, order_date
+            FROM confirmed_orders
+            WHERE store_id = ? AND matched = 0 AND order_date IN (?, ?)
+        """, (store_id, today, yesterday))
+        unmatched_rows = cursor.fetchall()
+
+        if not unmatched_rows:
+            logger.info(f"[Rematch] {store_id}: 미매칭 없음")
+            return result
+
+        # 2. receiving_qty 조회
+        item_cds = list({r['item_cd'] for r in unmatched_rows})
+        placeholders = ','.join('?' * len(item_cds))
+        cursor.execute(f"""
+            SELECT item_cd, receiving_date, SUM(receiving_qty) as total_qty
+            FROM receiving_history
+            WHERE store_id = ? AND receiving_date IN (?, ?)
+              AND item_cd IN ({placeholders})
+            GROUP BY item_cd, receiving_date
+        """, (store_id, today, yesterday, *item_cds))
+        received_map = {}
+        for r in cursor.fetchall():
+            received_map[(r['item_cd'], r['receiving_date'])] = r['total_qty']
+
+        # 3. 매칭
+        from src.infrastructure.database.repos import InventoryBatchRepository
+        batch_repo = InventoryBatchRepository(store_id=store_id)
+
+        for co in unmatched_rows:
+            item_cd = co['item_cd']
+            mid_cd = co['mid_cd'] or ''
+            delivery_type = co['delivery_type']
+            order_date = co['order_date']
+
+            # receiving_date: 1차=당일, 2차=익일
+            if delivery_type == '1차':
+                recv_date = order_date
+            else:
+                recv_date = (
+                    datetime.strptime(order_date, '%Y-%m-%d') + timedelta(days=1)
+                ).strftime('%Y-%m-%d')
+
+            actual_qty = received_map.get((item_cd, recv_date), 0)
+            try:
+                if actual_qty > 0:
+                    expiry_dt = calc_expiry_datetime(mid_cd, delivery_type, recv_date)
+                    existing = batch_repo.get_batch_by_item_and_date(
+                        item_cd=item_cd, receiving_date=recv_date, store_id=store_id,
+                    )
+                    if not existing:
+                        from src.infrastructure.database.connection import DBRouter as DR
+                        common_conn = DR.get_common_connection()
+                        try:
+                            pd_row = common_conn.execute(
+                                "SELECT expiration_days FROM product_details WHERE item_cd = ?",
+                                (item_cd,),
+                            ).fetchone()
+                            exp_days = pd_row[0] if pd_row and pd_row[0] else 2
+                        finally:
+                            common_conn.close()
+
+                        batch_repo.create_batch(
+                            item_cd=item_cd, item_nm=co['item_nm'] or '',
+                            mid_cd=mid_cd, receiving_date=recv_date,
+                            expiration_days=exp_days, initial_qty=actual_qty,
+                            store_id=store_id, delivery_type=delivery_type,
+                            expiry_datetime=expiry_dt,
+                        )
+
+                    cursor.execute(
+                        "UPDATE confirmed_orders SET matched = 1, matched_qty = ? WHERE id = ?",
+                        (actual_qty, co['id']),
+                    )
+                    result["matched"] += 1
+                else:
+                    result["still_unmatched"] += 1
+            except Exception as e:
+                logger.warning(f"[Rematch] 오류 ({item_cd}): {e}")
+                result["errors"] += 1
+
+        conn.commit()
+        logger.info(
+            f"[Rematch] {store_id} 완료: "
+            f"재매칭={result['matched']}, 미입고={result['still_unmatched']}, "
+            f"오류={result['errors']}"
+        )
+    except Exception as e:
+        logger.error(f"[Rematch] {store_id} 실패: {e}")
+        result["errors"] += 1
+    finally:
+        if own_conn:
+            conn.close()
+
+    return result
