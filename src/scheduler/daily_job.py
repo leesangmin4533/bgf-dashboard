@@ -162,6 +162,7 @@ class DailyCollectionJob:
         use_improved_predictor: bool = True,
         target_dates: Optional[List[str]] = None,
         dry_run: bool = False,
+        collect_only: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """
         최적화된 전체 플로우 실행
@@ -172,6 +173,8 @@ class DailyCollectionJob:
             use_improved_predictor: True면 개선된 예측기 사용 (31일 데이터 기반)
             target_dates: 발주할 날짜 목록 (YYYY-MM-DD). None이면 전체 발주
             dry_run: True면 발주 저장 없이 시뮬레이션만 (07시와 동일 경로)
+            collect_only: 선별 수집 모드. None이면 전체 Phase 실행.
+                ["waste_slip"] → Phase 1.15+1.16만, ["sales","waste_slip"] → 1.0+1.15+1.16
 
         Returns:
             실행 결과
@@ -189,6 +192,8 @@ class DailyCollectionJob:
         logger.info(f"Optimized flow started | store={self.store_id} | session={sid}")
         logger.info(f"Dates: {yesterday_str}, {today_str}")
         logger.info(f"Auto-order: {run_auto_order}, dry_run: {dry_run}")
+        if collect_only:
+            logger.info(f"Lightweight mode: collect_only={collect_only}")
         logger.info(f"Predictor: {'Improved (31-day)' if use_improved_predictor else 'Legacy'}")
         logger.info(LOG_SEPARATOR_WIDE)
 
@@ -220,6 +225,7 @@ class DailyCollectionJob:
             "order_result": None,
             "fail_reason_result": None,
             "new_product_stats": None,
+            "collect_only": collect_only,
             "_phase_timings": {},  # sub-phase별 소요시간 수집
         }
 
@@ -233,25 +239,32 @@ class DailyCollectionJob:
             ctx = run_collection_phases(ctx, self)
             phase_timings["collection"] = round(time.time() - _t0, 1)
 
-            # Phase 1.5~1.67: 보정/검증 (수집 성공 시)
-            _t0 = time.time()
-            if ctx["collection_success"]:
-                from src.scheduler.phases.calibration import run_calibration_phases
-                ctx = run_calibration_phases(ctx)
-            phase_timings["calibration"] = round(time.time() - _t0, 1)
+            # collect_only 모드: 보정/준비/실행 Phase 전체 스킵
+            if collect_only:
+                logger.info(
+                    f"[LightweightMode] collect_only={collect_only}, "
+                    f"skipping calibration/preparation/execution"
+                )
+            else:
+                # Phase 1.5~1.67: 보정/검증 (수집 성공 시)
+                _t0 = time.time()
+                if ctx["collection_success"]:
+                    from src.scheduler.phases.calibration import run_calibration_phases
+                    ctx = run_calibration_phases(ctx)
+                phase_timings["calibration"] = round(time.time() - _t0, 1)
 
-            # Phase 1.68~1.95: 발주 준비 (수집 성공 시)
-            _t0 = time.time()
-            if ctx["collection_success"]:
-                from src.scheduler.phases.preparation import run_preparation_phases
-                ctx = run_preparation_phases(ctx, self)
-            phase_timings["preparation"] = round(time.time() - _t0, 1)
+                # Phase 1.68~1.95: 발주 준비 (수집 성공 시)
+                _t0 = time.time()
+                if ctx["collection_success"]:
+                    from src.scheduler.phases.preparation import run_preparation_phases
+                    ctx = run_preparation_phases(ctx, self)
+                phase_timings["preparation"] = round(time.time() - _t0, 1)
 
-            # Phase 2.0~3.0: 발주 실행
-            from src.scheduler.phases.execution import run_execution_phases
-            _t0 = time.time()
-            ctx = run_execution_phases(ctx, self)
-            phase_timings["execution"] = round(time.time() - _t0, 1)
+                # Phase 2.0~3.0: 발주 실행
+                from src.scheduler.phases.execution import run_execution_phases
+                _t0 = time.time()
+                ctx = run_execution_phases(ctx, self)
+                phase_timings["execution"] = round(time.time() - _t0, 1)
 
             # 결과 통합
             collection_results = ctx["collection_results"]

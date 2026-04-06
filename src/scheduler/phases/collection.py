@@ -25,6 +25,11 @@ from src.settings.constants import LOG_SEPARATOR_THIN
 logger = get_logger(__name__)
 
 
+class _SkipPhase(Exception):
+    """collect_only 모드에서 불필요한 Phase를 스킵하기 위한 내부 예외"""
+    pass
+
+
 def run_collection_phases(ctx: Dict[str, Any], job: Any) -> Dict[str, Any]:
     """Phase 1.0~1.35 수집 Phase 실행
 
@@ -37,9 +42,22 @@ def run_collection_phases(ctx: Dict[str, Any], job: Any) -> Dict[str, Any]:
     """
     today_str = ctx["today_str"]
     yesterday_str = ctx["yesterday_str"]
+    collect_only = ctx.get("collect_only")  # None이면 전체 Phase 실행
 
-    # Phase 1.0: 기본 수집 (판매/날씨/캘린더)
-    with phase_timer("1.0", "Data Collection",
+    # ★ collect_only 모드에서 sales 스킵 시 로그인만 수행
+    if collect_only and "sales" not in collect_only:
+        with phase_timer("login", "BGF Login (lightweight)",
+                         store_id=job.store_id, _logger=logger,
+                         timings=ctx.get("_phase_timings")):
+            job.collector._ensure_login()
+            ctx["collection_success"] = True
+            ctx["collection_results"] = {}
+            ctx["dates_to_collect"] = [yesterday_str, today_str]
+            logger.info(f"[collect_only] 로그인 완료, Phase: {collect_only}")
+        collection_success = True
+    else:
+        # Phase 1.0: 기본 수집 (판매/날씨/캘린더)
+        with phase_timer("1.0", "Data Collection",
                      store_id=job.store_id, _logger=logger,
                      timings=ctx.get("_phase_timings")):
         dates_to_collect = [yesterday_str, today_str]
@@ -83,8 +101,11 @@ def run_collection_phases(ctx: Dict[str, Any], job: Any) -> Dict[str, Any]:
         ctx["collection_success"] = collection_success
         logger.info(f"수집 결과: {list(collection_results.keys())}, 성공={collection_success}")
 
+    # ── collect_only 가드: None이면 전체 모드 ──
+    _full = collect_only is None
+
     # ★ Phase 1.04: 시간대별 매출 수집 (STMB010 Direct API)
-    if collection_success:
+    if _full and collection_success:
         try:
             with phase_timer("1.04", "Hourly Sales Collection (STMB010)",
                              store_id=job.store_id, _logger=logger,
@@ -111,6 +132,8 @@ def run_collection_phases(ctx: Dict[str, Any], job: Any) -> Dict[str, Any]:
     # ★ Phase 1.05: 시간대별 매출 상세(품목별) 수집 (selPrdT3)
     # ※ collection_success 독립: Direct API는 Phase 1.0 팝업과 독립, driver만 필요
     try:
+        if not _full:
+            raise _SkipPhase()
         with phase_timer("1.05", "Hourly Sales Detail Collection (selPrdT3)",
                          store_id=job.store_id, _logger=logger,
                          timings=ctx.get("_phase_timings")):
@@ -182,11 +205,13 @@ def run_collection_phases(ctx: Dict[str, Any], job: Any) -> Dict[str, Any]:
                     hsd_collector.retry_failed()
             else:
                 logger.debug("[Phase 1.05] 드라이버 없음, 건너뜀")
+    except _SkipPhase:
+        pass
     except Exception as e:
         logger.warning(f"[Phase 1.05] 시간대별 매출 상세 수집 실패 (발주 플로우 계속): {e}")
 
     # ★ Phase 1.06: 소진율 곡선 갱신 (food_popularity_curve)
-    if collection_success:
+    if _full and collection_success:
         try:
             with phase_timer("1.06", "Food Depletion Curve Update",
                              store_id=job.store_id, _logger=logger,
@@ -203,7 +228,7 @@ def run_collection_phases(ctx: Dict[str, Any], job: Any) -> Dict[str, Any]:
             logger.warning(f"[Phase 1.06] 소진율 곡선 갱신 실패 (발주 플로우 계속): {e}")
 
     # ★ Phase 1.01: 이상치 탐지 (D-2)
-    if collection_success:
+    if _full and collection_success:
         try:
             with phase_timer("1.01", "Anomaly Detection (D-2)",
                              store_id=job.store_id, _logger=logger,
@@ -231,7 +256,7 @@ def run_collection_phases(ctx: Dict[str, Any], job: Any) -> Dict[str, Any]:
             logger.warning(f"[Phase 1.01] 이상치 탐지 실패 (발주 플로우 계속): {e}")
 
     # ★ Phase 1.1: 입고 데이터 수집 (센터매입 조회/확정)
-    if collection_success:
+    if _full and collection_success:
         try:
             with phase_timer("1.1", "Receiving Collection",
                              store_id=job.store_id, _logger=logger,
@@ -352,7 +377,7 @@ def run_collection_phases(ctx: Dict[str, Any], job: Any) -> Dict[str, Any]:
             logger.warning(f"폐기 동기화 실패 (발주 플로우 계속): {e}")
 
     # ★ Phase 1.17: 상품 유통기한 관리 수집 (BGF STCM130_M0)
-    if collection_success:
+    if _full and collection_success:
         try:
             with phase_timer("1.17", "Expiry Management Collection",
                              store_id=job.store_id, _logger=logger,
@@ -371,7 +396,7 @@ def run_collection_phases(ctx: Dict[str, Any], job: Any) -> Dict[str, Any]:
 
     # ★ Phase 1.2: 발주 제외 상품 수집 (자동/스마트)
     exclusion_stats = None
-    if collection_success:
+    if _full and collection_success:
         try:
             with phase_timer("1.2", "Exclusion Items Collection",
                              store_id=job.store_id, _logger=logger,
@@ -389,7 +414,7 @@ def run_collection_phases(ctx: Dict[str, Any], job: Any) -> Dict[str, Any]:
     # ★ Phase 1.3: 신상품 도입 현황 수집 (3일발주 후속 관리용)
     new_product_stats = None
     from src.settings.constants import NEW_PRODUCT_MODULE_ENABLED
-    if collection_success and NEW_PRODUCT_MODULE_ENABLED:
+    if _full and collection_success and NEW_PRODUCT_MODULE_ENABLED:
         try:
             with phase_timer("1.3", "New Product Introduction Collection",
                              store_id=job.store_id, _logger=logger,
@@ -405,7 +430,7 @@ def run_collection_phases(ctx: Dict[str, Any], job: Any) -> Dict[str, Any]:
     ctx["new_product_stats"] = new_product_stats
 
     # ★ Phase 1.35: 신제품 라이프사이클 모니터링
-    if collection_success:
+    if _full and collection_success:
         try:
             with phase_timer("1.35", "New Product Lifecycle Monitoring",
                              store_id=job.store_id, _logger=logger,
@@ -424,6 +449,8 @@ def run_collection_phases(ctx: Dict[str, Any], job: Any) -> Dict[str, Any]:
 
     # ★ Phase 1.36: 데이터 보존 정책 (오래된 기록 자동 삭제)
     try:
+        if not _full:
+            raise _SkipPhase()
         with phase_timer("1.36", "Data Retention Cleanup",
                          store_id=job.store_id, _logger=logger,
                          timings=ctx.get("_phase_timings")):
@@ -451,6 +478,8 @@ def run_collection_phases(ctx: Dict[str, Any], job: Any) -> Dict[str, Any]:
 
             if purge_results:
                 logger.info(f"[Phase 1.36] 데이터 정리: {purge_results}")
+    except _SkipPhase:
+        pass
     except Exception as e:
         logger.warning(f"[Phase 1.36] 데이터 정리 실패 (무시): {e}")
 

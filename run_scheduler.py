@@ -377,16 +377,19 @@ def expiry_pre_collect_wrapper(expiry_hour: int) -> Callable[[], None]:
         logger.info("=" * 60)
 
         def collect_and_alert_task(ctx):
-            # 1) BGF 사이트 수집 (기존)
+            # 1) 판매 + 폐기전표 수집 (경량 모드)
             try:
                 from src.scheduler.daily_job import DailyCollectionJob
 
                 job = DailyCollectionJob(store_id=ctx.store_id)
-                result = job.run_optimized(run_auto_order=False)
+                result = job.run_optimized(
+                    run_auto_order=False,
+                    collect_only=["sales", "waste_slip"],
+                )
 
                 if result["success"]:
                     total = result.get("total_items", 0)
-                    logger.info(f"[{ctx.store_id}] 폐기 전 수집 완료: {total}건")
+                    logger.info(f"[{ctx.store_id}] 폐기 전 수집 완료 (lightweight): {total}건")
                 else:
                     logger.warning(f"[{ctx.store_id}] 폐기 전 수집 실패: "
                                    f"{result.get('error', 'Unknown')}")
@@ -497,20 +500,22 @@ def expiry_confirm_wrapper(expiry_hour: int) -> Callable[[], None]:
         logger.info("=" * 60)
 
         def confirm_task(ctx):
-            # 1) 전체 수집 (Phase 1.15에서 폐기전표 자동 수집+DB 저장)
+            # 1) 폐기전표만 수집 (Phase 1.15+1.16 경량 모드)
             try:
                 from src.scheduler.daily_job import DailyCollectionJob
 
                 job = DailyCollectionJob(store_id=ctx.store_id)
-                result = job.run_optimized(run_auto_order=False)
+                result = job.run_optimized(
+                    run_auto_order=False,
+                    collect_only=["waste_slip"],
+                )
 
                 if result["success"]:
-                    logger.info(f"[{ctx.store_id}] 폐기 후 수집 완료: "
-                                f"{result.get('total_items', 0)}건")
+                    logger.info(f"[{ctx.store_id}] 폐기전표 수집 완료 (lightweight)")
                 else:
-                    logger.warning(f"[{ctx.store_id}] 폐기 후 수집 실패")
+                    logger.warning(f"[{ctx.store_id}] 폐기전표 수집 실패")
             except Exception as e:
-                logger.error(f"[{ctx.store_id}] 폐기 후 수집 error: {e}")
+                logger.error(f"[{ctx.store_id}] 폐기전표 수집 error: {e}")
 
             # 2) DB에서 당일 폐기전표 item_cd 조회 (Phase 1.15에서 이미 저장됨)
             waste_item_codes = set()
@@ -1084,6 +1089,7 @@ def bulk_collect_wrapper() -> None:
     """벌크 상품 상세 수집 (유통기한 + 행사 정보)
 
     매일 11:00 실행: 유통기한 미등록 활성 상품을 일괄 수집.
+    00:00 통합 수집에서 이미 처리된 경우 Selenium 생략.
     이전 중단 지점부터 자동 재개 (resume=True).
     """
     logger.info("=" * 60)
@@ -1092,10 +1098,27 @@ def bulk_collect_wrapper() -> None:
 
     from src.application.use_cases.batch_collect_flow import BatchCollectFlow
 
-    _run_task(
-        task_fn=lambda ctx: BatchCollectFlow(store_ctx=ctx).run(),
-        task_name="BulkCollect",
-    )
+    def task(ctx):
+        # ★ 사전 체크: 수집 대상 존재 여부 (Selenium 없이 DB만)
+        try:
+            from scripts.collect_all_product_details import get_target_items
+            targets = get_target_items(force=False)
+        except Exception:
+            targets = None  # 확인 실패 시 기존대로 실행
+
+        if targets is not None and len(targets) == 0:
+            logger.info(
+                f"[{ctx.store_id}] BulkCollect 수집 대상 0건 "
+                f"(00:00 통합 수집에서 완료) → Selenium 생략"
+            )
+            return {"success": True, "skipped": True, "reason": "no_targets"}
+
+        if targets is not None:
+            logger.info(f"[{ctx.store_id}] BulkCollect 수집 대상: {len(targets)}건")
+
+        return BatchCollectFlow(store_ctx=ctx).run()
+
+    _run_task(task, "BulkCollect")
 
 
 def ml_train_wrapper(incremental: bool = False) -> None:
@@ -1193,30 +1216,165 @@ def payday_analyze_wrapper() -> None:
 
 
 def inventory_verify_wrapper() -> None:
-    """주간 재고 검증 (수요일 02:00)
+    """주간 재고 검증 (수요일 03:00)
 
     전 매장 BGF 실재고 vs DB 비교 + 불일치 동기화 + 엑셀 리포트.
-    data/reports/inventory_verify_YYYYMMDD_HHMMSS.xlsx 저장.
+    매장별 병렬 실행 → 통합 엑셀 리포트 생성.
     """
     logger.info("=" * 60)
-    logger.info(f"Weekly inventory verification at {datetime.now().isoformat()}")
+    logger.info(f"Weekly inventory verification (parallel) at {datetime.now().isoformat()}")
     logger.info("=" * 60)
 
     try:
         scripts_path = str(Path(__file__).parent / "scripts")
         if scripts_path not in sys.path:
             sys.path.insert(0, scripts_path)
-        from scripts.verify_inventory_direct_api import run_verification_all_stores
-
-        excel_path = run_verification_all_stores(
-            threshold=1,
-            sync_db=True,  # 불일치 → BGF 값으로 DB 동기화
+        from scripts.verify_inventory_direct_api import (
+            run_verification_single,
+            _write_excel,
+            OUTPUT_DIR,
         )
-        logger.info(f"[InventoryVerify] 엑셀 리포트: {excel_path}")
+
+        _verify_results = {}
+
+        def verify_task(ctx):
+            result = run_verification_single(
+                store_id=ctx.store_id,
+                threshold=1,
+                sync_db=True,
+            )
+            _verify_results[ctx.store_id] = result
+            mismatches = len([r for r in result.get("results", []) if r.get("diff", 0) != 0])
+            logger.info(
+                f"[{ctx.store_id}] 재고 검증 완료: "
+                f"불일치 {mismatches}건, 동기화 {result.get('synced', 0)}건"
+            )
+            return result
+
+        _run_task(verify_task, "InventoryVerify")
+
+        # 통합 엑셀 리포트 생성
+        if _verify_results:
+            try:
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                excel_path = OUTPUT_DIR / f"inventory_verify_{timestamp}.xlsx"
+                _write_excel(_verify_results, excel_path)
+                logger.info(f"[InventoryVerify] 엑셀 리포트: {excel_path}")
+            except Exception as e:
+                logger.warning(f"[InventoryVerify] 엑셀 생성 실패: {e}")
+
     except Exception as e:
         logger.error(f"[InventoryVerify] 실패: {e}")
         import traceback
         traceback.print_exc()
+
+
+def consolidated_nightly_collect_wrapper() -> None:
+    """야간 통합 수집: 발주단위 + 상품 상세 (00:00, 단일 BGF 세션)
+
+    기존 00:00 order_unit_collect + 01:00 detail_fetch를 단일 로그인으로 통합.
+    BGF 계정이 단일이므로 _run_task(매장별 병렬)가 아닌 직접 실행.
+    """
+    logger.info("=" * 60)
+    logger.info(f"Consolidated nightly collection at {datetime.now().isoformat()}")
+    logger.info("=" * 60)
+
+    try:
+        from src.sales_analyzer import SalesAnalyzer
+        from src.collectors.order_status_collector import OrderStatusCollector
+        from src.collectors.product_detail_batch_collector import (
+            ProductDetailBatchCollector,
+        )
+        from src.infrastructure.database.repos import ProductDetailRepository
+        from src.settings.timing import SA_LOGIN_WAIT, SA_POPUP_CLOSE_WAIT
+        from src.utils.nexacro_helpers import close_tab_by_frame_id
+
+        repo = ProductDetailRepository()
+        store_id = _DEFAULT_STORE["store_id"]
+
+        analyzer = SalesAnalyzer()
+        try:
+            analyzer.setup_driver()
+            analyzer.connect()
+            time.sleep(SA_LOGIN_WAIT)
+
+            if not analyzer.do_login():
+                logger.error("[NightlyCollect] BGF 로그인 실패")
+                return
+
+            time.sleep(SA_POPUP_CLOSE_WAIT * 2)
+            analyzer.close_popup()
+            time.sleep(SA_POPUP_CLOSE_WAIT)
+
+            # ── Phase A: 발주단위 수집 (STBJ070 → 홈 폴백) ──
+            logger.info("[NightlyCollect] Phase A: 발주단위 수집 시작")
+            items = None
+
+            try:
+                collector = OrderStatusCollector(
+                    driver=analyzer.driver, store_id=store_id,
+                )
+                if collector.navigate_to_order_status_menu():
+                    items = collector.collect_all_order_unit_qty()
+                    if items:
+                        logger.info(f"[Phase A] STBJ070 수집 성공: {len(items)}개")
+                    else:
+                        logger.warning("[Phase A] STBJ070 결과 없음 - 홈 폴백")
+                    close_tab_by_frame_id(
+                        analyzer.driver, OrderStatusCollector.FRAME_ID,
+                    )
+                    time.sleep(0.5)
+                else:
+                    logger.warning("[Phase A] STBJ070 메뉴 이동 실패 - 홈 폴백")
+            except Exception as e:
+                logger.warning(f"[Phase A] STBJ070 실패: {e} - 홈 폴백")
+
+            if not items:
+                from src.infrastructure.database.connection import DBRouter
+
+                store_conn = DBRouter.get_store_connection(store_id)
+                try:
+                    cursor = store_conn.cursor()
+                    cursor.execute("""
+                        SELECT DISTINCT item_cd FROM daily_sales
+                        WHERE sales_date >= date('now', '-30 days')
+                        ORDER BY item_cd
+                    """)
+                    item_codes = [row[0] for row in cursor.fetchall()]
+                finally:
+                    store_conn.close()
+
+                if item_codes:
+                    logger.info(f"[Phase A] 홈 폴백: {len(item_codes)}개 상품")
+                    collector = OrderStatusCollector(
+                        driver=analyzer.driver, store_id=store_id,
+                    )
+                    items = collector.collect_order_unit_via_home(item_codes)
+
+            if items:
+                updated = repo.bulk_update_order_unit_qty(items)
+                logger.info(
+                    f"[Phase A] 발주단위 완료: {len(items)}개 수집, {updated}개 갱신"
+                )
+            else:
+                logger.warning("[Phase A] 발주단위 수집 데이터 없음")
+
+            # ── Phase B: 상품 상세 수집 (동일 드라이버 재사용) ──
+            logger.info("[NightlyCollect] Phase B: 상품 상세 수집 시작")
+            try:
+                detail_collector = ProductDetailBatchCollector(
+                    driver=analyzer.driver, store_id=None,
+                )
+                detail_stats = detail_collector.collect_all()
+                logger.info(f"[Phase B] 상품 상세 완료: {detail_stats}")
+            except Exception as e:
+                logger.error(f"[Phase B] 상품 상세 수집 실패: {e}")
+
+        finally:
+            analyzer.close()
+
+    except Exception as e:
+        logger.error(f"[NightlyCollect] 실패: {e}", exc_info=True)
 
 
 def order_unit_collect_wrapper() -> None:
@@ -1792,15 +1950,11 @@ def run_scheduler(schedule_time: str = "07:00", multi_store: bool = True) -> Non
     schedule.every().day.at("05:00").do(association_mining_wrapper)
     logger.info("[Schedule] Association rule mining: 05:00")
 
-    # 10. 전체 품목 발주단위 수집 (매일 00:00)
-    # BGF 사이트 발주현황조회 "전체" 탭에서 ORD_UNIT_QTY 수집 -> common.db 갱신
-    schedule.every().day.at("00:00").do(order_unit_collect_wrapper)
-    logger.info("[Schedule] Order unit qty collection: 00:00")
-
-    # 11. 상품 상세 일괄 수집 (매일 01:00)
-    # CallItemDetailPopup 일괄 조회 -> common.db products + product_details 갱신
-    schedule.every().day.at("01:00").do(detail_fetch_wrapper)
-    logger.info("[Schedule] Product detail batch fetch: 01:00")
+    # 10. 야간 통합 수집 (매일 00:00) — 발주단위 + 상품 상세 단일 세션
+    # 기존 00:00 order_unit_collect + 01:00 detail_fetch 통합
+    schedule.every().day.at("00:00").do(consolidated_nightly_collect_wrapper)
+    logger.info("[Schedule] Consolidated nightly collection (order_unit + detail): 00:00")
+    # 11. (01:00 제거 — 00:00 통합 수집으로 이관)
 
     # 12. 베이지안 파라미터 최적화 (매주 일요일 23:00)
     schedule.every().sunday.at("23:00").do(bayesian_optimize_wrapper)
