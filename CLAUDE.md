@@ -38,6 +38,7 @@ BGF 리테일(CU 편의점) 다매장 자동 발주 시스템
 <!-- ISSUE_TABLE_START -->
 | 상태 | 우선순위 | 이슈 | 파일 | 비고 |
 |:---:|:---:|------|------|------|
+| OPEN | - | delivery_match 타이밍 불일치 → 2차 매칭 실패 | expiry-tracking.md |  |
 | OPEN | - | product_details order_unit_qty 불일치 → 과발주 | order-execution.md |  |
 | WATCHING | - | action_proposals v70 컬럼 매장 DB 미적용 | scheduling.md | 내일(04-06) 07:00 로그에서 [Verify] executed_a |
 | WATCHING | - | 과도기 알림 누락 가능성 | expiry-tracking.md | 4/7 Gap 분석에서 누락 건수 확인 |
