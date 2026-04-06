@@ -632,6 +632,9 @@ MILESTONE_COMPLETION_WEEKS = 2         # 연속 달성 주 수 (완료 조건)
 # ── 행사 종료 감량 (promotion_adjuster.py) ──
 PROMO_END_REDUCTION_DAYS = 5           # 행사 종료 N일 전부터 감량 시작
 
+# ── SLOW 주기 판매 ROP (improved_predictor.py) ──
+SLOW_PERIODIC_MIN_SALES = 2            # 60일 내 N회 이상 판매 → 주기적 SLOW (ROP 유지)
+
 # ── Claude 자동 대응 (claude_responder.py) ──
 CLAUDE_AUTO_RESPOND_ENABLED = True         # False로 즉시 비활성화
 CLAUDE_AUTO_RESPOND_MODEL = "sonnet"       # 비용 절감 (sonnet 사용)

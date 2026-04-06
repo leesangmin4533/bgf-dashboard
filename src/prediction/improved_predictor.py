@@ -1103,6 +1103,21 @@ class ImprovedPredictor:
         """일별 판매량 리스트 — BasePredictor에 위임"""
         return self._base._get_daily_sales_history(item_cd, days)
 
+    def _count_sales_days(self, item_cd: str, days: int = 60) -> int:
+        """N일 내 판매일수 (sale_qty > 0인 날 수)"""
+        conn = self._get_connection()
+        try:
+            row = conn.execute(
+                "SELECT COUNT(*) FROM daily_sales "
+                "WHERE item_cd = ? AND sales_date >= date('now', ?) AND sale_qty > 0",
+                (item_cd, f"-{days} days"),
+            ).fetchone()
+            return row[0] if row else 0
+        except Exception:
+            return 0
+        finally:
+            conn.close()
+
     def _compute_base_prediction_wma(self, item_cd, product, target_date):
         """기존 WMA 기반 예측 — BasePredictor에 위임"""
         result = self._base._compute_wma(item_cd, product, target_date)
@@ -1993,6 +2008,9 @@ class ImprovedPredictor:
         if rop_enabled and sell_day_ratio < 0.3:
             if effective_stock_for_need == 0 and order_qty == 0 and pending_qty == 0:
                 _has_recent_sales = False
+                _has_periodic_sales = False
+                _sales_60d = 0
+
                 if data_days < DATA_MIN_DAYS_FOR_LARGE_UNIT and not _is_new_product:
                     try:
                         _recent = self._get_daily_sales_history(item_cd, days=30)
@@ -2002,21 +2020,29 @@ class ImprovedPredictor:
                     except Exception:
                         pass
 
+                    # 30일 내 판매 없어도 60일 내 주기적 판매 확인
+                    if not _has_recent_sales:
+                        from src.settings.constants import SLOW_PERIODIC_MIN_SALES
+                        _sales_60d = self._count_sales_days(item_cd, days=60)
+                        _has_periodic_sales = _sales_60d >= SLOW_PERIODIC_MIN_SALES
+
                 if (data_days < DATA_MIN_DAYS_FOR_LARGE_UNIT
                         and not _is_new_product
-                        and not _has_recent_sales):
+                        and not _has_recent_sales
+                        and not _has_periodic_sales):
                     logger.info(
                         f"[ROP Skip] {product['item_nm']}: "
                         f"데이터 부족(data_days={data_days}<{DATA_MIN_DAYS_FOR_LARGE_UNIT}) "
-                        f"+ 최근 판매 없음 → ROP 생략"
+                        f"+ 최근 판매 없음 + 60일 판매 {_sales_60d}회 → ROP 생략"
                     )
                 else:
                     order_qty = 1
-                    _rop_reason = (
-                        "SLOW_ZERO_STOCK_SAFETY"
-                        if _has_recent_sales and data_days < DATA_MIN_DAYS_FOR_LARGE_UNIT
-                        else f"ratio={sell_day_ratio:.2%}"
-                    )
+                    if _has_periodic_sales:
+                        _rop_reason = f"periodic_slow(60d={_sales_60d}회)"
+                    elif _has_recent_sales and data_days < DATA_MIN_DAYS_FOR_LARGE_UNIT:
+                        _rop_reason = "SLOW_ZERO_STOCK_SAFETY"
+                    else:
+                        _rop_reason = f"ratio={sell_day_ratio:.2%}"
                     proposal.set(order_qty, "rop", f"재고=0, {_rop_reason}")
                     logger.info(
                         f"[ROP] {product['item_nm']}: "

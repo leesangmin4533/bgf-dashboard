@@ -10,12 +10,13 @@ import pytest
 from src.prediction.improved_predictor import DATA_MIN_DAYS_FOR_LARGE_UNIT
 
 
-def _should_skip_rop(data_days, is_new_product, has_recent_sales):
-    """ROP 스킵 판정 로직 (improved_predictor.py L1721-1723 미러)"""
+def _should_skip_rop(data_days, is_new_product, has_recent_sales, has_periodic_sales=False):
+    """ROP 스킵 판정 로직 (improved_predictor.py _stage_rop 미러)"""
     return (
         data_days < DATA_MIN_DAYS_FOR_LARGE_UNIT
         and not is_new_product
         and not has_recent_sales
+        and not has_periodic_sales
     )
 
 
@@ -60,3 +61,42 @@ class TestSlowZeroStockSafety:
     def test_data_min_days_constant(self):
         """DATA_MIN_DAYS_FOR_LARGE_UNIT = 7 확인"""
         assert DATA_MIN_DAYS_FOR_LARGE_UNIT == 7
+
+
+class TestSlowPeriodicRop:
+    """SLOW 주기 판매 상품 ROP 유지 테스트"""
+
+    def test_periodic_slow_triggers_rop(self):
+        """60일 내 3회 판매, stock=0 → 주기적 SLOW → ROP=1"""
+        # 30일 판매 없음, but 60일 3회 판매 → periodic
+        assert _should_skip_rop(
+            data_days=3, is_new_product=False,
+            has_recent_sales=False, has_periodic_sales=True
+        ) is False  # ROP 발동
+
+    def test_dead_stock_skips_rop(self):
+        """60일 내 0회 판매, stock=0 → 사장상품 → ROP 스킵"""
+        assert _should_skip_rop(
+            data_days=3, is_new_product=False,
+            has_recent_sales=False, has_periodic_sales=False
+        ) is True  # ROP 스킵
+
+    def test_single_sale_skips_rop(self):
+        """60일 내 1회 판매 → MIN_SALES=2 미달 → ROP 스킵"""
+        # has_periodic_sales = (1 >= 2) = False
+        assert _should_skip_rop(
+            data_days=3, is_new_product=False,
+            has_recent_sales=False, has_periodic_sales=False
+        ) is True
+
+    def test_recent_sales_still_works(self):
+        """30일 내 판매 있으면 periodic 확인 불필요 → ROP=1"""
+        assert _should_skip_rop(
+            data_days=3, is_new_product=False,
+            has_recent_sales=True, has_periodic_sales=False
+        ) is False  # 기존 로직 유지
+
+    def test_periodic_min_sales_constant(self):
+        """SLOW_PERIODIC_MIN_SALES = 2 확인"""
+        from src.settings.constants import SLOW_PERIODIC_MIN_SALES
+        assert SLOW_PERIODIC_MIN_SALES == 2
