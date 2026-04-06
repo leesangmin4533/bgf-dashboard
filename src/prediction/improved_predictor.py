@@ -916,7 +916,13 @@ class ImprovedPredictor:
         )
 
         # 6. 최종 요약 로그 + PredictionResult 생성
-        final_order_qty = int(max(0, result_ctx["order_qty"]))
+        # food 카테고리: 1개 이상이면 올림(ceil) — 소수점 버림으로 인한 과소발주 방지
+        import math
+        _raw_qty = max(0, result_ctx["order_qty"])
+        if mid_cd in ('001', '002', '003', '004', '005', '012') and _raw_qty >= 1.0:
+            final_order_qty = math.ceil(_raw_qty)
+        else:
+            final_order_qty = int(_raw_qty)
         logger.info(
             f"[PRED][SUMMARY] {product['item_nm']}({item_cd}) mid={mid_cd} "
             f"| WMA={round(base_prediction, 2)} adj={round(result_ctx['adjusted_prediction'], 2)} "
@@ -951,7 +957,7 @@ class ImprovedPredictor:
             current_stock=current_stock,
             pending_qty=pending_qty,
             safety_stock=round(result_ctx["safety_stock"], 2),
-            order_qty=int(max(0, result_ctx["order_qty"])),
+            order_qty=final_order_qty,
             confidence=_confidence_value,
             data_days=data_days,
             weekday_coef=round(result_ctx.get("weekday_coef", weekday_coef), 2),
