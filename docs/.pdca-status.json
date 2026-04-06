@@ -1,0 +1,47 @@
+{
+  "version": "2.0",
+  "lastUpdated": "2026-04-06T14:59:08.695Z",
+  "activeFeatures": [
+    "scripts"
+  ],
+  "primaryFeature": "scripts",
+  "features": {
+    "scripts": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-04-06T14:58:54.515Z",
+        "lastUpdated": "2026-04-06T14:59:08.695Z"
+      },
+      "lastFile": "C:\\Users\\kanur\\OneDrive\\바탕 화면\\bbb\\bgf_auto\\scripts\\analyze_anomaly.py"
+    }
+  },
+  "pipeline": {
+    "currentPhase": 1,
+    "level": "Dynamic",
+    "phaseHistory": []
+  },
+  "session": {
+    "startedAt": "2026-04-06T14:58:04.061Z",
+    "onboardingCompleted": false,
+    "lastActivity": "2026-04-06T14:59:08.695Z"
+  },
+  "history": [
+    {
+      "timestamp": "2026-04-06T14:58:54.515Z",
+      "feature": "scripts",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-06T14:59:08.695Z",
+      "feature": "scripts",
+      "phase": "do",
+      "action": "updated"
+    }
+  ]
+}

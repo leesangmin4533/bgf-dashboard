@@ -1,0 +1,21 @@
+{
+  "anomalies": [],
+  "milestone": {
+    "K1": {
+      "value": 0.935,
+      "status": "ACHIEVED"
+    },
+    "K2": {
+      "value": null,
+      "status": "NO_DATA"
+    },
+    "K3": {
+      "value": null,
+      "status": "NO_DATA"
+    },
+    "K4": {
+      "value": 31,
+      "status": "NOT_MET"
+    }
+  }
+}

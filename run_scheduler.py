@@ -176,10 +176,30 @@ def _run_task(
     _MULTI_STORE=True: MultiStoreRunner.run_parallel()로 모든 활성 매장 병렬 실행
     _MULTI_STORE=False: 기본 매장 1개만 실행
 
+    job-health-monitor: 각 매장별 task_fn을 JobRunTracker로 래핑하여
+    job_runs 테이블에 실행 로그를 기록한다. 피처 플래그 OFF 시 투명 호출.
+
     Args:
         task_fn: StoreContext를 받는 작업 함수
         task_name: 작업 이름 (로깅용)
     """
+    # Tracker 래핑 (피처 플래그 체크는 wrap_multistore_task 내부에서)
+    try:
+        from src.infrastructure.job_health.job_run_tracker import (
+            wrap_multistore_task,
+            compute_scheduled_for,
+        )
+        from src.application.scheduler.job_definitions import SCHEDULED_JOBS
+        job_def = next((j for j in SCHEDULED_JOBS if j.name == task_name), None)
+        if job_def is not None:
+            sched_for = compute_scheduled_for(
+                schedule_str=job_def.schedule,
+                schedules=job_def.schedules,
+            )
+            task_fn = wrap_multistore_task(task_name, task_fn, sched_for)
+    except Exception as e:
+        logger.warning(f"[{task_name}] JobRunTracker 래핑 실패 (원본 실행): {e}")
+
     if _MULTI_STORE:
         _runner.run_parallel(task_fn=task_fn, task_name=task_name)
     else:
@@ -2031,6 +2051,23 @@ def run_scheduler(schedule_time: str = "07:00", multi_store: bool = True) -> Non
     # 다음 실행 시간 표시
     next_run = schedule.next_run()
     logger.info(f"[Scheduler] Next run: {next_run}")
+
+    # job-health-monitor: heartbeat writer + health checker daemon 스레드 시작
+    try:
+        from src.infrastructure.job_health.heartbeat_writer import HeartbeatWriter
+        from src.application.services.job_health_checker import start_health_checker_thread
+        from src.settings.constants import (
+            HEARTBEAT_INTERVAL_SEC,
+            JOB_HEALTH_TRACKER_ENABLED,
+        )
+        if JOB_HEALTH_TRACKER_ENABLED:
+            HeartbeatWriter(interval_sec=HEARTBEAT_INTERVAL_SEC).start()
+            start_health_checker_thread()
+            logger.info("[Scheduler] job-health-monitor 활성화 (heartbeat + checker)")
+        else:
+            logger.warning("[Scheduler] job-health-monitor 비활성화 (피처 플래그 OFF)")
+    except Exception as e:
+        logger.warning(f"[Scheduler] job-health-monitor 기동 실패: {e}")
 
     # 무한 루프
     while True:

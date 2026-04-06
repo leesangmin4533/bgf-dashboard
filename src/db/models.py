@@ -1857,6 +1857,29 @@ CREATE TABLE IF NOT EXISTS milestone_snapshots (
     UNIQUE(snapshot_date, stage)
 );
     """,
+    74: """
+-- v74: job_runs 스케줄 잡 실행 로그 (common.db, job-health-monitor feature)
+CREATE TABLE IF NOT EXISTS job_runs (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    job_name        TEXT NOT NULL,
+    store_id        TEXT,
+    scheduled_for   TEXT NOT NULL,
+    started_at      TEXT NOT NULL,
+    ended_at        TEXT,
+    status          TEXT NOT NULL,
+    error_message   TEXT,
+    error_type      TEXT,
+    duration_sec    REAL,
+    alerted         INTEGER DEFAULT 0,
+    created_at      TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_job_runs_name_time ON job_runs(job_name, started_at DESC);
+CREATE INDEX IF NOT EXISTS idx_job_runs_status_time ON job_runs(status, started_at DESC);
+CREATE INDEX IF NOT EXISTS idx_job_runs_scheduled ON job_runs(scheduled_for, job_name);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_job_runs_missed_unique
+    ON job_runs(job_name, COALESCE(store_id, ''), scheduled_for)
+    WHERE status = 'missed';
+    """,
 }
 
 

@@ -252,7 +252,19 @@ BATCH_EXPIRY_ALERT_DAYS = 1             # 폐기 N일 전 알림
 
 # DB 스키마 버전
 # =====================================================================
-DB_SCHEMA_VERSION = 73  # v73: milestone_snapshots 주간 KPI 스냅샷
+DB_SCHEMA_VERSION = 74  # v74: job_runs 스케줄 잡 실행 로그 (job-health-monitor)
+
+# =====================================================================
+# Job Health Monitor (job-health-monitor feature)
+# =====================================================================
+JOB_HEALTH_TRACKER_ENABLED = True        # 긴급 비활성화용 피처 플래그
+JOB_HEALTH_GRACE_PERIOD_MIN = 10         # 예정 시각 + 이 시간 이내 success 없으면 missed
+JOB_HEALTH_CHECKER_INTERVAL_SEC = 300    # JobHealthChecker 실행 주기 (5분)
+JOB_HEALTH_ALERT_COOLDOWN_HOUR = 1       # 같은 잡 반복 알림 방지 (시간)
+JOB_RUNS_RETENTION_DAYS = 30             # job_runs 자동 퍼지 기준
+HEARTBEAT_INTERVAL_SEC = 60              # HeartbeatWriter 쓰기 주기
+HEARTBEAT_STALE_THRESHOLD_SEC = 600      # Watchdog이 "Scheduler Dead" 판정 임계 (10분)
+WATCHDOG_INTERVAL_MIN = 5                # Windows Task Scheduler 주기
 
 # =====================================================================
 # 소진율 곡선 설정 (Phase 1.06 / 3단계)

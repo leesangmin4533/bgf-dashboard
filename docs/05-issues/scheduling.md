@@ -1,6 +1,6 @@
 # 스케줄링 이슈 체인
 
-> 최종 갱신: 2026-04-05
+> 최종 갱신: 2026-04-06
 > 현재 상태: executed_at 수정 완료 + GHOST_STOCK 승격/하네스 Week3 계획
 
 ---
@@ -43,5 +43,13 @@
 **동기**: 매일 카카오 알림이 원시 데이터만 전달 → 의사결정에 필요한 요약 부족
 **선행조건**: executed_at 검증 완료 (WATCHING 이슈 해결)
 **예상 영향**: schema.py (ai_summaries DDL), notification/summary_report_service.py (신규), daily_job.py Phase 3, kakao_notifier.py
+
+## [PLANNED] 자전 시스템 미해결 항목 (expiry_time_mismatch) (P1)
+
+**목표**: 체크 expiry_time_mismatch이(가) 31일 연속 anomaly 발생 중 (1개 항목)
+**동기**: 자동 감지 (2026-04-06) -- integrity_unresolved
+**선행조건**: 없음
+**예상 영향**: integrity_unresolved 관련 파일
+
 
 ---

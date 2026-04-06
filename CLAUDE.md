@@ -40,10 +40,10 @@ BGF 리테일(CU 편의점) 다매장 자동 발주 시스템
 |:---:|:---:|------|------|------|
 | OPEN | - | product_details order_unit_qty 불일치 → 과발주 | order-execution.md |  |
 | WATCHING | - | action_proposals v70 컬럼 매장 DB 미적용 | scheduling.md | 내일(04-06) 07:00 로그에서 [Verify] executed_a |
-| WATCHING | - | delivery_match 타이밍 불일치 → 2차 매칭 실패 | expiry-tracking.md | 오늘(04-06) 20:30 재매칭 로그 확인 (스케줄: delivery |
+| WATCHING | - | delivery_match 타이밍 불일치 → 2차 매칭 실패 | expiry-tracking.md | 04-07 09:00 expiry-tracking-gap-analysis |
 | WATCHING | - | 과도기 알림 누락 가능성 | expiry-tracking.md | 4/7 Gap 분석에서 누락 건수 확인 |
 | WATCHING | - | 행사 종료 임박 상품 발주 감량 자동화 | order-execution.md | 다음 행사 종료 상품에서 D-5~D-4 감량 로그 확인 (수동) |
-| PLANNED | P1 | 예측 정확도 하락 조사 (3개 카테고리) | prediction.md | 없음 |
+| PLANNED | P1 | 예측 정확도 하락 조사 (4개 카테고리) | prediction.md | 없음 |
 | PLANNED | P1 | 자전 시스템 미해결 항목 (expiry_time_mismatch) | scheduling.md | 없음 |
 | PLANNED | P2 | CLEAR_GHOST_STOCK 자동실행 승격 검토 | scheduling.md | integrity_checks 2주 누적 데이터에서 food_ghost_ |
 | PLANNED | P2 | ML is_payday DB 반영 효과 검증 | prediction.md | f0657a8 커밋 반영 후 최소 2주 운영 데이터 필요 |
