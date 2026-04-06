@@ -633,11 +633,16 @@ class WasteSlipCollector:
                         return first_items
                     return None
 
-                # 나머지 전표는 Direct API로 조회
+                # 나머지 전표는 일괄 API 우선 시도
                 remaining_slips = slip_list[1:]
-                remaining_items = fetcher.fetch_all_slip_details(
-                    remaining_slips, delay=0.3
+                remaining_items = fetcher.fetch_all_slip_details_batch(
+                    remaining_slips, delay=0.1
                 )
+                if remaining_items is None:
+                    # 일괄 실패 시 순차 폴백
+                    remaining_items = fetcher.fetch_all_slip_details(
+                        remaining_slips, delay=0.3
+                    )
 
                 if remaining_items is not None:
                     all_items = (first_items or []) + remaining_items
@@ -650,11 +655,25 @@ class WasteSlipCollector:
 
                 return None
 
-            # 템플릿이 이미 캡처되어 있으면 전체 Direct API 조회
+            # 템플릿이 이미 캡처되어 있으면 일괄 API 우선 시도
+            batch_items = fetcher.fetch_all_slip_details_batch(
+                slip_list, delay=0.1
+            )
+            if batch_items:
+                logger.info(
+                    f"[WasteSlipDetailAPI] 일괄 API 성공: "
+                    f"{len(batch_items)}건"
+                )
+                return batch_items
+
+            # 일괄 실패 시 순차 API 폴백
+            logger.info(
+                "[WasteSlipDetailAPI] 일괄 API 실패, 순차 폴백"
+            )
             items = fetcher.fetch_all_slip_details(slip_list, delay=0.3)
             if items:
                 logger.info(
-                    f"[WasteSlipDetailAPI] Direct API 성공: {len(items)}건"
+                    f"[WasteSlipDetailAPI] 순차 API 성공: {len(items)}건"
                 )
                 return items
             return None
