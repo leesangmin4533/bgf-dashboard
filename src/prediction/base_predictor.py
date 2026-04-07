@@ -323,6 +323,33 @@ class BasePredictor:
                     else:
                         imputed_history.append(row)
                 sales_history = imputed_history
+            elif stockout and not available:
+                # food-systemic-underprediction (04-08):
+                # 윈도우 전체가 품절(또는 미수집) 상태인 만성 품절 상품의 경우
+                # available이 비어 있어 기존 imputation이 발동하지 않아
+                # WMA가 0 근처로 떨어져 발주 0~1 → 더 심한 품절 → 악순환.
+                # 품절일 중 sale_qty>0 인 흔적(부분 영업 중 판매)을 신호로 사용해
+                # 0 일자만 평균값으로 대체한다.
+                nonzero_signal = [row for row in stockout if row[1] and row[1] > 0]
+                if nonzero_signal:
+                    avg_signal = sum(row[1] for row in nonzero_signal) / len(nonzero_signal)
+                    imputed_history = []
+                    for row in sales_history:
+                        is_stockout_day = (
+                            (row[2] is not None and row[2] == 0)
+                            or (row[2] is None and include_none_as_stockout)
+                        )
+                        if is_stockout_day and (not row[1] or row[1] == 0):
+                            imputed_history.append((row[0], avg_signal, row[2]))
+                        else:
+                            imputed_history.append(row)
+                    sales_history = imputed_history
+                    if item_cd:
+                        logger.debug(
+                            f"[stockout-all-window] {item_cd} mid={mid_cd} "
+                            f"signal_days={len(nonzero_signal)} avg={avg_signal:.2f} "
+                            f"→ 0일 imputation 적용 (만성 품절 상품)"
+                        )
 
         # 판매량 + 날짜 추출 (2-tuple, 3-tuple 모두 호환)
         sales = [row[1] for row in sales_history]

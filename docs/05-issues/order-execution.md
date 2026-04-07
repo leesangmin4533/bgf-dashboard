@@ -46,7 +46,7 @@ Issue-Chain: order-execution#bundle-guard-bypass-49965
 
 ---
 
-## [OPEN] 푸드 체계적 과소예측 — 도시락/김밥/샌드위치/햄버거 (04-08 ~)
+## [WATCHING] 푸드 체계적 과소예측 — 도시락/김밥/샌드위치/햄버거 (04-08 ~)
 
 **문제**: 2026-04-08 49965점 푸드 카테고리 예측이 7일 평균 판매 대비 일관되게 낮음
   - 001 도시락: 18건 중 13건 under, 평균 bias **-0.36**
@@ -67,12 +67,47 @@ Issue-Chain: order-execution#bundle-guard-bypass-49965
 4. **food_daily_cap 발동**: 요일평균+20% 버퍼 cap이 실수요보다 낮게 산출 (food-cap-qty-fix 이후 sum(qty) 기준으로 더 빠르게 도달)
 5. **WMA 7일 가중**: 최근 며칠 폐기 우려로 ord_qty 자체가 줄어 sell_qty 상한이 낮아진 self-fulfilling 패턴
 
-### 검증 필요
-- [ ] prediction_logs.stage_trace로 푸드 상품 단계별 값 추적 (WMA → 계수 → ML → DiffFeedback → cap)
-- [ ] food_daily_cap 발동 비율 확인
-- [ ] DiffFeedback 페널티가 푸드(001~005)에 적용 중인지 확인
-- [ ] 03-30 전후 푸드 MAE 비교
-- [ ] is_cut_item / is_available 플래그 비정상 여부
+### 근본 원인 (04-08 조사 완료)
+
+**WMA imputation 사각지대 — 만성 품절 푸드 상품**
+
+49965 daily_sales 직접 분석:
+- `8800271904593` (avg7=2.0, predicted=0): 14일 중 4일만 row 존재, **모든 row stock_qty=0**.
+  4-05 sale=2 단 한 흔적 → WMA(7일)= 2/7 ≈ 0.28 → 발주 0
+- `8800271905408` (avg7=1.0, predicted=0.34): 5일 row 모두 stock=0, sale=1.
+  WMA = 5일 / 14일 ≈ 0.36
+
+`base_predictor.py:314` 의 stockout imputation 코드는 `if available and stockout:` 조건이라
+**윈도우 7일 전체가 품절(또는 미수집)인 만성 품절 상품은 imputation 미발동**.
+원본 `(date,0,None)` 그대로 WMA에 들어가 거의 0이 되고 → 발주 0~1 → 추가 품절 → 악순환.
+
+food-stockout-misclassify(이전 수정)는 "일부 품절"만 커버하고 "전체 품절"은 사각지대로 남음.
+
+### 시도 1: WMA imputation 전체-품절 사각지대 처리 (04-08)
+- **왜**: 윈도우 전체가 stockout인 만성 품절 상품도 부분 영업 중 판매 흔적(sale_qty>0 with stock=0)을
+  수요 신호로 활용해 0일을 imputation 하면 WMA가 실제 수요에 근접
+- **수정**: `base_predictor.py:calculate_weighted_average`
+  - `available and stockout` → 기존 imputation 유지
+  - `not available and stockout` 분기 신규: stockout 행 중 `sale_qty>0` 인 것을 nonzero_signal로 추출,
+    평균을 0일 imputation 값으로 사용. nonzero_signal 없으면 보정 없이 0 유지(안전 폴백)
+- **검증** (5 케이스 인라인 테스트):
+  * A 만성품절 1sale=2 → WMA 2.000 (이전 0.28)
+  * B fresh food None+nonzero → WMA 1.000 (이전 ≈0.4)
+  * C mixed (기존 경로) → WMA 1.950 (회귀 없음)
+  * D 비푸드 None → WMA 0.200 (회귀 없음, 기존 정책 유지)
+  * E zero-signal → WMA 0.000 (안전 폴백)
+- **회귀**: tests/ predictor·stockout·wma 키워드 = 20 fail / 166 pass.
+  20 fail 모두 stash 기준 동일 (`promo_status` UnboundLocalError, `no such table: promotion_stats`) — 본 수정과 무관
+
+### 해결 검증
+- [ ] 04-09 07:00 49965 푸드 카테고리 predicted_qty가 avg7d 근처로 회복 확인
+- [ ] 8800271904593, 8800271905408 발주량 ≥1 확인
+- [ ] 1주 운영 후 푸드 mid 001~005 평균 bias 비교 (목표: -0.4 → 0 이내)
+- [ ] [stockout-all-window] DEBUG 로그 발생 빈도 확인 (너무 많으면 만성 품절 상품 자체를 정리)
+
+### 후속
+- 만성 품절 상품 자동 정지(stop) 후보 리스트 별도 생성 검토
+- DiffFeedback / food_daily_cap 영향도는 본 수정 효과 확인 후 재평가
 
 Issue-Chain: order-execution#food-systemic-underprediction
 
