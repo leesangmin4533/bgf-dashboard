@@ -64,23 +64,24 @@ BGF 리테일(CU 편의점) 다매장 자동 발주 시스템
 <!-- ISSUE_TABLE_START -->
 | 상태 | 우선순위 | 이슈 | 파일 | 비고 |
 |:---:|:---:|------|------|------|
-| OPEN | - | collection.py 구문 오류 → 07:00 daily_job 전체 실패 (04-07) | expiry-tracking.md |  |
-| WATCHING | P1 | D-1 부스트 발주 execute_single_order 누락 (04-06→04-07 수정) | expiry-tracking.md | 메서드명 수정+테스트 완료, scheduler 재시작 대기 |
-| WATCHING | P1 | K4 expiry_time_mismatch 식품 전용 재정의 (04-07 수정) | scheduling.md | 8328→444건 (94.7% 감소), 다음 milestone 검증 대기 |
-| WATCHING | P1 | scheduler 모듈 캐시 — auto-reload 구현 (04-07) | scheduling.md | SrcWatcher + start_scheduler_loop.bat, 운영 전환 대기 |
-| WATCHING | P1 | BatchSync 0판매 + 만료 임박 가드 적용 (04-07) | expiry-tracking.md | normal_qty 가드, 5/5 테스트 통과, 다음 14:00 검증 |
-| WATCHING | P2 | 슬롯 기반 폐기 추적 검증 도입 (04-07) | expiry-tracking.md | 47863 02시 7건 누락 발견, 1차/2차 분리 측정 |
+| OPEN | - | collection.py 구문 오류 → 07:00 daily_job 전체 실패 (04-07) | expiry-tracking.md | 없음 |
 | OPEN | - | product_details order_unit_qty 불일치 → 과발주 | order-execution.md |  |
-| WATCHING | P2 | claude-auto-respond Claude CLI 호출 실패 (04-06→04-07 수정) | scheduling.md | max_turns 10→30 상향, 04-08 23:58 검증 대기 |
-| WATCHING | P2 | claude-respond 역추적성 강화 (04-07 PDCA 95%) | scheduling.md | input snapshot+duration+status(ok/skipped/failed)+응답유효성, 04-08 23:58 운영검증 |
-| RESOLVED | P2 | scheduler-wrapper-restart (04-07 18:58 SrcWatcher reload→1h 중단) | scheduling.md | bat chcp 65001 + 영문화, 04-07 20:08 재기동, wrapper 우회 금지 명시 |
-| WATCHING | P1 | ops_metrics waste_rate mid_cd 컬럼 부재 → K2 NO_DATA (04-07 수정) | scheduling.md | products JOIN 적용, 다음 23:55 검증 대기 |
+| WATCHING | - | 묶음 가드 우회 — 49965 햄/소시지·라면 과발주 (04-08 수정) | order-execution.md | 04-09 07:00 검증 대기 |
+| OPEN | - | 푸드 체계적 과소예측 — 도시락/김밥/샌드위치/햄버거 (04-08) | order-execution.md | 49965 평균 bias -0.4~-0.67 |
+| WATCHING | - | BatchSync 0판매 + 만료 임박 → 잘못된 consumed 마킹 (04-07 수정) | expiry-tracking.md | scheduler-auto-reload로 자동 적용 확인 (코드 변경 감 |
+| WATCHING | - | D-1 부스트 발주 execute_single_order 누락 + scheduler 모듈 캐시 | expiry-tracking.md | scheduler 재시작 (운영자 수동) |
+| WATCHING | - | K4 expiry_time_mismatch 31일 NOT_MET — 식품 전용 재정의 (04-07 수정) | scheduling.md | 다음 milestone_snapshots K4 NOT_MET → ACHI |
 | WATCHING | - | SLOW 주기 판매 상품 ROP=1 발주 | order-execution.md |  |
 | WATCHING | - | action_proposals v70 컬럼 매장 DB 미적용 | scheduling.md | 내일(04-06) 07:00 로그에서 [Verify] executed_a |
+| WATCHING | - | claude-auto-respond Claude CLI 호출 실패 | scheduling.md | 04-08 23:58 스케줄에서 `data/auto_respond/202 |
 | WATCHING | - | delivery_match 타이밍 불일치 → 2차 매칭 실패 | expiry-tracking.md |  |
+| WATCHING | - | ops_metrics waste_rate mid_cd 컬럼 부재 | scheduling.md | 다음 23:55 OpsMetricsCollector 실행에서 `waste |
+| WATCHING | - | scheduler 모듈 캐시 — 코드 fix 무력화 | scheduling.md | 운영자가 start_scheduler_loop.bat으로 전환 후 다음  |
+| WATCHING | - | 슬롯 기반 폐기 추적 검증 도입 (04-07) | expiry-tracking.md | 47863 02시 누락 7건 원인 조사 (별도) |
 | WATCHING | - | 행사 종료 임박 상품 발주 감량 자동화 | order-execution.md | 다음 행사 종료 상품에서 D-5~D-4 감량 로그 확인 (수동) |
 | PLANNED | P1 | 예측 정확도 하락 조사 (4개 카테고리) | prediction.md | 없음 |
 | PLANNED | P1 | 자전 시스템 미해결 항목 (expiry_time_mismatch) | scheduling.md | 없음 |
+| PLANNED | P2 | 010 폐기율 상승 조사 | expiry-tracking.md | 없음 |
 | PLANNED | P2 | CLEAR_GHOST_STOCK 자동실행 승격 검토 | scheduling.md | integrity_checks 2주 누적 데이터에서 food_ghost_ |
 | PLANNED | P2 | ML is_payday DB 반영 효과 검증 | prediction.md | f0657a8 커밋 반영 후 최소 2주 운영 데이터 필요 |
 | PLANNED | P2 | PaydayAnalyzer 결과를 ML 학습 데이터에도 반영 | prediction.md | (밀도 승격) P2 효과 검증 완료 후 양수 효과 확인 시 |

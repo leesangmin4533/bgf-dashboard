@@ -1,7 +1,80 @@
 # 발주 실행 이슈 체인
 
-> 최종 갱신: 2026-04-06
-> 현재 상태: 입수 데이터 불일치 → 과발주 조사 중
+> 최종 갱신: 2026-04-08
+> 현재 상태: 묶음 가드 우회 + 푸드 체계적 과소예측 조사 중
+
+---
+
+## [WATCHING] 묶음 가드 우회 — 49965 햄/소시지·라면 과발주 (04-08 ~)
+
+**문제**: 2026-04-08 07:00 49965점에서 2건 과발주
+  - `8801392060632` CJ아삭한비엔나70g (mid=023 햄/소시지) — order_tracking `order_qty=5`
+  - `8801043016049` 농심)짜파게티큰사발면 (mid=032 라면) — order_tracking `order_qty=1` (BGF 전송 후 3개 입고로 보고)
+  46513 product_details 기준 두 상품 모두 `order_unit_qty=1` (49965 행은 미수집)
+
+**설계 의도**: order-unit-qty-integrity-v2 긴급 가드(51cd670)가 묶음 의심 카테고리(`BUNDLE_SUSPECT_MID_CDS`)에서 unit≤1 발주를 차단하여 BGF 빈값 응답으로 인한 과발주를 막는 것
+**기여 KPI**: K2 (폐기율), K3 (발주 실패율)
+
+### 의심 원인
+1. **mid=023 가드 누락**: 햄/소시지(023)는 묶음발주가 표준이지만 `BUNDLE_SUSPECT_MID_CDS`(constants.py:262)에 미포함 → 가드 미작동 → unit=1 그대로 전송
+2. **L3 Selenium 경로 가드 미적용**: `_calc_order_result` 가드는 L1(Direct API)/L2(Batch Grid)에만 적용되고, L3(Selenium 그리드)은 line 1071에서 grid 읽기 실패 시 `actual_order_unit_qty=1` 폴백 → mid=032(suspect 포함)도 우회
+3. **49965 product_details 미수집**: 두 상품 모두 `product_details`에 49965 store_id 행이 없음 → `_finalize_order_unit_qty`가 다른 매장 값(1)을 그대로 사용했을 가능성
+
+### 검증 필요
+- [ ] 04-08 07:00 49965 daily_job 로그에서 두 item_cd의 발주 경로(L1/L2/L3) + AUDIT 라인 확인
+- [ ] `[BLOCK/unit-qty]` 알림 카톡 미수신 확인 (= 가드 안 탄 증거)
+- [ ] BGF 그리드에서 두 상품 실제 ORD_UNIT_QTY 값 확인
+- [ ] 49965 product_details에 두 item_cd 행이 없는지 확인
+
+### 시도 1: BUNDLE_SUSPECT 식육가공 추가 + L3 가드 (04-08)
+- **왜**: mid=023(햄/소시지) 가드 누락, L3 셀레니움 경로는 _calc_order_result 가드 미적용
+- **수정**:
+  - `constants.py:262` BUNDLE_SUSPECT_MID_CDS에 023, 024, 025 추가
+  - `order_executor.py:input_product` actual_order_unit_qty 계산 직후 L3 가드 분기 추가 — products 테이블에서 mid_cd 조회 후 suspect+unit≤1 조건 만족 시 발주 거부 + 알림
+- **결과**: pytest 71건 통과, syntax OK
+
+### 해결 검증
+- [ ] 04-09 07:00 49965 발주에서 8801392060632, 8801043016049 미발주 또는 unit>1 확인
+- [ ] `[BLOCK/unit-qty L3]` 알림 카톡 수신 확인 (49965 product_details 미수집 상태가 유지되면 차단 발생해야 함)
+- [ ] 49965 누락 상품 product_details 재수집 (별도 조치)
+
+### 후속 조치 후보
+- 49965 누락 상품 product_details 재수집 트리거
+- product_detail_batch_collector에 매장별 누락 감지 추가
+
+Issue-Chain: order-execution#bundle-guard-bypass-49965
+
+---
+
+## [OPEN] 푸드 체계적 과소예측 — 도시락/김밥/샌드위치/햄버거 (04-08 ~)
+
+**문제**: 2026-04-08 49965점 푸드 카테고리 예측이 7일 평균 판매 대비 일관되게 낮음
+  - 001 도시락: 18건 중 13건 under, 평균 bias **-0.36**
+  - 002 주먹밥: 27건 중 24건 under, 평균 bias **-0.42**
+  - 003 김밥: 30건 중 **29건** under, 평균 bias **-0.63**
+  - 004 샌드위치: 18건 중 17건 under, 평균 bias **-0.67**
+  - 005 햄버거: 14건 중 **14건 전부** under, 평균 bias **-0.54**
+  - 012 빵: 22건 중 16건 under, 평균 bias **-0.11**
+
+**영향**: 푸드는 유통기한 1~2일 → 과소발주 시 즉시 품절. 고객 이탈 + 매출 손실 + sell_qty=0 누적으로 SLOW 오분류 악순환 (참고: food-stockout-misclassify)
+**설계 의도**: FoodStrategy + AdditiveAdjuster + DemandClassifier가 일평균 판매를 따라잡아야 함. ML 앙상블·DiffFeedback이 추세 보정해야 함
+**기여 KPI**: K1 (서비스율), K3 (발주 실패율)
+
+### 의심 원인
+1. **prediction-quick-wins(03-30) 부작용**: Rolling Bias + Stacking 100 도입 후 푸드 카테고리에 과도한 하향 편향
+2. **DiffFeedback 페널티**: 최근 023/026/034/035/048 폐기율 상승(pending_issues.json) → DiffFeedback이 인접 카테고리까지 음의 보정
+3. **food_waste_calibration 누적**: dessert-2week 단축 후 food 전체에 일괄 적용된 캘리브레이션 잔여 효과
+4. **food_daily_cap 발동**: 요일평균+20% 버퍼 cap이 실수요보다 낮게 산출 (food-cap-qty-fix 이후 sum(qty) 기준으로 더 빠르게 도달)
+5. **WMA 7일 가중**: 최근 며칠 폐기 우려로 ord_qty 자체가 줄어 sell_qty 상한이 낮아진 self-fulfilling 패턴
+
+### 검증 필요
+- [ ] prediction_logs.stage_trace로 푸드 상품 단계별 값 추적 (WMA → 계수 → ML → DiffFeedback → cap)
+- [ ] food_daily_cap 발동 비율 확인
+- [ ] DiffFeedback 페널티가 푸드(001~005)에 적용 중인지 확인
+- [ ] 03-30 전후 푸드 MAE 비교
+- [ ] is_cut_item / is_available 플래그 비정상 여부
+
+Issue-Chain: order-execution#food-systemic-underprediction
 
 ---
 

@@ -1073,6 +1073,65 @@ class OrderExecutor:
 
             # 올바른 배수 계산 (목표수량 / 배수단위, 최대 99)
             actual_order_unit_qty = max(1, actual_order_unit_qty)  # 0 방지
+
+            # ── 묶음 가드 L3 (order-unit-qty-integrity-v2 / bundle-guard-bypass-49965) ──
+            # L1/L2(_calc_order_result)와 동일 정책을 L3 셀레니움 경로에도 적용
+            # mid_cd 가 묶음 의심 카테고리이고 actual_order_unit_qty<=1 이면 BGF 빈값 응답 의심 → 차단
+            if target_qty > 0 and actual_order_unit_qty <= 1:
+                try:
+                    from src.settings.constants import (
+                        BUNDLE_SUSPECT_MID_CDS,
+                        ORDER_UNIT_QTY_GUARD_ENABLED,
+                    )
+                except Exception:
+                    BUNDLE_SUSPECT_MID_CDS = set()
+                    ORDER_UNIT_QTY_GUARD_ENABLED = False
+
+                _mid_for_guard = ""
+                if ORDER_UNIT_QTY_GUARD_ENABLED:
+                    try:
+                        from src.infrastructure.database.connection import get_connection as _gc
+                        _c = _gc()
+                        try:
+                            _r = _c.execute(
+                                "SELECT mid_cd FROM products WHERE item_cd=?",
+                                (item_cd,),
+                            ).fetchone()
+                            if _r and _r[0]:
+                                _mid_for_guard = str(_r[0]).zfill(3)
+                        finally:
+                            _c.close()
+                    except Exception as _e:
+                        logger.debug(f"[L3 guard] mid_cd 조회 실패 무시: {_e}")
+
+                if ORDER_UNIT_QTY_GUARD_ENABLED and _mid_for_guard in BUNDLE_SUSPECT_MID_CDS:
+                    logger.error(
+                        f"[BLOCK/unit-qty L3] {item_cd} mid={_mid_for_guard} "
+                        f"unit={actual_order_unit_qty} qty={target_qty} "
+                        f"— 묶음 의심 카테고리 + unit<=1 → L3 발주 거부 (BGF 빈값 응답 가능)"
+                    )
+                    try:
+                        from src.application.services.notification_dispatcher import NotificationDispatcher
+                        NotificationDispatcher().send(
+                            subject="ORDER BLOCKED L3: order_unit_qty 의심",
+                            body=(
+                                f"{item_cd} (mid={_mid_for_guard}) "
+                                f"unit={actual_order_unit_qty}, qty={target_qty}, method=L3-selenium "
+                                f"— BGF 빈값 응답 과발주 방지 차단"
+                            ),
+                            level="ERROR",
+                        )
+                    except Exception as _e:
+                        logger.debug(f"[BLOCK/unit-qty L3] 알림 실패 무시: {_e}")
+
+                    return {
+                        "success": False,
+                        "item_cd": item_cd,
+                        "multiplier": 0,
+                        "order_unit_qty": actual_order_unit_qty,
+                        "message": "unit_qty_guard_block_l3",
+                    }
+
             # cancel_smart (target_qty=0): PYUN_QTY=0으로 전송하여 스마트→단품별(채택) 전환
             # 라이브 검증 (2026-03-14): BGF 서버 PYUN_QTY=0 수락 확인
             if target_qty == 0:
