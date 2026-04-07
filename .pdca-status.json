@@ -1,9 +1,11 @@
 {
   "ops-metrics-waste-query-fix": {
-    "phase": "do",
-    "matchRate": null,
+    "phase": "archived",
+    "matchRate": 98,
     "iterationCount": 0,
-    "startedAt": "2026-04-07T13:50:00Z"
+    "startedAt": "2026-04-07T13:50:00Z",
+    "archivedAt": "2026-04-07T14:10:00Z",
+    "archivedTo": "docs/archive/2026-04/ops-metrics-waste-query-fix/"
   },
   "claude-respond-fix": {
     "phase": "check",
