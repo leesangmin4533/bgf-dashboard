@@ -39,6 +39,7 @@ BGF 리테일(CU 편의점) 다매장 자동 발주 시스템
 | 상태 | 우선순위 | 이슈 | 파일 | 비고 |
 |:---:|:---:|------|------|------|
 | OPEN | - | collection.py 구문 오류 → 07:00 daily_job 전체 실패 (04-07) | expiry-tracking.md |  |
+| WATCHING | P1 | D-1 부스트 발주 execute_single_order 누락 (04-06→04-07 수정) | expiry-tracking.md | 메서드명 수정+테스트 완료, scheduler 재시작 대기 |
 | OPEN | - | product_details order_unit_qty 불일치 → 과발주 | order-execution.md |  |
 | WATCHING | P2 | claude-auto-respond Claude CLI 호출 실패 (04-06→04-07 수정) | scheduling.md | max_turns 10→30 상향, 04-08 23:58 검증 대기 |
 | WATCHING | P1 | ops_metrics waste_rate mid_cd 컬럼 부재 → K2 NO_DATA (04-07 수정) | scheduling.md | products JOIN 적용, 다음 23:55 검증 대기 |

@@ -138,6 +138,47 @@
 
 ---
 
+## [WATCHING] D-1 부스트 발주 execute_single_order 누락 + scheduler 모듈 캐시 (04-06 ~ 04-07)
+
+**문제**: 매일 14:00 D-1 2차 배송 보정에서 부스트 대상이 있는 매장(주로 49965)이 `No module named 'src.collectors.bgf_collector'` 로 실패. boost_orders 미실행.
+**영향**: 49965 D-1 부스트 04-06 1개 + 04-07 2개 누락 → 폐기 직전 상품 보충 실패 → 폐기 위험 증가
+**설계 의도**: 14:00에 오전 판매 데이터 기반으로 2차 배송 직전 부스트 발주를 추가해 폐기를 막는다.
+
+### 근본 원인 (2가지)
+1. **정적 버그**: `second_delivery_adjuster.py:441`이 `executor.execute_single_order()` 호출하지만 OrderExecutor에 해당 메서드 없음 (실제: `execute_order(item_cd, qty, target_date=None)`, order_executor.py:1876). AttributeError가 발생해야 정상.
+2. **운영 캐시**: 04-06 1차 fix(`bgf-collector-import-fix`)로 daily_job.py L934는 SalesCollector로 교체됐으나, scheduler 프로세스가 fix 이전 시점에 시작되어 옛 daily_job 모듈을 메모리에 캐시. Python은 자동 reload하지 않음 → ModuleNotFoundError가 그대로 표시. **scheduler 재시작 없이는 fix 미반영**.
+
+### 해결 방향
+- 단계 1: `second_delivery_adjuster.py:441` `execute_single_order` → `execute_order`
+- 단계 2: 회귀 테스트 추가 (mock executor + boost_order 1개)
+- 단계 3: scheduler 재시작 (운영)
+- 단계 4: 다음 14:00 또는 수동 재현으로 49965 success=True 확인
+
+### 시도 1: execute_single_order → execute_order + spec mock 회귀 테스트 (04-07)
+- **왜**: 정적 버그 수정 + AttributeError 회귀 방지를 위해 spec mock 패턴 도입
+- **조치**:
+  1. `second_delivery_adjuster.py:441` `execute_single_order` → `execute_order` (1줄)
+  2. `tests/test_second_delivery_adjuster.py` 신규 생성 — `Mock(spec=OrderExecutor)`로 메서드명 검증
+- **결과**: ✓ 3/3 테스트 통과. 정적 버그 해결.
+- **잔여**: 운영 캐시(원인 B) — scheduler 재시작 필요
+- **실패 패턴**: (신규) method-name-typo-no-spec-mock
+
+### 교훈
+- **`Mock(spec=Class)` 사용 강제**: Python은 메서드명 오기를 컴파일에서 못 잡음. spec mock으로 AttributeError를 단위 테스트에서 잡아야 함
+- **운영 캐시 인지**: 코드 수정만으로 fix 완결 아님. long-running scheduler는 모듈 메모리 캐시 → 재시작 필수
+- **에러 메시지의 함정**: ModuleNotFoundError 메시지가 떴지만 실제 원인은 메서드명 오기. 같은 메시지가 다른 원인을 가릴 수 있음 (1차 fix 완료 후에도 재현된 이유)
+
+### 검증 체크포인트
+- [x] 메서드명 수정 + 회귀 테스트 3/3 통과
+- [ ] scheduler 재시작 (운영자 수동)
+- [ ] 다음 14:00 D-1 작업에서 49965 ModuleNotFoundError 소멸
+- [ ] d1_adjustment_log 또는 logs에서 BOOST 완료 확인
+
+**관련 Plan**: [docs/01-plan/features/d1-bgf-collector-import-fix.plan.md](../01-plan/features/d1-bgf-collector-import-fix.plan.md)
+**선행 작업**: docs/archive/2026-04/bgf-collector-import-fix/ (04-06 1차 fix, daily_job.py L934)
+
+---
+
 ## [OPEN] collection.py 구문 오류 → 07:00 daily_job 전체 실패 (04-07)
 
 **문제**: `collection.py` line 60의 `with` 블록 구문 오류로 07:00 4개 매장 daily_job 전부 실패 (1.5s 내 종료)

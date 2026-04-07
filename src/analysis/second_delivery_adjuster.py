@@ -438,7 +438,7 @@ def execute_boost_orders(result: AdjustmentResult, driver) -> Dict:
 
     for bo in result.boost_orders:
         try:
-            order_result = executor.execute_single_order(
+            order_result = executor.execute_order(
                 item_cd=bo.item_cd,
                 qty=bo.delta_qty,
             )
