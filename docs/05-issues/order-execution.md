@@ -105,9 +105,29 @@ food-stockout-misclassify(이전 수정)는 "일부 품절"만 커버하고 "전
 - [ ] 1주 운영 후 푸드 mid 001~005 평균 bias 비교 (목표: -0.4 → 0 이내)
 - [ ] [stockout-all-window] DEBUG 로그 발생 빈도 확인 (너무 많으면 만성 품절 상품 자체를 정리)
 
+### 4매장 교차검증 (04-08, 사후)
+
+가설 재검토를 위해 4매장 04-08 prediction_logs × daily_sales 그룹별 bias 측정:
+
+| 매장 | all_stockout n | bias | has_stock n | bias |
+|---|---|---|---|---|
+| 46513 | 21 | **-0.54** | 21 | -0.26 |
+| 46704 | 47 | **-0.54** | 31 | -0.39 |
+| 47863 | 32 | **-0.49** | 39 | -0.22 |
+| 49965 | 62 | **-0.71** | 67 | -0.22 |
+
+- **all_stockout** (7일 전부 stock=0): 본 수정의 표적 그룹. 4매장 합계 162건, 평균 bias -0.49~-0.71.
+  49965 62건 중 nonzero_signal 61건 → 패치가 정확히 표적에 작동.
+- **has_stock** (1일 이상 재고): 본 수정 미적용 그룹. bias -0.22~-0.39 로 여전히 음수.
+  → **2차 원인 별도 존재** (1차 원인의 절반 강도).
+
+### 결론
+- 본 이슈의 약 50% 비중(가장 심각한 부분)은 정확히 진단·수정됨
+- 나머지 50% 잔존 underprediction 은 다른 메커니즘 (AdditiveAdjuster / DiffFeedback / outlier handler / ML 추세 / food_daily_cap 후보) → **별도 후속 이슈로 분리** 필요
+
 ### 후속
+- [PLANNED] 푸드 has_stock 약한 음의 bias 잔존 — 별도 이슈로 등록 (2차 원인 조사)
 - 만성 품절 상품 자동 정지(stop) 후보 리스트 별도 생성 검토
-- DiffFeedback / food_daily_cap 영향도는 본 수정 효과 확인 후 재평가
 
 Issue-Chain: order-execution#food-systemic-underprediction
 
