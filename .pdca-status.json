@@ -1,7 +1,13 @@
 {
-  "claude-respond-fix": {
+  "ops-metrics-waste-query-fix": {
     "phase": "do",
     "matchRate": null,
+    "iterationCount": 0,
+    "startedAt": "2026-04-07T13:50:00Z"
+  },
+  "claude-respond-fix": {
+    "phase": "check",
+    "matchRate": 100,
     "iterationCount": 0,
     "startedAt": "2026-04-07T00:00:00Z"
   },

@@ -132,8 +132,12 @@ class OpsMetrics:
             conn.close()
 
     def _waste_rate(self) -> dict:
-        """waste_slip_items + daily_sales에서 카테고리별 폐기율"""
-        conn = DBRouter.get_store_connection(self.store_id)
+        """waste_slip_items + daily_sales에서 카테고리별 폐기율
+
+        waste_slip_items에는 mid_cd 컬럼이 없으므로 common.products JOIN으로 도출.
+        (ops-metrics-waste-query-fix, 2026-04-07)
+        """
+        conn = DBRouter.get_store_connection_with_common(self.store_id)
         try:
             cursor = conn.cursor()
 
@@ -146,14 +150,15 @@ class OpsMetrics:
             if data_days < _MIN_DATA_DAYS:
                 return {"insufficient_data": True}
 
-            # 7d 폐기율: waste_slip_items 합계 / daily_sales 합계
+            # 7d/30d 폐기 집계: waste_slip_items + products JOIN으로 mid_cd 도출
             cursor.execute("""
-                SELECT mid_cd,
-                       SUM(CASE WHEN chit_date >= date('now', '-7 days') THEN qty ELSE 0 END) as waste_7d,
-                       SUM(qty) as waste_30d
-                FROM waste_slip_items
-                WHERE chit_date >= date('now', '-30 days')
-                GROUP BY mid_cd
+                SELECT p.mid_cd,
+                       SUM(CASE WHEN wsi.chit_date >= date('now', '-7 days') THEN wsi.qty ELSE 0 END) as waste_7d,
+                       SUM(wsi.qty) as waste_30d
+                FROM waste_slip_items wsi
+                JOIN common.products p ON wsi.item_cd = p.item_cd
+                WHERE wsi.chit_date >= date('now', '-30 days')
+                GROUP BY p.mid_cd
             """)
             waste_map = {}
             for row in cursor.fetchall():
@@ -161,6 +166,25 @@ class OpsMetrics:
                     "waste_7d": row["waste_7d"] or 0,
                     "waste_30d": row["waste_30d"] or 0,
                 }
+
+            # 매칭률 경고: products에 없는 item_cd 비율 (신제품 동기화 모니터링)
+            cursor.execute("""
+                SELECT
+                    SUM(CASE WHEN p.item_cd IS NULL THEN wsi.qty ELSE 0 END) as unmatched_qty,
+                    SUM(wsi.qty) as total_qty
+                FROM waste_slip_items wsi
+                LEFT JOIN common.products p ON wsi.item_cd = p.item_cd
+                WHERE wsi.chit_date >= date('now', '-30 days')
+            """)
+            row = cursor.fetchone()
+            total_qty = row["total_qty"] or 0
+            unmatched_qty = row["unmatched_qty"] or 0
+            if total_qty > 0 and unmatched_qty / total_qty > 0.05:
+                logger.warning(
+                    f"[OpsMetrics] {self.store_id} waste_rate products 미매칭 "
+                    f"{unmatched_qty}/{total_qty} ({100*unmatched_qty/total_qty:.1f}%) "
+                    f"— 신제품 products 동기화 확인 필요"
+                )
 
             # 카테고리별 판매량
             cursor.execute("""

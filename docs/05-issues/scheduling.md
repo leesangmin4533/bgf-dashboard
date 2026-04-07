@@ -74,6 +74,45 @@
 
 ---
 
+## [WATCHING] ops_metrics waste_rate mid_cd 컬럼 부재 (04-07 ~ )
+
+**문제**: `_waste_rate()` 쿼리가 `waste_slip_items.mid_cd` GROUP BY를 시도하지만 해당 컬럼 없음 (실제: `large_cd`만 존재). 4개 매장 전부 매일 23:55 `OperationalError: no such column: mid_cd` → `insufficient_data` 반환 → **K2 마일스톤 NO_DATA 지속**.
+**영향**: K2 KPI 완전 마비, 폐기율 기반 이상 감지 불가, DailyChainReport K2 섹션 공백.
+**설계 의도**: mid_cd별 카테고리 폐기율 집계는 products의 mid_cd를 단일 원천으로 사용해야 함 (waste_slip_items는 item_cd만 확실).
+
+**발견 경로**: claude-auto-respond 분석 보고서 (2026-04-07) — 진단 로깅 강화 후 첫 자동 감지.
+
+**관련 파일**: `src/analysis/ops_metrics.py:134-206` `_waste_rate()`
+
+### 해결 방향
+- **옵션 A (권장)**: `waste_slip_items` + `common.products` JOIN으로 mid_cd 도출
+- 옵션 B: waste_slip_items에 mid_cd 컬럼 추가 (스키마+수집기+백필 필요, 과대)
+- 옵션 C: large_cd로 집계 (K2 정의 변경, 부적절)
+
+### 시도 1: common.products INNER JOIN + 매칭률 경고 (04-07)
+- **왜**: waste_slip_items는 item_cd만 확실. products가 mid_cd 단일 원천. 스키마 변경 없이 1곳만 수정.
+- **조치**:
+  1. `DBRouter.get_store_connection_with_common()` 사용 (common.db ATTACH)
+  2. 쿼리에 `JOIN common.products p ON wsi.item_cd = p.item_cd`, `GROUP BY p.mid_cd`
+  3. 매칭률 경고 쿼리 추가 (5% 초과 시 신제품 동기화 경고)
+- **결과**: ✓ 4매장 전부 성공 — mid_cd 001~005 폐기율 정상 집계. 17/17 테스트 통과.
+- **실패 패턴**: (신규) schema-column-assumption
+
+### 교훈
+- **정규화 원칙**: mid_cd는 products가 단일 원천. 다른 테이블은 JOIN으로 얻는다
+- **스키마 확인 먼저**: 쿼리 작성 전 `waste_slip_items` 실제 컬럼을 schema.py에서 확인했다면 처음부터 방지 가능
+- **매칭률 경고 부수효과**: products에 없는 폐기 item_cd 발견 시 신제품 동기화 이슈 조기 감지
+
+### 검증 체크포인트
+- [x] _waste_rate() 4매장 전부 `categories` 반환 (04-07 13:58 수동 재현)
+- [x] 회귀 테스트 3개 추가 (`test_ops_metrics_waste_rate.py`, 3/3 통과)
+- [ ] 다음 23:55 OpsMetricsCollector 실행에서 `waste_rate 실패` 로그 소멸
+- [ ] 다음 milestone_snapshots에서 K2 NO_DATA 탈출 (ACHIEVED/NOT_MET 전환)
+
+**관련 Plan**: [docs/01-plan/features/ops-metrics-waste-query-fix.plan.md](../01-plan/features/ops-metrics-waste-query-fix.plan.md)
+
+---
+
 ## [PLANNED] CLEAR_GHOST_STOCK 자동실행 승격 검토 (P2)
 
 **목표**: 유령 재고 보정(CLEAR_GHOST_STOCK)을 LOW(승인 필요) → HIGH(자동 실행)로 승격
