@@ -29,13 +29,24 @@ def record_step(
     success: bool,
     summary: str,
     details: dict = None,
+    status: str = None,
 ) -> None:
-    """파이프라인 단계 실행 결과 기록"""
+    """파이프라인 단계 실행 결과 기록
+
+    Args:
+        success: 하위호환용 불리언
+        status: "ok" | "skipped" | "failed". None이면 success로 추론
+                ("ok" if success else "failed")
+    """
     try:
+        if status is None:
+            status = "ok" if success else "failed"
+
         data = _load_or_init()
 
         data["steps"][step_name] = {
             "success": success,
+            "status": status,
             "summary": summary,
             "details": details or {},
             "completed_at": datetime.now().isoformat(),
@@ -43,8 +54,8 @@ def record_step(
 
         _save(data)
 
-        # 실패 시 즉시 카카오 긴급 알림
-        if not success:
+        # 실패 시(status=="failed")에만 카카오 긴급 알림 (skipped는 알림 안 함)
+        if status == "failed":
             _send_failure_alert(step_name, summary)
 
     except Exception as e:

@@ -1691,34 +1691,77 @@ def daily_chain_report_wrapper() -> None:
 
 def claude_auto_respond_wrapper() -> None:
     """Claude 자동 대응 (매일 23:58, 이상 감지 3분 후)"""
+    import time
     from src.infrastructure.pipeline_status import record_step, check_dependencies
+    t_start = time.monotonic()
+    started_at = datetime.now().isoformat()
     try:
         # 이전 단계(ops_detect) 성공 여부 확인
         dep = check_dependencies("claude_respond")
         if not dep["can_proceed"]:
             msg = f"스킵 — {dep['reason']}"
             logger.warning(f"[AutoRespond] {msg}")
-            record_step("claude_respond", True, msg)  # 스킵은 성공 처리 (본인 오류 아님)
+            record_step(
+                "claude_respond", True, msg,
+                details={
+                    "started_at": started_at,
+                    "duration_sec": round(time.monotonic() - t_start, 2),
+                    "skip_reason": dep["reason"],
+                },
+                status="skipped",
+            )
             return
 
         from src.settings.constants import CLAUDE_AUTO_RESPOND_ENABLED
         if not CLAUDE_AUTO_RESPOND_ENABLED:
-            record_step("claude_respond", True, "비활성화 (ENABLED=False)")
+            record_step(
+                "claude_respond", True, "비활성화 (ENABLED=False)",
+                details={"started_at": started_at, "duration_sec": 0.0},
+                status="skipped",
+            )
             return
 
         from src.infrastructure.claude_responder import ClaudeResponder
         result = ClaudeResponder().respond_if_needed()
+
+        details = {
+            "started_at": started_at,
+            "duration_sec": result.get("duration_sec", 0.0),
+            "anomaly_count": result.get("anomaly_count", 0),
+            "prompt_len": result.get("prompt_len", 0),
+            "response_len": result.get("response_len", 0),
+            "output_path": result.get("output_path"),
+            "input_snapshot_path": result.get("input_snapshot_path"),
+        }
+
         if result.get("responded"):
             logger.info(f"[AutoRespond] 분석 완료: {result.get('output_path', '')}")
-            record_step("claude_respond", True,
-                         f"분석 완료: {result.get('summary', '')[:80]}",
-                         {"output_path": result.get("output_path")})
+            record_step(
+                "claude_respond", True,
+                f"분석 완료: {result.get('summary', '')[:80]}",
+                details=details, status="ok",
+            )
+        elif result.get("error"):
+            details["error"] = result["error"]
+            record_step(
+                "claude_respond", False,
+                f"실패: {str(result['error'])[:80]}",
+                details=details, status="failed",
+            )
         else:
             logger.debug("[AutoRespond] pending 없음, 스킵")
-            record_step("claude_respond", True, "pending 없음, 스킵")
+            record_step(
+                "claude_respond", True, "pending 없음, 스킵",
+                details=details, status="skipped",
+            )
     except Exception as e:
+        duration = round(time.monotonic() - t_start, 2)
         logger.warning(f"[AutoRespond] 실패 (무시): {e}")
-        record_step("claude_respond", False, str(e))
+        record_step(
+            "claude_respond", False, str(e),
+            details={"started_at": started_at, "duration_sec": duration},
+            status="failed",
+        )
 
 
 def milestone_report_wrapper() -> None:

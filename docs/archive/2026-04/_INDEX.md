@@ -23,3 +23,4 @@
 | scheduler-auto-reload | 100% | 2026-04-07 |
 | batch-sync-zero-sales-guard | 95% | 2026-04-07 |
 | waste-verification-slot-based | 100% | 2026-04-07 |
+| claude-respond-traceability | 95% | 2026-04-07 |

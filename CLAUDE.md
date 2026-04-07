@@ -72,6 +72,7 @@ BGF 리테일(CU 편의점) 다매장 자동 발주 시스템
 | WATCHING | P2 | 슬롯 기반 폐기 추적 검증 도입 (04-07) | expiry-tracking.md | 47863 02시 7건 누락 발견, 1차/2차 분리 측정 |
 | OPEN | - | product_details order_unit_qty 불일치 → 과발주 | order-execution.md |  |
 | WATCHING | P2 | claude-auto-respond Claude CLI 호출 실패 (04-06→04-07 수정) | scheduling.md | max_turns 10→30 상향, 04-08 23:58 검증 대기 |
+| WATCHING | P2 | claude-respond 역추적성 강화 (04-07 PDCA 95%) | scheduling.md | input snapshot+duration+status(ok/skipped/failed)+응답유효성, 04-08 23:58 운영검증 |
 | WATCHING | P1 | ops_metrics waste_rate mid_cd 컬럼 부재 → K2 NO_DATA (04-07 수정) | scheduling.md | products JOIN 적용, 다음 23:55 검증 대기 |
 | WATCHING | - | SLOW 주기 판매 상품 ROP=1 발주 | order-execution.md |  |
 | WATCHING | - | action_proposals v70 컬럼 매장 DB 미적용 | scheduling.md | 내일(04-06) 07:00 로그에서 [Verify] executed_a |

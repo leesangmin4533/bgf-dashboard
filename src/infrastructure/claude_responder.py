@@ -8,6 +8,7 @@ import json
 import os
 import shutil
 import subprocess
+import time
 from datetime import date, datetime
 from pathlib import Path
 from typing import Optional
@@ -26,6 +27,22 @@ _PROJECT_DIR = Path(__file__).parent.parent.parent  # bgf_auto/
 _PENDING_PATH = _PROJECT_DIR / ".claude" / "pending_issues.json"
 _OUTPUT_DIR = _PROJECT_DIR / "data" / "auto_respond"
 _CLAUDE_BIN = shutil.which("claude") or "claude"  # shutil.which로 정확한 경로
+_MIN_RESPONSE_LEN = 50  # 이 길이 미만의 응답은 실패로 처리 (빈 응답/에러 메시지 방지)
+
+
+def _empty_result(error: Optional[str] = None) -> dict:
+    """skip/early-return 시 일관된 반환 구조"""
+    return {
+        "responded": False,
+        "output_path": None,
+        "summary": None,
+        "duration_sec": 0.0,
+        "anomaly_count": 0,
+        "prompt_len": 0,
+        "response_len": 0,
+        "input_snapshot_path": None,
+        "error": error,
+    }
 
 
 class ClaudeResponder:
@@ -35,19 +52,24 @@ class ClaudeResponder:
         """pending_issues.json이 있으면 Claude 분석 실행
 
         Returns:
-            {"responded": bool, "output_path": str|None, "summary": str|None}
+            {
+              "responded": bool, "output_path": str|None, "summary": str|None,
+              "duration_sec": float, "anomaly_count": int,
+              "prompt_len": int, "response_len": int,
+              "input_snapshot_path": str|None, "error": str|None,
+            }
         """
         if not CLAUDE_AUTO_RESPOND_ENABLED:
-            return {"responded": False, "output_path": None, "summary": None}
+            return _empty_result()
 
         if not _PENDING_PATH.exists():
-            return {"responded": False, "output_path": None, "summary": None}
+            return _empty_result()
 
         try:
             issues = json.loads(_PENDING_PATH.read_text(encoding="utf-8"))
         except Exception as e:
             logger.warning(f"[AutoRespond] pending_issues.json 파싱 실패: {e}")
-            return {"responded": False, "output_path": None, "summary": None}
+            return _empty_result(error=f"pending 파싱 실패: {e}")
 
         # anomaly도 없고 milestone KPI 미달도 없으면 스킵
         has_anomalies = bool(issues.get("anomalies"))
@@ -56,22 +78,46 @@ class ClaudeResponder:
             for v in (issues.get("milestone") or {}).values()
         )
         if not has_anomalies and not has_milestone_issue:
-            return {"responded": False, "output_path": None, "summary": None}
+            return _empty_result()
 
         # 마일스톤 최신 스냅샷 병합
         milestone = self._get_latest_milestone()
         if milestone:
             issues["milestone"] = milestone
 
-        # prompt 구성 + Claude 호출
+        # [NEW] 입력 스냅샷 저장 (역추적용 원본 보존)
+        snapshot_path = self._snapshot_input(issues)
+        snapshot_str = str(snapshot_path) if snapshot_path else None
+
+        anomaly_count = len(issues.get("anomalies") or [])
         prompt = self._build_prompt(issues)
+        prompt_len = len(prompt)
+
+        t0 = time.monotonic()
+
+        # Claude 호출
         try:
             output = self._call_claude(prompt)
         except Exception as e:
-            logger.warning(f"[AutoRespond] Claude 호출 실패: {e}")
-            # pending 삭제하지 않음 — DailyChainReport가 최종 처리
+            duration = round(time.monotonic() - t0, 2)
+            logger.warning(
+                f"[AutoRespond] Claude 호출 실패 (duration={duration}s): {e}"
+            )
             self._append_analysis_to_pending(str(e), None, [])
-            return {"responded": False, "output_path": None, "summary": str(e)}
+            return {
+                "responded": False,
+                "output_path": None,
+                "summary": str(e),
+                "duration_sec": duration,
+                "anomaly_count": anomaly_count,
+                "prompt_len": prompt_len,
+                "response_len": 0,
+                "input_snapshot_path": snapshot_str,
+                "error": str(e),
+            }
+
+        duration = round(time.monotonic() - t0, 2)
+        response_len = len(output)
 
         # 결과 저장
         today = date.today().isoformat()
@@ -84,10 +130,41 @@ class ClaudeResponder:
         suggested_issues = self._extract_suggested_issues(output)
         self._append_analysis_to_pending(summary, str(output_path), suggested_issues)
 
-        # pending 삭제하지 않음 — DailyChainReport가 최종 처리
+        logger.info(
+            f"[AutoRespond] 분석 완료: duration={duration}s, "
+            f"anomalies={anomaly_count}, prompt={prompt_len} chars, "
+            f"response={response_len} chars, path={output_path}"
+        )
+        return {
+            "responded": True,
+            "output_path": str(output_path),
+            "summary": summary,
+            "duration_sec": duration,
+            "anomaly_count": anomaly_count,
+            "prompt_len": prompt_len,
+            "response_len": response_len,
+            "input_snapshot_path": snapshot_str,
+            "error": None,
+        }
 
-        logger.info(f"[AutoRespond] 분석 완료: {output_path}")
-        return {"responded": True, "output_path": str(output_path), "summary": summary}
+    def _snapshot_input(self, issues: dict) -> Optional[Path]:
+        """pending_issues.json 스냅샷을 data/auto_respond/에 저장.
+        실패해도 본작업 중단 없음 (None 반환)."""
+        try:
+            today = date.today().isoformat()
+            path = _OUTPUT_DIR / f"{today}_input.json"
+            if path.exists():
+                ts = datetime.now().strftime("%H%M%S")
+                path = _OUTPUT_DIR / f"{today}_input_{ts}.json"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(
+                json.dumps(issues, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            return path
+        except Exception as e:
+            logger.debug(f"[AutoRespond] 입력 스냅샷 저장 실패 (무시): {e}")
+            return None
 
     def _call_claude(self, prompt: str) -> str:
         """claude CLI 비대화형 호출 (읽기 전용)"""
@@ -121,7 +198,17 @@ class ClaudeResponder:
                 f"claude exit={result.returncode}: {detail[:500]} "
                 f"(bin={claude_cmd}, cwd={_PROJECT_DIR})"
             )
-        return result.stdout
+
+        output = result.stdout or ""
+        # 응답 유효성 검증 — returncode=0이어도 빈/짧은 응답은 실패 처리
+        if len(output.strip()) < _MIN_RESPONSE_LEN:
+            self._dump_failure_context(cmd, result, env)
+            raise RuntimeError(
+                f"claude returned empty/short response: "
+                f"len={len(output.strip())} < {_MIN_RESPONSE_LEN} "
+                f"(bin={claude_cmd})"
+            )
+        return output
 
     def _dump_failure_context(self, cmd: list, result, env: dict) -> None:
         """실패 시 진단 정보를 debug 로그로 덤프"""
