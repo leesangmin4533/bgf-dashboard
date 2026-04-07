@@ -20,3 +20,4 @@
 | ops-metrics-waste-query-fix | 98% | 2026-04-07 |
 | d1-bgf-collector-import-fix | 100% | 2026-04-07 |
 | k4-non-food-sentinel-filter | 100% | 2026-04-07 |
+| scheduler-auto-reload | 100% | 2026-04-07 |

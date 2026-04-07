@@ -164,6 +164,47 @@
 
 ---
 
+## [WATCHING] scheduler 모듈 캐시 — 코드 fix 무력화 (04-06 ~ 04-07 수정)
+
+**문제**: long-running `run_scheduler.py` 프로세스가 sys.modules에 옛 모듈을 캐시. 코드 수정/커밋해도 수동 재시작 없이는 fix 미반영.
+**영향**: 오늘(04-07) PDCA 4건(claude-respond, ops-metrics, d1-bgf, k4) 모두 동일 운영 이슈 보유. 04-06 bgf-collector-import-fix 1차 fix가 무력화돼 d1 작업에서 진짜 원인 디버깅에 시간 소모.
+**설계 의도**: 코드 변경이 자동 반영되어야 운영 신뢰성 확보. 수동 재시작 의식 = 0이 목표.
+
+### 해결 방향 (옵션 C 채택)
+- file mtime watch 데몬 스레드 (60초 폴) → src/ 변경 감지 → graceful exit
+- 외부 wrapper script (`run_scheduler_loop.ps1`)로 무한 재시작 루프
+- 작업 실행 중에는 exit 보류 → 완료 후 exit
+- import 에러 시 backoff (5s → 30s → 60s) + 1회 알림
+
+### 시도 1: SrcWatcher + start_scheduler_loop.bat (04-07)
+- **왜**: long-running scheduler 모듈 캐시는 운영 의식(수동 재시작)으로만 해소 가능 → 자동화로 제거
+- **조치**:
+  1. `src/infrastructure/scheduler/src_watcher.py` 신규 (mtime+size 시그니처 daemon)
+  2. `run_scheduler.py` 무한 루프에 reload_event 체크 + sys.exit(0) 추가
+  3. `scripts/start_scheduler_loop.bat` 외부 wrapper (exit code 분기 + backoff)
+  4. CLAUDE.md 사용법 갱신
+- **결과**: ✓ 5/5 회귀 테스트 통과, MVP 완성
+- **실패 패턴**: (신규) long-running-process-cache
+
+### 교훈
+- 운영 의식 자동화는 fix 신뢰성의 핵심 — "scheduler 재시작" 같은 1분 작업이 잊혀지면 fix 무효화
+- importlib.reload는 transitive 종속성/객체 정체성 문제로 위험 → 프로세스 재시작이 안전
+- mtime + size 조합이 hash보다 가벼우면서 OneDrive 신뢰성도 보강
+
+### 검증 체크포인트
+- [x] SrcWatcher 모듈 + 5/5 테스트 통과
+- [x] run_scheduler.py 통합
+- [x] 외부 wrapper batch
+- [x] CLAUDE.md 운영 가이드
+- [ ] 운영자가 start_scheduler_loop.bat으로 전환 후 다음 코드 변경에서 자동 재시작 확인
+
+**관련 작업 (archive)**: docs/archive/2026-04/scheduler-auto-reload/
+
+**관련 Plan**: [docs/01-plan/features/scheduler-auto-reload.plan.md](../01-plan/features/scheduler-auto-reload.plan.md)
+**선행 사례**: docs/archive/2026-04/{claude-respond-fix, d1-bgf-collector-import-fix} (수동 재시작 필요 사례)
+
+---
+
 ## [PLANNED] CLEAR_GHOST_STOCK 자동실행 승격 검토 (P2)
 
 **목표**: 유령 재고 보정(CLEAR_GHOST_STOCK)을 LOW(승인 필요) → HIGH(자동 실행)로 승격

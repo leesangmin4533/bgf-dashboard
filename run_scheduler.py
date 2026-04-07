@@ -2090,10 +2090,26 @@ def run_scheduler(schedule_time: str = "07:00", multi_store: bool = True) -> Non
     except Exception as e:
         logger.warning(f"[Scheduler] job-health-monitor 기동 실패: {e}")
 
+    # ── scheduler-auto-reload (2026-04-07): src 변경 감지 → graceful exit ──
+    import threading as _threading
+    _reload_event = _threading.Event()
+    try:
+        from src.infrastructure.scheduler.src_watcher import SrcWatcher
+        SrcWatcher(_reload_event, interval_sec=60).start()
+        logger.info("[Scheduler] SrcWatcher 활성화 (코드 변경 시 자동 재시작)")
+    except Exception as e:
+        logger.warning(f"[Scheduler] SrcWatcher 기동 실패: {e}")
+
     # 무한 루프
     while True:
         schedule.run_pending()
         time.sleep(60)  # 1분마다 체크
+        if _reload_event.is_set():
+            logger.warning(
+                "[Scheduler] auto-reload 트리거 — graceful exit (code=0). "
+                "외부 wrapper script가 새 코드로 재시작합니다."
+            )
+            sys.exit(0)
 
 
 def run_now(multi_store: bool = True) -> None:
