@@ -1,7 +1,38 @@
 # 스케줄링 이슈 체인
 
-> 최종 갱신: 2026-04-06
-> 현재 상태: executed_at 수정 완료 + GHOST_STOCK 승격/하네스 Week3 계획
+> 최종 갱신: 2026-04-07
+> 현재 상태: scheduler-wrapper-restart RESOLVED + claude-respond-traceability WATCHING
+
+---
+
+## [RESOLVED] scheduler-wrapper-restart (04-07 18:58 ~ 20:08)
+
+**문제**: 04-07 18:58 SrcWatcher가 src 변경 감지 → 18:59:05 graceful exit(0) → wrapper 미가동으로 약 1시간 스케줄러 완전 중단. 04-07 23:30~23:58 야간 잡 미실행 위험.
+
+**원인** (2단):
+1. 사용자가 `python run_scheduler.py` 직접 실행 → wrapper(`scripts/start_scheduler_loop.bat`) 우회 → exit 0 시 재기동 주체 없음
+2. wrapper bat 자체가 UTF-8 저장이지만 `chcp 65001` 미선언 → cmd 기본 cp949가 한글 주석/echo를 명령으로 오인 (`'hon' 은(는) 내부 또는 외부 명령... 아닙니다`)
+
+### 시도 1: bat에 chcp 65001 추가 + 한글 주석 영문화 (04-07)
+- **왜**: cp949 fallback에서도 안전하게 동작하도록
+- **변경**: `scripts/start_scheduler_loop.bat` 첫 줄 `chcp 65001 >nul`, REM/echo 영문화
+- **결과**: 더블클릭 시 한글 깨짐 0건. 본문 loop 로직 무변경.
+
+### 운영 복구
+- 20:03 직접 python 백그라운드 임시 기동 (PID 39264)
+- 20:08 fix 적용 후 새 백그라운드 기동 (PID 39120)
+- heartbeat 정상 갱신 확인
+
+### 교훈
+- **Windows bat은 UTF-8 저장 시 반드시 `chcp 65001 >nul`로 시작** — 한글 주석/echo가 명령으로 오인되는 것을 방지
+- **wrapper 우회 금지**: SrcWatcher의 auto-reload는 wrapper 재기동 사슬을 전제. 직접 python 실행은 단발성으로만 사용
+- 운영 매뉴얼(CLAUDE.md 빠른 시작)에 wrapper 사용을 명시적으로 강제
+
+### 해결
+- 검증:
+  - [x] bat 더블클릭 시 한글 에러 0건
+  - [ ] 다음 src 변경 시 wrapper가 5초 내 재기동 (실측 대기)
+  - [ ] 사용자가 시작 프로그램 등록 (수동 작업)
 
 ---
 
