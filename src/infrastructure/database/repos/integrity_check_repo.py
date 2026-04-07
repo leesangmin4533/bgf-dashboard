@@ -247,22 +247,26 @@ class IntegrityCheckRepository(BaseRepository):
             conn.close()
 
     def check_expiry_time_mismatch(self, store_id: str) -> Dict[str, Any]:
-        """Check 3: OT expiry_time vs IB expiry_date 1일 초과 차이
+        """Check 3: 식품(001~005, 012) OT vs IB 유통기한 7일 초과 차이
 
-        order_tracking과 inventory_batches의 유통기한이 1일 넘게 불일치하면
-        알림 시스템이 잘못된 시점에 경보를 발생시킬 수 있다.
+        K4 의도(식품 폐기 정합성)에 맞춰 비식품 제외 + 임계값 1→7일 완화.
+        비식품 92.4%가 노이즈로 K4 신호를 묻어버리던 문제 해결.
+        (k4-non-food-sentinel-filter, 2026-04-07)
         """
-        conn = self._get_conn()
+        from src.infrastructure.database.connection import DBRouter
+        conn = DBRouter.get_store_connection_with_common(store_id)
         try:
             cursor = conn.cursor()
             _mismatch_sql = """
                 FROM order_tracking ot
                 JOIN inventory_batches ib
                     ON ot.item_cd = ib.item_cd AND ot.store_id = ib.store_id
+                JOIN common.products p ON ot.item_cd = p.item_cd
                 WHERE ot.store_id = ?
                   AND ot.status NOT IN ('expired', 'disposed', 'cancelled')
                   AND ib.status = 'active' AND ib.remaining_qty > 0
-                  AND ABS(julianday(date(ot.expiry_time)) - julianday(ib.expiry_date)) > 1
+                  AND p.mid_cd IN ('001','002','003','004','005','012')
+                  AND ABS(julianday(date(ot.expiry_time)) - julianday(ib.expiry_date)) > 7
             """
             cursor.execute(f"SELECT COUNT(*) as cnt {_mismatch_sql}", (store_id,))
             count = cursor.fetchone()["cnt"]

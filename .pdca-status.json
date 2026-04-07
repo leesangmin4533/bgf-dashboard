@@ -1,4 +1,12 @@
 {
+  "k4-non-food-sentinel-filter": {
+    "phase": "archived",
+    "matchRate": 100,
+    "iterationCount": 0,
+    "startedAt": "2026-04-07T15:00:00Z",
+    "archivedAt": "2026-04-07T15:30:00Z",
+    "archivedTo": "docs/archive/2026-04/k4-non-food-sentinel-filter/"
+  },
   "d1-bgf-collector-import-fix": {
     "phase": "archived",
     "matchRate": 100,

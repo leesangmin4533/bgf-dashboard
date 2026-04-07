@@ -113,6 +113,57 @@
 
 ---
 
+## [WATCHING] K4 expiry_time_mismatch 31일 NOT_MET — 식품 전용 재정의 (04-07 수정)
+
+**문제**: K4 마일스톤이 31일 연속 NOT_MET. `check_expiry_time_mismatch`가 모든 카테고리의 OT vs IB 1일 초과 차이를 mismatch로 잡지만, 92.4%(7,691/8,328)가 비식품(담배/맥주/우산 등)이고 이 중 일부는 sentinel 값(2053-08, 2028-12)으로 9,997일 차이를 만든다. K4 의도(식품 폐기 정합성)와 측정 대상 불일치.
+**영향**: K4 KPI가 가짜 alarm으로 31일 연속 실패 → 진짜 식품 폐기 사고를 가림. 마일스톤 단계3 ACHIEVED 차단.
+**설계 의도**: K4 = 식품(도시락/김밥/빵 등)의 OT.expiry_time과 IB.expiry_date 정합성. 폐기 알림 시점 정확도 측정.
+
+**4매장 mismatch 분포**:
+| 분류 | 건수 | 비율 |
+|---|---:|---:|
+| 비식품 (072 담배, 049 맥주 등) | 7,691 | 92.4% |
+| 식품 (001~005, 012) | 637 | 7.6% |
+| sentinel (year≥2030) | 230 | 2.8% |
+
+**식품 diff_days 분포 (637건)**:
+- 1~3일: 75
+- 3~7일: 143
+- 7~30일: 312 (진짜 위험 신호)
+- 30~365일: 145 (진짜 위험 신호)
+
+### 해결 방향
+- **D+C 조합**: 식품 카테고리(001~005, 012) 전용 + 임계값 1일 → 7일 완화
+- 비식품 mismatch는 K4에서 제외, 별도 메트릭으로 분리 (후속)
+- products JOIN 추가 (common.db ATTACH)
+
+### 시도 1: 식품 전용 + 7일 임계값 (D+C 조합) (04-07)
+- **왜**: K4 의도(식품 폐기 정합성)와 측정 대상(전체) 불일치, 비식품 92.4%가 노이즈
+- **조치**:
+  1. `check_expiry_time_mismatch` 커넥션 → `get_store_connection_with_common`
+  2. JOIN common.products + `mid_cd IN ('001'~'005','012')` 필터
+  3. 임계값 1일 → 7일
+- **결과**: ✓ 4매장 mismatch 8,328 → **444건 (94.7% 감소)**, Plan 예상치(457)와 일치
+- **실패 패턴**: (신규) kpi-intent-vs-measurement-mismatch
+
+### 교훈
+- **첫 5건 정렬 함정**: 가장 큰 차이값(sentinel 9997일)이 보였지만 2.8%에 불과. distribution + GROUP BY로 전체 그림 파악 필수
+- **KPI 정의 시 측정 범위 명시**: K4 의도(식품)와 측정(전체) 불일치 → 진짜 신호 가림
+- **임계값은 시작점**: 7일은 보수적, 1주 운영 후 재조정 가능
+
+### 검증 체크포인트
+- [x] check_expiry_time_mismatch 식품 전용 + 7일 임계값 (04-07)
+- [x] 4매장 mismatch 합계 444건 (목표 100~500 범위)
+- [x] 회귀 테스트 3/3 통과 (test_integrity_check_k4.py)
+- [ ] 다음 milestone_snapshots K4 NOT_MET → ACHIEVED 전환
+
+**관련 작업 (archive)**: docs/archive/2026-04/k4-non-food-sentinel-filter/
+
+**관련 Plan**: [docs/01-plan/features/k4-non-food-sentinel-filter.plan.md](../01-plan/features/k4-non-food-sentinel-filter.plan.md)
+**발견 경로**: claude-auto-respond 분석 보고서(2026-04-07) K4 PLANNED 지목 → 폐기 추적 점검 → K4 데이터 직접 조사
+
+---
+
 ## [PLANNED] CLEAR_GHOST_STOCK 자동실행 승격 검토 (P2)
 
 **목표**: 유령 재고 보정(CLEAR_GHOST_STOCK)을 LOW(승인 필요) → HIGH(자동 실행)로 승격
