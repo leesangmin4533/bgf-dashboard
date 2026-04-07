@@ -2359,9 +2359,66 @@ class OrderExecutor:
 
         주의: L3(Selenium)에서는 사용 금지 — BGF 그리드가 반환한 실제 배수를
               Python 계산값으로 덮어쓰는 "후행 덮어쓰기" 문제 발생
+
+        order-unit-qty-integrity-v2 긴급 가드:
+            order_unit_qty가 None/0/1인데 mid_cd가 묶음 우세 카테고리면
+            BGF 서버의 실제 입수와 불일치할 가능성 → 발주 차단 + 알림.
         """
         qty = item.get("final_order_qty", 0)
-        unit = item.get("order_unit_qty", 1) or 1
+        raw_unit = item.get("order_unit_qty")
+        item_cd = item.get("item_cd", "")
+        item_nm = item.get("item_nm", "")
+        mid_cd = str(item.get("mid_cd", "")).zfill(3) if item.get("mid_cd") else ""
+
+        # ── 긴급 가드: 묶음 의심 카테고리 + unit<=1 → 차단 ──
+        try:
+            from src.settings.constants import (
+                BUNDLE_SUSPECT_MID_CDS,
+                ORDER_UNIT_QTY_GUARD_ENABLED,
+            )
+        except Exception:
+            BUNDLE_SUSPECT_MID_CDS = set()
+            ORDER_UNIT_QTY_GUARD_ENABLED = False
+
+        unit_missing = raw_unit is None or (isinstance(raw_unit, (int, float)) and raw_unit <= 0)
+        unit_is_one = raw_unit == 1
+        is_suspect = mid_cd in BUNDLE_SUSPECT_MID_CDS
+
+        if ORDER_UNIT_QTY_GUARD_ENABLED and (unit_missing or unit_is_one) and is_suspect:
+            logger.error(
+                f"[BLOCK/unit-qty] {item_cd} {item_nm} mid={mid_cd} "
+                f"unit={raw_unit!r} qty={qty} method={method} "
+                f"— 묶음 의심 카테고리 + unit<=1 → 발주 거부 (BGF 실제 입수 불일치 가능)"
+            )
+            # 알림 (NotificationDispatcher 가용 시)
+            try:
+                from src.application.services.notification_dispatcher import NotificationDispatcher
+                NotificationDispatcher().send(
+                    subject="ORDER BLOCKED: order_unit_qty 의심",
+                    body=(
+                        f"{item_cd} {item_nm} (mid={mid_cd}) "
+                        f"unit={raw_unit!r}, qty={qty}, method={method} — "
+                        f"BGF 빈값 반환 상품 과발주 방지 차단"
+                    ),
+                    level="ERROR",
+                )
+            except Exception as _e:
+                logger.debug(f"[BLOCK/unit-qty] 알림 실패 무시: {_e}")
+
+            return {
+                "item_cd": item_cd,
+                "target_qty": qty,
+                "actual_qty": 0,
+                "multiplier": 0,
+                "order_unit_qty": raw_unit,
+                "order_date": order_date,
+                "success": False,
+                "method": method,
+                "message": "unit_qty_guard_block",
+            }
+
+        # ── 정상 경로 ──
+        unit = raw_unit if (raw_unit and raw_unit > 0) else 1
         # _calc_multiplier와 동일한 계산: ceil(qty / unit)
         mult = max(1, (qty + unit - 1) // unit) if qty > 0 else 0
         actual = mult * unit

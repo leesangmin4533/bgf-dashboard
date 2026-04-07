@@ -512,7 +512,7 @@ class OrderPrepCollector:
                     'expiration_days': exp_days,
                     'orderable_day': existing.get('orderable_day', '일월화수목금토'),
                     'orderable_status': existing.get('orderable_status', ''),
-                    'order_unit_qty': existing.get('order_unit_qty', 1),
+                    'order_unit_qty': existing.get('order_unit_qty'),  # None 허용 (1 폴백 금지)
                     'sell_price': sell_price,
                     'margin_rate': margin_rate,
                 }
@@ -792,7 +792,11 @@ class OrderPrepCollector:
             history = data.get('history', [])
 
             # 입수(단위수량) - 1배수당 실제 개수
-            order_unit_qty = item_info.get('order_unit_qty', 1) or 1
+            # order-unit-qty-integrity-v2: None 유지 (or 1 폴백 금지 — BGF 빈값 상품 DB 오염 방지)
+            _raw_unit = item_info.get('order_unit_qty')
+            order_unit_qty = int(_raw_unit) if _raw_unit and int(_raw_unit) > 0 else None
+            # 하류 pending 계산용 안전값 (계산만 1 사용, DB 저장/반환 dict는 None 유지)
+            _unit_for_calc = order_unit_qty if order_unit_qty else 1
 
             # 데이터셋에서 유통기한 가져오기 (DOM에서 못 가져왔을 경우)
             if not expiration_days:
@@ -804,15 +808,15 @@ class OrderPrepCollector:
             if PENDING_COMPARISON_MODE:
                 # Phase 3: 비교 모드 - 두 방식 동시 실행, 차이 로깅
                 pending_qty, pending_detail = self._calculate_pending_with_comparison(
-                    history, order_unit_qty, item_cd, item_info.get('item_nm', '')
+                    history, _unit_for_calc, item_cd, item_info.get('item_nm', '')
                 )
             elif USE_SIMPLIFIED_PENDING:
                 # 단순화 방식 (item_cd 전달하여 1차/2차 배송 필터링)
-                pending_qty = self._calculate_pending_simplified(history, order_unit_qty, item_cd=item_cd)
+                pending_qty = self._calculate_pending_simplified(history, _unit_for_calc, item_cd=item_cd)
                 pending_detail = []  # 단순화 방식에서는 디버그 로그 없음
             else:
                 # 복잡한 방식 (기본값)
-                pending_qty, pending_detail = self._calculate_pending_complex(history, order_unit_qty, item_cd)
+                pending_qty, pending_detail = self._calculate_pending_complex(history, _unit_for_calc, item_cd)
 
             # 디버그 로그 수집 (복잡한 방식만 - 단순화 방식은 로그 없음)
             if not USE_SIMPLIFIED_PENDING and pending_detail:
@@ -956,19 +960,22 @@ class OrderPrepCollector:
 
         # 미입고 수량 계산 (기존 로직 재사용)
         history = api_data.get('history', [])
-        order_unit_qty = api_data.get('order_unit_qty', 1) or 1
+        # order-unit-qty-integrity-v2: None 유지 (or 1 폴백 금지)
+        _raw_unit = api_data.get('order_unit_qty')
+        order_unit_qty = int(_raw_unit) if _raw_unit and int(_raw_unit) > 0 else None
+        _unit_for_calc = order_unit_qty if order_unit_qty else 1
 
         from src.settings.constants import USE_SIMPLIFIED_PENDING, PENDING_COMPARISON_MODE
 
         if PENDING_COMPARISON_MODE:
             pending_qty, pending_detail = self._calculate_pending_with_comparison(
-                history, order_unit_qty, item_cd, api_data.get('item_nm', '')
+                history, _unit_for_calc, item_cd, api_data.get('item_nm', '')
             )
         elif USE_SIMPLIFIED_PENDING:
-            pending_qty = self._calculate_pending_simplified(history, order_unit_qty, item_cd=item_cd)
+            pending_qty = self._calculate_pending_simplified(history, _unit_for_calc, item_cd=item_cd)
             pending_detail = []
         else:
-            pending_qty, pending_detail = self._calculate_pending_complex(history, order_unit_qty, item_cd)
+            pending_qty, pending_detail = self._calculate_pending_complex(history, _unit_for_calc, item_cd)
 
         # 디버그 로그 수집
         if not USE_SIMPLIFIED_PENDING and pending_detail:

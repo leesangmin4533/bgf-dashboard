@@ -1,7 +1,7 @@
 # 폐기 추적 이슈 체인
 
-> 최종 갱신: 2026-04-05
-> 현재 상태: confirmed_orders + delivery_match 기반 (9aca17d)
+> 최종 갱신: 2026-04-07
+> 현재 상태: confirmed_orders + delivery_match 기반 (9aca17d) — Gap 분석 완료
 
 ---
 
@@ -55,9 +55,22 @@
 ### 해결: confirmed_orders + delivery_match (9aca17d, 04-05)
 - 검증:
   - [x] 4매장 스냅샷 저장 확인 (완료: 04-05, 314건)
-  - [ ] D+2 첫 정확한 알림 확인 — 001~003 (예정: 04-07, 스케줄: expiry-d2-alert-verify)
-  - [ ] Gap 분석 (예정: 04-07, 스케줄: expiry-tracking-gap-analysis)
+  - [x] D+2 첫 정확한 알림 확인 — 001~003 (완료: 04-07 02:00, 46513 1건·49965 1건 발송, 46704·47863 재고 없어 알림 불필요)
+  - [x] Gap 분석 (완료: 04-07, Match Rate 90% — 상세 아래)
   - [ ] 1주일 운영 후 matched/unmatched 비율 (예정: 04-12, 스케줄: expiry-1week-match-ratio)
+
+### Gap 분석 결과 (04-07, expiry-tracking-gap-analysis)
+
+| 검증 포인트 | 결과 | 상세 |
+|------------|:----:|------|
+| confirmed_orders 스냅샷 저장률 | ✅ PASS | 4매장 × 2일(04-05~06) 전체 저장. 04-05: 314건, 04-06: 921건 |
+| delivery_match 매칭률 | ⚠️ PARTIAL | 04-05: 84/72/42/83%. 04-06: 73/12/12/16% (타이밍 이슈 영향, WATCHING) |
+| inventory_batches 확정 배치 정확도 | ✅ PASS | expiry_datetime 100% 설정. FOOD_EXPIRY_CONFIG 계산 정확 |
+| expiry_checker OT 폴백 제거 | ✅ PASS | line 238-240 확인: inventory_batches → None, OT/receiving_history 완전 제거 |
+| D+2 첫 정확한 알림 | ✅ PASS | 46513·49965 02:00 발송 성공. 46704·47863 active 재고 없어 정상 비발송 |
+| 과도기 알림 누락 | ✅ PASS | 0건 누락. graceful degradation(FR-03 폴백) 정상 작동 |
+
+**Match Rate: 90%** (delivery_match 매칭률은 WATCHING 이슈 영향, 재설계 자체는 정상 동작)
 
 ---
 
@@ -102,11 +115,14 @@
   - 04-06 발주는 아직 배송 미도착으로 낮은 것 정상 (46513 70%, 나머지 12~16%)
   - 46704·47863 낮은 원인: 미입고 항목 없는 게 아니라 receiving_history에 해당 item_cd 자체 없음 → 아직 미배송
   - 47863 상세: 29개 미매칭 중 28개는 receiving_history order_date=04-05에 없음 (미배송)
-- [ ] 04-07 09:00 expiry-tracking-gap-analysis에서 matched 비율 확인
+- [x] 04-07 09:00 expiry-tracking-gap-analysis에서 matched 비율 확인
+  - 04-05 발주: 46513=84%, 46704=72%, 47863=42%, 49965=83%
+  - 04-06 발주: 46513=73%, 46704=12%, 47863=12%, 49965=16% (2차 배송 지연 정상)
+  - rematch_unmatched 20:30 재매칭: 46704 +38, 49965 +42 보완
 
 ---
 
-## [WATCHING] 과도기 알림 누락 가능성 (04-05 ~)
+## [RESOLVED] 과도기 알림 누락 가능성 (04-05 ~ 04-07)
 
 **문제**: OT/receiving_history 폴백 제거로 FR-03이 배치 못 만든 상품의 알림 누락 가능
 **영향**: D~D+1 기간 일부 상품
@@ -117,8 +133,18 @@
 - **왜**: FR-03 + receiving_collector가 계속 동작하므로 대부분 커버
 - **결과**: 4/7 확인 예정
 - 검증:
-  - [ ] 4/7 Gap 분석에서 누락 건수 확인
-  - [ ] 누락 0건 확인 시 [RESOLVED]로 전환
+  - [x] 4/7 Gap 분석에서 누락 건수 확인 → **0건 누락 확인** (FR-03 폴백 정상 작동)
+  - [x] 누락 0건 확인 → **[RESOLVED]로 전환**
+
+---
+
+## [OPEN] collection.py 구문 오류 → 07:00 daily_job 전체 실패 (04-07)
+
+**문제**: `collection.py` line 60의 `with` 블록 구문 오류로 07:00 4개 매장 daily_job 전부 실패 (1.5s 내 종료)
+**영향**: 2차 delivery_match 미실행 (07:04 retry에서 자동 복구됨), 발주 실행 지연
+**원인**: `expected an indented block after 'with' statement on line 60 (collection.py, line 63)` — 현재 코드는 정상이므로 .pyc 캐시 불일치 가능성
+**조치**: 07:04 HealthChecker retry로 복구 완료. 재발 방지를 위해 `__pycache__` 정리 또는 원인 파일 확인 필요
+**추적**: 폐기 추적 재설계와 직접 관련 없으나 delivery_match 실행에 영향
 
 ---
 
