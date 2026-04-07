@@ -672,8 +672,8 @@ FOOD_WEEKDAY_COEF_MAX = 1.50           # 최대 계수 (기존 1.25 → 1.50)
 # ── Claude 자동 대응 (claude_responder.py) ──
 CLAUDE_AUTO_RESPOND_ENABLED = True         # False로 즉시 비활성화
 CLAUDE_AUTO_RESPOND_MODEL = "sonnet"       # 비용 절감 (sonnet 사용)
-CLAUDE_AUTO_RESPOND_MAX_TURNS = 10         # 무한 루프 방지
-CLAUDE_AUTO_RESPOND_TIMEOUT = 300          # 5분 타임아웃 (초)
+CLAUDE_AUTO_RESPOND_MAX_TURNS = 30         # 분석 작업에 Read/Grep 다수 호출 (04-07 max turns 초과로 10→30 상향)
+CLAUDE_AUTO_RESPOND_TIMEOUT = 600          # 10분 타임아웃 (max_turns 상향에 맞춰 확대)
 
 # ── 일일 체인 리포트 (daily_chain_report.py) ──
 DAILY_CHAIN_REPORT_ENABLED = True          # False로 즉시 비활성화

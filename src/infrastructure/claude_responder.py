@@ -93,15 +93,16 @@ class ClaudeResponder:
         """claude CLI 비대화형 호출 (읽기 전용)"""
         claude_cmd = _CLAUDE_BIN
         env = {**os.environ, "PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8"}
+        cmd = [
+            claude_cmd,
+            "-p", prompt,
+            "--output-format", "text",
+            "--model", CLAUDE_AUTO_RESPOND_MODEL,
+            "--max-turns", str(CLAUDE_AUTO_RESPOND_MAX_TURNS),
+            "--allowed-tools", "Read Grep Glob",
+        ]
         result = subprocess.run(
-            [
-                claude_cmd,
-                "-p", prompt,
-                "--output-format", "text",
-                "--model", CLAUDE_AUTO_RESPOND_MODEL,
-                "--max-turns", str(CLAUDE_AUTO_RESPOND_MAX_TURNS),
-                "--allowed-tools", "Read Grep Glob",
-            ],
+            cmd,
             cwd=str(_PROJECT_DIR),
             capture_output=True,
             text=True,
@@ -111,11 +112,48 @@ class ClaudeResponder:
             env=env,
         )
         if result.returncode != 0:
+            # 진단 정보 덤프 (data/auto_respond/debug_{timestamp}.log)
+            self._dump_failure_context(cmd, result, env)
             stderr = (result.stderr or "").strip()
+            stdout = (result.stdout or "").strip()
+            detail = stderr or stdout or "(no output)"
             raise RuntimeError(
-                f"claude exit={result.returncode}: {stderr[:200] if stderr else '(no stderr)'}"
+                f"claude exit={result.returncode}: {detail[:500]} "
+                f"(bin={claude_cmd}, cwd={_PROJECT_DIR})"
             )
         return result.stdout
+
+    def _dump_failure_context(self, cmd: list, result, env: dict) -> None:
+        """실패 시 진단 정보를 debug 로그로 덤프"""
+        try:
+            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            debug_path = _OUTPUT_DIR / f"debug_{ts}.log"
+            debug_path.parent.mkdir(parents=True, exist_ok=True)
+            key_env = {
+                k: env.get(k, "")
+                for k in (
+                    "PATH", "PYTHONUTF8", "PYTHONIOENCODING",
+                    "USERPROFILE", "APPDATA", "LOCALAPPDATA",
+                )
+            }
+            # prompt는 덤프 제외 (cmd[2]) — 길이/민감도 이슈
+            cmd_safe = cmd[:2] + ["[prompt omitted]"] + cmd[3:]
+            lines = [
+                f"[timestamp] {datetime.now().isoformat()}",
+                f"[claude_bin] {_CLAUDE_BIN}",
+                f"[returncode] {result.returncode}",
+                f"[cwd] {_PROJECT_DIR}",
+                f"[cmd] {cmd_safe}",
+                f"[env] {json.dumps(key_env, ensure_ascii=False)}",
+                f"[stdout:{len(result.stdout or '')}chars]",
+                (result.stdout or "")[:2000],
+                f"[stderr:{len(result.stderr or '')}chars]",
+                (result.stderr or "")[:2000],
+            ]
+            debug_path.write_text("\n".join(lines), encoding="utf-8")
+            logger.warning(f"[AutoRespond] 진단 로그 저장: {debug_path}")
+        except Exception as e:
+            logger.debug(f"[AutoRespond] 진단 덤프 실패 (무시): {e}")
 
     def _build_prompt(self, issues: dict) -> str:
         """분석 prompt 생성"""

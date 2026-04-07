@@ -28,6 +28,52 @@
 
 ---
 
+## [WATCHING] claude-auto-respond Claude CLI 호출 실패 (04-06 ~ 04-07)
+
+**문제**: 2026-04-06 23:58 스케줄(claude-auto-respond)이 `claude exit=1: (no stderr)`로 실패. stderr가 비어있어 원인 추적 불가.
+**영향**: 이상 감지 시 L1 자동 원인 분석 무력화 → DailyChainReport에 분석 결과 누락 → 운영자가 수동 분석 필요
+**설계 의도**: 이상 감지(23:55 OpsIssueDetector) → pending_issues.json 저장 → 23:58 ClaudeResponder가 claude -p 읽기전용 호출 → 분석 결과를 pending에 병합 → 00:02 DailyChainReport가 통합 발송
+
+**재현 로그**:
+```
+2026-04-06 23:55:02 [OpsIssueDetector] pending_issues.json 저장 (5건)
+2026-04-07 00:00:06 [AutoRespond] Claude 호출 실패: claude exit=1: (no stderr)
+```
+
+**가설 5가지**:
+1. stdout에 에러 메시지 출력 (CLI가 stderr 대신 stdout 사용)
+2. Windows 스케줄러 컨텍스트에서 `claude.cmd` shim PATH 미인식
+3. `--allowed-tools "Read Grep Glob"` 플래그 형식 변경 (최신 CLI에서 콤마/반복 옵션 요구)
+4. 비대화형 환경에서 OAuth 재인증 트리거
+5. Windows cp949 ↔ UTF-8 prompt 인코딩 충돌
+
+**관련 파일**: `src/infrastructure/claude_responder.py:92-118` `_call_claude()`
+
+### 시도 1: 진단 로깅 강화 + max_turns 10→30 상향 (04-07)
+- **왜**: 기존 코드는 stderr만 출력했는데 claude CLI는 stdout으로 에러 출력 → 원인 불명
+- **조치**:
+  1. `_call_claude()` stdout fallback + `_dump_failure_context()`로 debug 파일 덤프
+  2. 재현 결과 실제 원인 = `Error: Reached max turns (10)` (분석 작업에 Read/Grep 다수 호출)
+  3. `CLAUDE_AUTO_RESPOND_MAX_TURNS 10→30`, `TIMEOUT 300→600` 상향
+- **결과**: ✓ 성공 — `data/auto_respond/2026-04-07_response.md` 생성 확인
+- **실패 패턴**: (신규) stderr-only-error-reporting
+
+### 교훈
+- **서브프로세스 에러는 stdout/stderr 둘 다 확인**: claude CLI는 사용량/turn 제한 에러를 stdout으로 출력
+- **max_turns는 실제 분석 복잡도 기준**: 읽기 전용 도구(Read/Grep/Glob)를 많이 쓰는 분석 작업은 10 turn으로 부족
+- **진단 덤프는 실패 재현의 핵심**: stderr만 찍으면 1차 조사에서 헤맨다. cmd/cwd/env/stdout 전체 덤프 표준화 필요
+
+### 검증 체크포인트
+- [x] 진단 로깅 강화 후 수동 재현 (04-07 13:25 debug_20260407_132510.log)
+- [x] 원인 식별: max_turns 초과 (stdout만 출력)
+- [x] 수정 후 재실행 성공 (04-07 13:29, 2026-04-07_response.md 생성)
+- [x] 회귀 테스트 3개 추가 (TestCallClaudeFailureDiagnostics, 14/14 통과)
+- [ ] 04-08 23:58 스케줄에서 `data/auto_respond/2026-04-08_response.md` 자동 생성 확인
+
+**관련 Plan**: [docs/01-plan/features/claude-respond-fix.plan.md](../01-plan/features/claude-respond-fix.plan.md)
+
+---
+
 ## [PLANNED] CLEAR_GHOST_STOCK 자동실행 승격 검토 (P2)
 
 **목표**: 유령 재고 보정(CLEAR_GHOST_STOCK)을 LOW(승인 필요) → HIGH(자동 실행)로 승격

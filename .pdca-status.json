@@ -1,4 +1,10 @@
 {
+  "claude-respond-fix": {
+    "phase": "do",
+    "matchRate": null,
+    "iterationCount": 0,
+    "startedAt": "2026-04-07T00:00:00Z"
+  },
   "ml-harness": {
     "phase": "design",
     "matchRate": null,

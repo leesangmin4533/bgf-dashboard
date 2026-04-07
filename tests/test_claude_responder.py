@@ -133,3 +133,59 @@ class TestBuildPrompt:
         issues = {"anomalies": [{"priority": "P2", "title": "test"}]}
         prompt = ClaudeResponder()._build_prompt(issues)
         assert "분석 요청" in prompt
+
+
+class TestCallClaudeFailureDiagnostics:
+    """_call_claude 실패 시 진단 로깅 회귀 테스트 (claude-respond-fix)"""
+
+    @patch("src.infrastructure.claude_responder.subprocess.run")
+    def test_call_claude_dumps_debug_on_failure(self, mock_run, tmp_path):
+        """실패 시 stdout fallback + debug 파일 덤프"""
+        mock_result = MagicMock()
+        mock_result.returncode = 1
+        mock_result.stdout = "Error: please login"
+        mock_result.stderr = ""
+        mock_run.return_value = mock_result
+
+        responder = ClaudeResponder()
+        with patch("src.infrastructure.claude_responder._OUTPUT_DIR", tmp_path):
+            with pytest.raises(RuntimeError) as exc:
+                responder._call_claude("test prompt")
+
+        # stdout 내용이 에러 메시지에 포함되어야 함
+        assert "please login" in str(exc.value)
+        assert "exit=1" in str(exc.value)
+        # debug 파일 생성 확인
+        debug_files = list(tmp_path.glob("debug_*.log"))
+        assert len(debug_files) == 1
+        content = debug_files[0].read_text(encoding="utf-8")
+        assert "[returncode] 1" in content
+        assert "please login" in content
+        assert "[prompt omitted]" in content  # prompt는 덤프 제외
+
+    @patch("src.infrastructure.claude_responder.subprocess.run")
+    def test_call_claude_success_returns_stdout(self, mock_run):
+        """성공 시 stdout 그대로 반환"""
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = "# Analysis\nOK"
+        mock_result.stderr = ""
+        mock_run.return_value = mock_result
+
+        result = ClaudeResponder()._call_claude("test prompt")
+        assert result == "# Analysis\nOK"
+
+    @patch("src.infrastructure.claude_responder.subprocess.run")
+    def test_call_claude_empty_output_reports_no_output(self, mock_run, tmp_path):
+        """stdout/stderr 모두 비면 '(no output)' 표기"""
+        mock_result = MagicMock()
+        mock_result.returncode = 1
+        mock_result.stdout = ""
+        mock_result.stderr = ""
+        mock_run.return_value = mock_result
+
+        with patch("src.infrastructure.claude_responder._OUTPUT_DIR", tmp_path):
+            with pytest.raises(RuntimeError) as exc:
+                ClaudeResponder()._call_claude("test prompt")
+
+        assert "(no output)" in str(exc.value)

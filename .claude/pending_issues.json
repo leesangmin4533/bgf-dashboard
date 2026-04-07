@@ -17,5 +17,11 @@
       "value": 31,
       "status": "NOT_MET"
     }
+  },
+  "analysis": {
+    "responded": true,
+    "summary": "이제 충분한 정보를 수집했습니다. 종합 분석을 작성합니다.\n---\n## 운영 이상 분석 보고서 (2026-04-07)",
+    "output_path": "C:\\Users\\kanur\\OneDrive\\바탕 화면\\bbb\\bgf_auto\\data\\auto_respond\\2026-04-07_response.md",
+    "suggested_issues": []
   }
 }
