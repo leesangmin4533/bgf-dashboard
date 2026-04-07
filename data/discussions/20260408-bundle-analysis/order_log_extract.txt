@@ -1,0 +1,200 @@
+89113:2026-04-08 07:21:07 | INFO     | 4c53b5d6 | src.order.order_executor | [AUDIT] 8801771303336 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+89114:2026-04-08 07:21:07 | INFO     | 4c53b5d6 | src.order.order_executor | [AUDIT] 8800279679066 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+89115:2026-04-08 07:21:07 | INFO     | 4c53b5d6 | src.order.order_executor | [AUDIT] 8801068930757 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+89116:2026-04-08 07:21:07 | INFO     | 4c53b5d6 | src.order.order_executor | [AUDIT] 8801068939101 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+89117:2026-04-08 07:21:07 | ERROR    | 4c53b5d6 | src.order.order_executor | [BLOCK/unit-qty] 8800348940455 면)투움바파스타 mid=006 unit=1 qty=1 method=direct_api — 묶음 의심 카테고리 + unit<=1 → 발주 거부 (BGF 실제 입수 불일치 가능)
+89118:2026-04-08 07:21:07 | INFO     | 4c53b5d6 | src.order.order_executor | [AUDIT] 8801068912913 PYUN_QTY=3 ORD_UNIT_QTY=1 TOT_QTY=3 (need=3) method=direct_api
+89119:2026-04-08 07:21:07 | INFO     | 4c53b5d6 | src.order.order_executor | [AUDIT] 8801068405545 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+89120:2026-04-08 07:21:07 | INFO     | 4c53b5d6 | src.order.order_executor | [AUDIT] 8801068912463 PYUN_QTY=2 ORD_UNIT_QTY=1 TOT_QTY=2 (need=2) method=direct_api
+89121:2026-04-08 07:21:07 | INFO     | 4c53b5d6 | src.order.order_executor | [AUDIT] 8801068938777 PYUN_QTY=2 ORD_UNIT_QTY=1 TOT_QTY=2 (need=2) method=direct_api
+89122:2026-04-08 07:21:07 | INFO     | 4c53b5d6 | src.order.order_executor | [AUDIT] 8809895799004 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+89123:2026-04-08 07:21:07 | INFO     | 4c53b5d6 | src.order.order_executor | [AUDIT] 8809895798366 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+89124:2026-04-08 07:21:07 | INFO     | 4c53b5d6 | src.order.order_executor | [AUDIT] 8801068405576 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+89125:2026-04-08 07:21:07 | INFO     | 4c53b5d6 | src.order.order_executor | [AUDIT] 8801068086225 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+89126:2026-04-08 07:21:07 | INFO     | 4c53b5d6 | src.order.order_executor | [AUDIT] 8809895797703 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+89127:2026-04-08 07:21:07 | INFO     | 4c53b5d6 | src.order.order_executor | [AUDIT] 8809895795303 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+89128:2026-04-08 07:21:07 | INFO     | 4c53b5d6 | src.order.order_executor | [AUDIT] 8809486993101 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+89129:2026-04-08 07:21:07 | INFO     | 4c53b5d6 | src.order.order_executor | [AUDIT] 8801068939415 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+89130:2026-04-08 07:21:07 | INFO     | 4c53b5d6 | src.order.order_executor | [AUDIT] 8801068938845 PYUN_QTY=1 ORD_UNIT_QTY=5 TOT_QTY=5 (need=5) method=direct_api
+89131:2026-04-08 07:21:07 | ERROR    | 4c53b5d6 | src.order.order_executor | [BLOCK/unit-qty] 8801753108775 연세)초코생크림빵 mid=014 unit=1 qty=1 method=direct_api — 묶음 의심 카테고리 + unit<=1 → 발주 거부 (BGF 실제 입수 불일치 가능)
+89132:2026-04-08 07:21:07 | ERROR    | 4c53b5d6 | src.order.order_executor | [BLOCK/unit-qty] 8801753108478 연세)우유생크림빵 mid=014 unit=1 qty=1 method=direct_api — 묶음 의심 카테고리 + unit<=1 → 발주 거부 (BGF 실제 입수 불일치 가능)
+89133:2026-04-08 07:21:07 | ERROR    | 4c53b5d6 | src.order.order_executor | [BLOCK/unit-qty] 8801753116268 연세)딸기크림맘모스 mid=014 unit=1 qty=1 method=direct_api — 묶음 의심 카테고리 + unit<=1 → 발주 거부 (BGF 실제 입수 불일치 가능)
+89134:2026-04-08 07:21:07 | ERROR    | 4c53b5d6 | src.order.order_executor | [BLOCK/unit-qty] 8801121288764 유라가)두바이쫀득찹쌀떡 mid=014 unit=1 qty=1 method=direct_api — 묶음 의심 카테고리 + unit<=1 → 발주 거부 (BGF 실제 입수 불일치 가능)
+89135:2026-04-08 07:21:07 | ERROR    | 4c53b5d6 | src.order.order_executor | [BLOCK/unit-qty] 8809523625439 참조은)두바이쫀득초코 mid=014 unit=1 qty=1 method=direct_api — 묶음 의심 카테고리 + unit<=1 → 발주 거부 (BGF 실제 입수 불일치 가능)
+89136:2026-04-08 07:21:07 | ERROR    | 4c53b5d6 | src.order.order_executor | [BLOCK/unit-qty] 8807999037497 대두)한입딸기우유찰떡 mid=014 unit=1 qty=1 method=direct_api — 묶음 의심 카테고리 + unit<=1 → 발주 거부 (BGF 실제 입수 불일치 가능)
+89137:2026-04-08 07:21:07 | ERROR    | 4c53b5d6 | src.order.order_executor | [BLOCK/unit-qty] 8801753115612 연세)말차초코생크림빵 mid=014 unit=1 qty=1 method=direct_api — 묶음 의심 카테고리 + unit<=1 → 발주 거부 (BGF 실제 입수 불일치 가능)
+89138:2026-04-08 07:21:07 | ERROR    | 4c53b5d6 | src.order.order_executor | [BLOCK/unit-qty] 8801111917421 크라운)산도딸기 mid=015 unit=1 qty=3 method=direct_api — 묶음 의심 카테고리 + unit<=1 → 발주 거부 (BGF 실제 입수 불일치 가능)
+89139:2026-04-08 07:21:07 | INFO     | 4c53b5d6 | src.order.order_executor | [AUDIT] 8809350321900 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+89140:2026-04-08 07:21:07 | INFO     | 4c53b5d6 | src.order.order_executor | [AUDIT] 8801068922738 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+89141:2026-04-08 07:21:07 | INFO     | 4c53b5d6 | src.order.order_executor | [AUDIT] 8801007034980 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+89142:2026-04-08 07:21:07 | INFO     | 4c53b5d6 | src.order.order_executor | [AUDIT] 8801155834616 PYUN_QTY=1 ORD_UNIT_QTY=5 TOT_QTY=5 (need=5) method=direct_api
+89143:2026-04-08 07:21:07 | INFO     | 4c53b5d6 | src.order.order_executor | [AUDIT] 8801047224341 PYUN_QTY=1 ORD_UNIT_QTY=3 TOT_QTY=3 (need=3) method=direct_api
+89144:2026-04-08 07:21:07 | INFO     | 4c53b5d6 | src.order.order_executor | [AUDIT] 8801073112278 PYUN_QTY=1 ORD_UNIT_QTY=16 TOT_QTY=16 (need=16) method=direct_api
+89145:2026-04-08 07:21:07 | INFO     | 4c53b5d6 | src.order.order_executor | [AUDIT] 8801045857107 PYUN_QTY=1 ORD_UNIT_QTY=12 TOT_QTY=12 (need=12) method=direct_api
+89146:2026-04-08 07:21:07 | INFO     | 4c53b5d6 | src.order.order_executor | [AUDIT] 8801045522678 PYUN_QTY=1 ORD_UNIT_QTY=4 TOT_QTY=4 (need=4) method=direct_api
+89147:2026-04-08 07:21:07 | INFO     | 4c53b5d6 | src.order.order_executor | [AUDIT] 8801043015226 PYUN_QTY=1 ORD_UNIT_QTY=5 TOT_QTY=5 (need=3) method=direct_api
+89148:2026-04-08 07:21:07 | INFO     | 4c53b5d6 | src.order.order_executor | [AUDIT] 8801045892344 PYUN_QTY=2 ORD_UNIT_QTY=1 TOT_QTY=2 (need=2) method=direct_api
+89149:2026-04-08 07:21:07 | INFO     | 4c53b5d6 | src.order.order_executor | [AUDIT] 8809015115455 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+89150:2026-04-08 07:21:07 | INFO     | 4c53b5d6 | src.order.order_executor | [AUDIT] 8809015115448 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+89151:2026-04-08 07:21:07 | INFO     | 4c53b5d6 | src.order.order_executor | [AUDIT] 8809015115424 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+89152:2026-04-08 07:21:07 | ERROR    | 4c53b5d6 | src.order.order_executor | [BLOCK/unit-qty] 8801121043561 매일)피크닉사과240ml mid=039 unit=1 qty=3 method=direct_api — 묶음 의심 카테고리 + unit<=1 → 발주 거부 (BGF 실제 입수 불일치 가능)
+89153:2026-04-08 07:21:07 | INFO     | 4c53b5d6 | src.order.order_executor | [AUDIT] 8806371360352 PYUN_QTY=2 ORD_UNIT_QTY=1 TOT_QTY=2 (need=2) method=direct_api
+89154:2026-04-08 07:21:07 | INFO     | 4c53b5d6 | src.order.order_executor | [AUDIT] 8801115139836 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+89155:2026-04-08 07:21:07 | INFO     | 4c53b5d6 | src.order.order_executor | [AUDIT] 8801104666176 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+89156:2026-04-08 07:21:07 | INFO     | 4c53b5d6 | src.order.order_executor | [AUDIT] 8809520491587 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+89157:2026-04-08 07:21:07 | INFO     | 4c53b5d6 | src.order.order_executor | [AUDIT] 0000088002798 PYUN_QTY=2 ORD_UNIT_QTY=4 TOT_QTY=8 (need=8) method=direct_api
+89158:2026-04-08 07:21:07 | INFO     | 4c53b5d6 | src.order.order_executor | [AUDIT] 8809846901548 PYUN_QTY=3 ORD_UNIT_QTY=1 TOT_QTY=3 (need=3) method=direct_api
+89159:2026-04-08 07:21:07 | INFO     | 4c53b5d6 | src.order.order_executor | [AUDIT] 8801155000608 PYUN_QTY=2 ORD_UNIT_QTY=1 TOT_QTY=2 (need=2) method=direct_api
+89160:2026-04-08 07:21:07 | INFO     | 4c53b5d6 | src.order.order_executor | [AUDIT] 8801069173788 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+89161:2026-04-08 07:21:07 | INFO     | 4c53b5d6 | src.order.order_executor | [AUDIT] 8809311399184 PYUN_QTY=1 ORD_UNIT_QTY=4 TOT_QTY=4 (need=4) method=direct_api
+89162:2026-04-08 07:21:07 | INFO     | 4c53b5d6 | src.order.order_executor | [AUDIT] 4977042240922 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+89163:2026-04-08 07:21:07 | INFO     | 4c53b5d6 | src.order.order_executor | [AUDIT] 8801260114474 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+89164:2026-04-08 07:21:07 | INFO     | 4c53b5d6 | src.order.order_executor | [AUDIT] 8801236225449 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+89165:2026-04-08 07:21:07 | INFO     | 4c53b5d6 | src.order.order_executor | [AUDIT] 0000088022680 PYUN_QTY=1 ORD_UNIT_QTY=10 TOT_QTY=10 (need=3) method=direct_api
+89166:2026-04-08 07:21:07 | INFO     | 4c53b5d6 | src.order.order_executor | [AUDIT] 0000088022666 PYUN_QTY=1 ORD_UNIT_QTY=10 TOT_QTY=10 (need=3) method=direct_api
+89167:2026-04-08 07:21:07 | INFO     | 4c53b5d6 | src.order.order_executor | [AUDIT] 8801116007257 PYUN_QTY=1 ORD_UNIT_QTY=10 TOT_QTY=10 (need=3) method=direct_api
+89168:2026-04-08 07:21:07 | INFO     | 4c53b5d6 | src.order.order_executor | [AUDIT] 5010278103759 PYUN_QTY=6 ORD_UNIT_QTY=1 TOT_QTY=6 (need=6) method=direct_api
+90135:2026-04-08 07:26:05 | INFO     | 862b795f | src.order.direct_api_saver | [DirectApiSaver] 0채움 컬럼: ORD_MUL_QTY(meta:INT), OLD_PYUN_QTY(known), EVT_DC_RATE(known), RB_AMT(known)
+90207:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8800271905675 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+90208:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8800336394468 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+90209:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8800336394369 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+90210:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8800336394680 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+90211:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8809196620854 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+90212:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8800279675815 PYUN_QTY=2 ORD_UNIT_QTY=1 TOT_QTY=2 (need=2) method=direct_api
+90213:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8800271902520 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+90214:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8800279675778 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+90215:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8800271903480 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+90216:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8800279675730 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+90217:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8800279676911 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+90218:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8800336390651 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+90219:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8800279676904 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+90220:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8800279675808 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+90221:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8800271903473 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+90222:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8800279675723 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+90223:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8800336392266 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+90224:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8800336391986 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+90225:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8801771035619 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+90226:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8800271904449 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+90227:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8800271904432 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+90228:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8800336392068 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+90229:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8800271904968 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+90230:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8800336391979 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+90231:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8800336394314 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+90232:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8801771035961 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+90233:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8800336394246 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+90234:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8800336394277 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+90235:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8800336394789 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+90236:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8800336394901 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+90237:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8800336392501 PYUN_QTY=2 ORD_UNIT_QTY=1 TOT_QTY=2 (need=2) method=direct_api
+90238:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8800279671909 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+90239:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8800279679073 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+90240:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8800271900144 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+90241:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8801771303336 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+90242:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8801771031574 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+90243:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8800336392495 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+90244:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8800271904609 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+90245:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8801771304180 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+90246:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8800336394109 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+90247:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8800336394093 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+90248:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8800271905286 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+90249:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8801771304388 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+90250:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8800271905408 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+90251:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8801771304371 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+90252:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8809196620939 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+90253:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8801068927320 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+90254:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8801068932003 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+90255:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8801068936148 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+90256:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8801771304227 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+90257:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8809692959632 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+90258:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8809692959649 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+90259:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8801068939071 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+90260:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8801771304418 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+90261:2026-04-08 07:26:11 | ERROR    | 862b795f | src.order.order_executor | [BLOCK/unit-qty] 8800281969810 면)토마토치즈스파게티 mid=006 unit=1 qty=1 method=direct_api — 묶음 의심 카테고리 + unit<=1 → 발주 거부 (BGF 실제 입수 불일치 가능)
+90262:2026-04-08 07:26:11 | ERROR    | 862b795f | src.order.order_executor | [BLOCK/unit-qty] 8800348940332 면)나폴리탄스파게티 mid=006 unit=1 qty=1 method=direct_api — 묶음 의심 카테고리 + unit<=1 → 발주 거부 (BGF 실제 입수 불일치 가능)
+90263:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8800247190364 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+90264:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8800247190449 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+90265:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8801068923001 PYUN_QTY=4 ORD_UNIT_QTY=1 TOT_QTY=4 (need=4) method=direct_api
+90266:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8801068402285 PYUN_QTY=3 ORD_UNIT_QTY=1 TOT_QTY=3 (need=3) method=direct_api
+90267:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8809895799004 PYUN_QTY=3 ORD_UNIT_QTY=1 TOT_QTY=3 (need=3) method=direct_api
+90268:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8801068933840 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+90269:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8801068086003 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+90270:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8801062475735 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+90271:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8801062475728 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+90272:2026-04-08 07:26:11 | ERROR    | 862b795f | src.order.order_executor | [BLOCK/unit-qty] 8801753116725 연세)EBS국어생크림빵 mid=014 unit=1 qty=1 method=direct_api — 묶음 의심 카테고리 + unit<=1 → 발주 거부 (BGF 실제 입수 불일치 가능)
+90273:2026-04-08 07:26:11 | ERROR    | 862b795f | src.order.order_executor | [BLOCK/unit-qty] 8809523625651 참조은)버터모찌 mid=014 unit=1 qty=1 method=direct_api — 묶음 의심 카테고리 + unit<=1 → 발주 거부 (BGF 실제 입수 불일치 가능)
+90274:2026-04-08 07:26:11 | ERROR    | 862b795f | src.order.order_executor | [BLOCK/unit-qty] 8801068940121 텔레토비)나나의점보롤 mid=014 unit=1 qty=1 method=direct_api — 묶음 의심 카테고리 + unit<=1 → 발주 거부 (BGF 실제 입수 불일치 가능)
+90275:2026-04-08 07:26:11 | ERROR    | 862b795f | src.order.order_executor | [BLOCK/unit-qty] 8809523625439 참조은)두바이쫀득초코 mid=014 unit=1 qty=1 method=direct_api — 묶음 의심 카테고리 + unit<=1 → 발주 거부 (BGF 실제 입수 불일치 가능)
+90276:2026-04-08 07:26:11 | ERROR    | 862b795f | src.order.order_executor | [BLOCK/unit-qty] 8801019307089 해태)크림웨하스 mid=015 unit=1 qty=3 method=direct_api — 묶음 의심 카테고리 + unit<=1 → 발주 거부 (BGF 실제 입수 불일치 가능)
+90277:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8801392060632 PYUN_QTY=5 ORD_UNIT_QTY=1 TOT_QTY=5 (need=5) method=direct_api
+90278:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8801068922738 PYUN_QTY=2 ORD_UNIT_QTY=1 TOT_QTY=2 (need=2) method=direct_api
+90279:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8803465070487 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+90280:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8809130942158 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+90281:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8801047224341 PYUN_QTY=1 ORD_UNIT_QTY=3 TOT_QTY=3 (need=3) method=direct_api
+90282:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8801128503488 PYUN_QTY=1 ORD_UNIT_QTY=18 TOT_QTY=18 (need=18) method=direct_api
+90283:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8801043060356 PYUN_QTY=1 ORD_UNIT_QTY=4 TOT_QTY=4 (need=4) method=direct_api
+90284:2026-04-08 07:26:11 | ERROR    | 862b795f | src.order.order_executor | [BLOCK/unit-qty] 8801043016049 농심)짜파게티큰사발컵 mid=032 unit=1 qty=3 method=direct_api — 묶음 의심 카테고리 + unit<=1 → 발주 거부 (BGF 실제 입수 불일치 가능)
+90285:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8801007778280 PYUN_QTY=3 ORD_UNIT_QTY=1 TOT_QTY=3 (need=3) method=direct_api
+90286:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8809405270009 PYUN_QTY=3 ORD_UNIT_QTY=1 TOT_QTY=3 (need=3) method=direct_api
+90287:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8801045290324 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+90288:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8809367693199 PYUN_QTY=2 ORD_UNIT_QTY=1 TOT_QTY=2 (need=2) method=direct_api
+90289:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8809015115455 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+90290:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8809015115448 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+90291:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8809015115356 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+90292:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 4897036691120 PYUN_QTY=1 ORD_UNIT_QTY=6 TOT_QTY=6 (need=6) method=direct_api
+90293:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8801033770357 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+90294:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8809286695106 PYUN_QTY=1 ORD_UNIT_QTY=6 TOT_QTY=6 (need=6) method=direct_api
+90295:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8806371360352 PYUN_QTY=4 ORD_UNIT_QTY=1 TOT_QTY=4 (need=4) method=direct_api
+90296:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8801056251963 PYUN_QTY=3 ORD_UNIT_QTY=1 TOT_QTY=3 (need=3) method=direct_api
+90297:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8809286695113 PYUN_QTY=1 ORD_UNIT_QTY=6 TOT_QTY=6 (need=3) method=direct_api
+90298:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8801128945745 PYUN_QTY=1 ORD_UNIT_QTY=6 TOT_QTY=6 (need=3) method=direct_api
+90299:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8801056175955 PYUN_QTY=1 ORD_UNIT_QTY=6 TOT_QTY=6 (need=3) method=direct_api
+90300:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8801097334212 PYUN_QTY=1 ORD_UNIT_QTY=6 TOT_QTY=6 (need=3) method=direct_api
+90301:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8801155000530 PYUN_QTY=2 ORD_UNIT_QTY=1 TOT_QTY=2 (need=2) method=direct_api
+90302:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8801104241373 PYUN_QTY=2 ORD_UNIT_QTY=1 TOT_QTY=2 (need=2) method=direct_api
+90303:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8809520491587 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+90304:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8801155731632 PYUN_QTY=3 ORD_UNIT_QTY=1 TOT_QTY=3 (need=3) method=direct_api
+90305:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8801104946933 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+90306:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8801115114390 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+90307:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8809197840107 PYUN_QTY=1 ORD_UNIT_QTY=12 TOT_QTY=12 (need=3) method=direct_api
+90308:2026-04-08 07:26:11 | ERROR    | 862b795f | src.order.order_executor | [BLOCK/unit-qty] 8809197840336 del)벤티컵얼음400g mid=048 unit=1 qty=3 method=direct_api — 묶음 의심 카테고리 + unit<=1 → 발주 거부 (BGF 실제 입수 불일치 가능)
+90309:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8801119834201 PYUN_QTY=1 ORD_UNIT_QTY=6 TOT_QTY=6 (need=6) method=direct_api
+90310:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8801858048198 PYUN_QTY=1 ORD_UNIT_QTY=6 TOT_QTY=6 (need=6) method=direct_api
+90311:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8801119773517 PYUN_QTY=1 ORD_UNIT_QTY=6 TOT_QTY=6 (need=6) method=direct_api
+90312:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8801858042769 PYUN_QTY=1 ORD_UNIT_QTY=4 TOT_QTY=4 (need=4) method=direct_api
+90313:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8809848530234 PYUN_QTY=2 ORD_UNIT_QTY=1 TOT_QTY=2 (need=2) method=direct_api
+90314:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8801166027236 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+90315:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8801236225449 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+90316:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 0000088022666 PYUN_QTY=1 ORD_UNIT_QTY=10 TOT_QTY=10 (need=3) method=direct_api
+90317:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 0000088014128 PYUN_QTY=1 ORD_UNIT_QTY=10 TOT_QTY=10 (need=3) method=direct_api
+90318:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8801116002986 PYUN_QTY=3 ORD_UNIT_QTY=1 TOT_QTY=3 (need=3) method=direct_api
+90319:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8801116022731 PYUN_QTY=1 ORD_UNIT_QTY=10 TOT_QTY=10 (need=3) method=direct_api
+90320:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 0000088011967 PYUN_QTY=1 ORD_UNIT_QTY=10 TOT_QTY=10 (need=3) method=direct_api
+90321:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8801116001033 PYUN_QTY=1 ORD_UNIT_QTY=10 TOT_QTY=10 (need=3) method=direct_api
+90322:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8801116052011 PYUN_QTY=1 ORD_UNIT_QTY=10 TOT_QTY=10 (need=3) method=direct_api
+90323:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8801116005598 PYUN_QTY=3 ORD_UNIT_QTY=1 TOT_QTY=3 (need=3) method=direct_api
+90324:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8801116001712 PYUN_QTY=1 ORD_UNIT_QTY=10 TOT_QTY=10 (need=3) method=direct_api
+90325:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 0000088012087 PYUN_QTY=3 ORD_UNIT_QTY=1 TOT_QTY=3 (need=3) method=direct_api
+90326:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8801116015887 PYUN_QTY=1 ORD_UNIT_QTY=10 TOT_QTY=10 (need=3) method=direct_api
+90327:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8801116013319 PYUN_QTY=1 ORD_UNIT_QTY=10 TOT_QTY=10 (need=3) method=direct_api
+90328:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8801116012435 PYUN_QTY=3 ORD_UNIT_QTY=1 TOT_QTY=3 (need=3) method=direct_api
+90329:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 0000088024134 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+90330:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8806723002312 PYUN_QTY=2 ORD_UNIT_QTY=1 TOT_QTY=2 (need=2) method=direct_api
+90331:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8806265000685 PYUN_QTY=1 ORD_UNIT_QTY=1 TOT_QTY=1 (need=1) method=direct_api
+90332:2026-04-08 07:26:11 | INFO     | 862b795f | src.order.order_executor | [AUDIT] 8809599360524 PYUN_QTY=2 ORD_UNIT_QTY=1 TOT_QTY=2 (need=2) method=direct_api
+90564:2026-04-08 07:55:48 | INFO     | -------- | src.order.order_executor | [AUDIT] 8801043036016 PYUN_QTY=5 ORD_UNIT_QTY=1 TOT_QTY=5 (need=5) method=direct_api
+90566:2026-04-08 07:55:48 | INFO     | -------- | src.order.order_executor | [AUDIT] 8809112345678 PYUN_QTY=2 ORD_UNIT_QTY=6 TOT_QTY=12 (need=12) method=direct_api
+90567:2026-04-08 07:55:48 | INFO     | -------- | src.order.order_executor | [AUDIT] 8801043036016 PYUN_QTY=5 ORD_UNIT_QTY=1 TOT_QTY=5 (need=5) method=direct_api
+90569:2026-04-08 07:55:48 | INFO     | -------- | src.order.order_executor | [AUDIT] 8809112345678 PYUN_QTY=2 ORD_UNIT_QTY=6 TOT_QTY=12 (need=12) method=direct_api
+90574:2026-04-08 07:55:48 | INFO     | -------- | src.order.order_executor | [AUDIT] 8800100200300 PYUN_QTY=3 ORD_UNIT_QTY=1 TOT_QTY=3 (need=3) method=direct_api
+90578:2026-04-08 07:55:48 | INFO     | -------- | src.order.order_executor | [AUDIT] 8801043036016 PYUN_QTY=5 ORD_UNIT_QTY=1 TOT_QTY=5 (need=5) method=selenium
+90580:2026-04-08 07:55:48 | INFO     | -------- | src.order.order_executor | [AUDIT] 8809112345678 PYUN_QTY=5 ORD_UNIT_QTY=1 TOT_QTY=5 (need=12) method=selenium
+90583:2026-04-08 07:55:48 | INFO     | -------- | src.order.order_executor | [AUDIT] 8801043036016 PYUN_QTY=5 ORD_UNIT_QTY=1 TOT_QTY=5 (need=5) method=batch_grid
+90584:2026-04-08 07:55:48 | INFO     | -------- | src.order.order_executor | [AUDIT] 8809112345678 PYUN_QTY=2 ORD_UNIT_QTY=6 TOT_QTY=12 (need=12) method=batch_grid
+90585:2026-04-08 07:55:48 | INFO     | -------- | src.order.order_executor | [AUDIT] 8800100200300 PYUN_QTY=3 ORD_UNIT_QTY=1 TOT_QTY=3 (need=3) method=batch_grid
+90589:2026-04-08 07:55:48 | INFO     | -------- | src.order.order_executor | [AUDIT] 8800100200300 PYUN_QTY=5 ORD_UNIT_QTY=1 TOT_QTY=5 (need=3) method=selenium
+90638:2026-04-08 07:55:52 | INFO     | -------- | src.order.order_executor | [AUDIT] 8801043036016 PYUN_QTY=5 ORD_UNIT_QTY=1 TOT_QTY=5 (need=5) method=batch_grid
+90640:2026-04-08 07:55:52 | INFO     | -------- | src.order.order_executor | [AUDIT] 8809112345678 PYUN_QTY=2 ORD_UNIT_QTY=6 TOT_QTY=12 (need=12) method=batch_grid
+90641:2026-04-08 07:55:52 | INFO     | -------- | src.order.order_executor | [AUDIT] 8800100200300 PYUN_QTY=3 ORD_UNIT_QTY=1 TOT_QTY=3 (need=3) method=batch_grid
+90652:2026-04-08 07:55:54 | INFO     | -------- | src.order.order_executor | [AUDIT] 8801043036016 PYUN_QTY=5 ORD_UNIT_QTY=1 TOT_QTY=5 (need=5) method=selenium
+90654:2026-04-08 07:55:54 | INFO     | -------- | src.order.order_executor | [AUDIT] 8809112345678 PYUN_QTY=5 ORD_UNIT_QTY=1 TOT_QTY=5 (need=12) method=selenium
+90656:2026-04-08 07:55:54 | INFO     | -------- | src.order.order_executor | [AUDIT] 8800100200300 PYUN_QTY=5 ORD_UNIT_QTY=1 TOT_QTY=5 (need=3) method=selenium
