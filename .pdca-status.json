@@ -1,4 +1,12 @@
 {
+  "batch-sync-zero-sales-guard": {
+    "phase": "archived",
+    "matchRate": 95,
+    "iterationCount": 0,
+    "startedAt": "2026-04-07T16:30:00Z",
+    "archivedAt": "2026-04-07T17:00:00Z",
+    "archivedTo": "docs/archive/2026-04/batch-sync-zero-sales-guard/"
+  },
   "scheduler-auto-reload": {
     "phase": "archived",
     "matchRate": 100,

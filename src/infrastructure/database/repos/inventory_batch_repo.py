@@ -1101,6 +1101,7 @@ class InventoryBatchRepository(BaseRepository):
             checked = len(batch_totals)
             adjusted = 0
             consumed_count = 0
+            protected_skipped = 0  # batch-sync-zero-sales-guard
 
             # 3) 상품별 FIFO 보정
             for item_cd, batch_total in batch_totals.items():
@@ -1111,15 +1112,49 @@ class InventoryBatchRepository(BaseRepository):
 
                 # batch_total > stock_qty -> 초과분 FIFO 차감
                 to_consume = batch_total - stock_qty
+
+                # ★ batch-sync-zero-sales-guard (2026-04-07):
+                # 만료 24h 이내 active 배치는 ExpiryChecker가 처리하도록 보호.
+                # 차감 대상에서 정상 배치(만료 24h 이상)를 우선 사용하고,
+                # 정상 배치 잔량이 충분하면 임박 배치는 보호.
+                # 0판매 + 만료 임박 상품이 stock=0 보고로 잘못 consumed 마킹되어
+                # 폐기 인지가 누락되는 사례 차단.
+                cursor.execute(
+                    """
+                    SELECT COALESCE(SUM(remaining_qty), 0) AS normal_qty
+                    FROM inventory_batches
+                    WHERE item_cd = ? AND store_id = ? AND status = ?
+                      AND remaining_qty > 0
+                      AND (expiry_date IS NULL
+                           OR julianday(expiry_date) - julianday('now') >= 1.0)
+                    """,
+                    (item_cd, store_id, BATCH_STATUS_ACTIVE),
+                )
+                normal_qty = int(cursor.fetchone()[0] or 0)
+
+                if normal_qty == 0:
+                    # 모든 active 배치가 만료 임박 → 보류 (ExpiryChecker가 처리)
+                    protected_skipped += 1
+                    continue
+
+                # 정상 배치만큼만 차감 (임박 배치는 보호)
+                if to_consume > normal_qty:
+                    to_consume = normal_qty
+
                 adjusted += 1
 
+                # 만료 임박 배치가 마지막에 차감되도록 정렬 (FIFO 우선, 임박 후순위)
                 cursor.execute(
                     """
                     SELECT id, remaining_qty
                     FROM inventory_batches
                     WHERE item_cd = ? AND store_id = ? AND status = ?
                       AND remaining_qty > 0
-                    ORDER BY receiving_date ASC, id ASC
+                    ORDER BY
+                        CASE WHEN expiry_date IS NOT NULL
+                             AND julianday(expiry_date) - julianday('now') < 1.0
+                             THEN 1 ELSE 0 END,
+                        receiving_date ASC, id ASC
                     """,
                     (item_cd, store_id, BATCH_STATUS_ACTIVE),
                 )
@@ -1150,11 +1185,12 @@ class InventoryBatchRepository(BaseRepository):
 
             conn.commit()
 
-            if adjusted > 0:
+            if adjusted > 0 or protected_skipped > 0:
                 logger.info(
                     f"[BatchSync] {store_id}: "
                     f"점검 {checked}건, 보정 {adjusted}건, "
-                    f"consumed {consumed_count}건"
+                    f"consumed {consumed_count}건, "
+                    f"만료임박 보호 {protected_skipped}건"
                 )
 
             # 4) 푸드 유령재고 정리: active 배치 없는데 RI > 0인 푸드 상품 → stock_qty = 0

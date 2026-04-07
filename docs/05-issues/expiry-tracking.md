@@ -143,6 +143,51 @@
 
 ---
 
+## [WATCHING] BatchSync 0판매 + 만료 임박 → 잘못된 consumed 마킹 (04-07 수정)
+
+**문제**: `sync_remaining_with_stock`이 stock_qty=0 보고 active 배치를 consumed 마킹. 만료 24h 이내 배치도 차감 대상에 포함돼 폐기 인지 실패.
+**영향**: 0판매 + 1일 유통기한 상품(도시락 001~005, 빵 012)이 매일 무인지 폐기 가능. 점주 알림 누락 + K2 통계 왜곡.
+**설계 의도**: BatchSync는 정상 판매 후 잔량 정합성 보정용. 만료 임박 상품의 폐기 인지는 ExpiryChecker가 담당해야 함.
+
+**재현 사례 (46513 04-07)**:
+- 도)한끼만족뉴함박치킨2 (8801771034445)
+- 04-06 1개 입고 (id=28505, expiry=04-07 14:00)
+- 04-06 0개 판매 (BGF 응답에 sales row 없음)
+- 04-07 07:08 BatchSync: stock=0 보고 active → consumed
+- 04-07 13:52 ExpiryChecker: active만 검색 → 누락 → 14:00 폐기 대상 0건
+- 04-07 14:00 알림 없음 + waste_slip_collector 못 잡음
+
+### 해결 방향 (옵션 A+C)
+- A: `sync_remaining_with_stock`에 만료 24h 이내 배치 보호 가드 추가
+- C: ExpiryChecker가 24h 이내 만료된 consumed 배치를 폐기 후보로 회수 (안전망)
+
+### 시도 1: normal_qty 기반 가드 + FIFO 정렬 보강 (04-07)
+- **왜**: 만료 임박 배치를 stock=0 보고로 잘못 consumed 마킹하던 로직 차단
+- **조치**:
+  1. normal_qty(만료 24h 이상 active 합) 조회
+  2. normal_qty == 0 → skip + protected_skipped 카운트
+  3. to_consume = min(to_consume, normal_qty) → 정상 배치 양 한도
+  4. FIFO 정렬에 만료 임박 후순위 (CASE WHEN)
+  5. 회귀 테스트 5개
+- **결과**: ✓ 5/5 통과. TDD로 첫 구현(`protected_qty >= to_consume`)의 결함을 즉시 잡고 수정
+- **실패 패턴**: (신규) zero-stock-imminent-expiry-misconsumed
+
+### 교훈
+- **stock=0 ≠ 모두 팔림**: BGF가 0판매 행을 응답에 포함 안 함 → daily_sales 누락 → BatchSync 잘못 추론
+- **부정 vs 긍정 변수**: protected_qty 대신 normal_qty가 FIFO 차감 한도와 자연 일치
+- **TDD 효과**: 회귀 테스트가 알고리즘 결함을 첫 실행에서 잡음
+
+### 검증 체크포인트
+- [x] 가드 추가 + 5/5 회귀 테스트 통과
+- [ ] scheduler-auto-reload로 자동 적용 확인 (코드 변경 감지)
+- [ ] 다음 14:00 ExpiryChecker가 0판매 만료 상품 폐기 후보 인지
+
+**관련 작업 (archive)**: docs/archive/2026-04/batch-sync-zero-sales-guard/
+
+**관련 Plan**: [docs/01-plan/features/batch-sync-zero-sales-guard.plan.md](../01-plan/features/batch-sync-zero-sales-guard.plan.md)
+
+---
+
 ## [WATCHING] D-1 부스트 발주 execute_single_order 누락 + scheduler 모듈 캐시 (04-06 ~ 04-07)
 
 **문제**: 매일 14:00 D-1 2차 배송 보정에서 부스트 대상이 있는 매장(주로 49965)이 `No module named 'src.collectors.bgf_collector'` 로 실패. boost_orders 미실행.

@@ -21,3 +21,4 @@
 | d1-bgf-collector-import-fix | 100% | 2026-04-07 |
 | k4-non-food-sentinel-filter | 100% | 2026-04-07 |
 | scheduler-auto-reload | 100% | 2026-04-07 |
+| batch-sync-zero-sales-guard | 95% | 2026-04-07 |
