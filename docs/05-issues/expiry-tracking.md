@@ -143,6 +143,38 @@
 
 ---
 
+## [WATCHING] 슬롯 기반 폐기 추적 검증 도입 (04-07)
+
+**문제**: 기존 폐기 검증은 일자(date) 단위 매칭만 함. 같은 상품이 1차(02:00 만료)와 2차(14:00 만료) 박스가 동시 존재할 때 어느 박스가 폐기됐는지 구분 불가. 또한 tracking base가 `status='expired'`만이라 consumed로 잘못 마킹된 배치(batch-sync-zero-sales-guard 사건)는 검증조차 안 됨.
+**영향**: 추적 시스템 정확도 측정 불가능. 1차 박스 누락이 2차 매칭으로 위장. 사각지대 81건/매장 발생.
+**설계 의도**: BGF 점주 입력 시각(`waste_slips.cre_ymdhms`)으로 슬롯 자동 분류 + tracking base 확장으로 양방향 가드.
+
+### 시도 1: get_slot_comparison_data + status != active (04-07)
+- **조치**:
+  1. `_classify_slot(cre_ymdhms)` 헬퍼 (02~13→2am, 14~01→2pm)
+  2. `get_slot_comparison_data` 신규 (waste_slips JOIN + 슬롯별 set 비교)
+  3. `verify_date_by_slot` service 진입점
+  4. `_get_tracking_inventory_batches` `status='expired'` → `status != 'active'` (사각지대 해소)
+- **결과**: ✓ 8/8 회귀 테스트 통과, 4매장 라이브 검증, 함박치킨 사건 케이스 정확히 잡힘
+- **새 발견**: 47863 02시 누락 7건 (false negative, 별도 조사 가치)
+- **실패 패턴**: (해소) day-only-verification-no-slot-distinction
+
+### 교훈
+- 데이터는 이미 있었음 (cre_ymdhms 14자리) — JOIN 1줄로 슬롯 분류
+- 사각지대는 양방향 가드 필요: BatchSync 측(어제) + 검증 측(오늘)
+- base 확장이 진짜 운영 신호(47863 7건 누락) 발견의 열쇠
+
+### 검증 체크포인트
+- [x] 8/8 회귀 테스트
+- [x] 4매장 라이브 검증
+- [x] 8801771034445 사건 케이스 사각지대 해소
+- [ ] 47863 02시 누락 7건 원인 조사 (별도)
+- [ ] verify_date_deep 자동 호출 통합 (별도)
+
+**관련 작업 (archive)**: docs/archive/2026-04/waste-verification-slot-based/
+
+---
+
 ## [WATCHING] BatchSync 0판매 + 만료 임박 → 잘못된 consumed 마킹 (04-07 수정)
 
 **문제**: `sync_remaining_with_stock`이 stock_qty=0 보고 active 배치를 consumed 마킹. 만료 24h 이내 배치도 차감 대상에 포함돼 폐기 인지 실패.

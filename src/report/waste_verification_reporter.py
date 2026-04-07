@@ -126,6 +126,9 @@ class WasteVerificationReporter:
             if not cursor.fetchone():
                 return []
 
+            # waste-verification-slot-based (2026-04-07):
+            # status='expired'만 보던 사각지대 해소 → 'consumed'/'disposed'/'expired' 모두 포함.
+            # batch-sync-zero-sales-guard 사건처럼 잘못 consumed 마킹된 배치도 검증 base에 포함.
             cursor.execute(
                 """
                 SELECT
@@ -134,8 +137,8 @@ class WasteVerificationReporter:
                     COALESCE(remaining_qty, 0) as qty,
                     status
                 FROM inventory_batches
-                WHERE expiry_date = ?
-                  AND status = 'expired'
+                WHERE date(expiry_date) = ?
+                  AND status != 'active'
                 ORDER BY item_cd
                 """,
                 (target_date,),
@@ -144,6 +147,146 @@ class WasteVerificationReporter:
         except Exception as e:
             logger.warning(f"inventory_batches 조회 실패: {e}")
             return []
+
+    # ================================================================
+    # 슬롯 기반 검증 (waste-verification-slot-based, 2026-04-07)
+    # ================================================================
+
+    @staticmethod
+    def _classify_slot(cre_ymdhms: Optional[str]) -> str:
+        """BGF 점주 입력 시각(cre_ymdhms 14자리) → 슬롯 분류.
+
+        Returns:
+            'slot_2am': 02:00 ~ 13:59 (1차 박스 폐기)
+            'slot_2pm': 14:00 ~ 다음날 01:59 (2차 박스 폐기)
+            'unclassified': 파싱 실패
+        """
+        if not cre_ymdhms or len(cre_ymdhms) != 14:
+            return "unclassified"
+        try:
+            hh = int(cre_ymdhms[8:10])
+        except ValueError:
+            return "unclassified"
+        if 2 <= hh <= 13:
+            return "slot_2am"
+        if hh >= 14 or hh < 2:
+            return "slot_2pm"
+        return "unclassified"
+
+    def get_slot_comparison_data(self, target_date: str) -> Dict[str, Any]:
+        """슬롯별(02시/14시) 폐기 추적 검증 데이터 조회.
+
+        BGF 입력 시각으로 슬롯 자동 분류 + tracking base에 status!=active 적용.
+
+        Returns:
+            {date, store_id, slot_2am, slot_2pm, unclassified, summary}
+        """
+        try:
+            conn = self.sales_repo._get_conn()
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+
+            # 1) BGF 폐기 (헤더 JOIN으로 cre_ymdhms 포함)
+            cursor.execute(
+                """
+                SELECT wsi.item_cd,
+                       COALESCE(wsi.item_nm, wsi.item_cd) AS item_nm,
+                       wsi.qty, ws.cre_ymdhms
+                FROM waste_slip_items wsi
+                JOIN waste_slips ws
+                  ON wsi.store_id = ws.store_id
+                 AND wsi.chit_date = ws.chit_date
+                 AND wsi.chit_no = ws.chit_no
+                WHERE wsi.chit_date = ?
+                """,
+                (target_date,),
+            )
+            slip_rows = [dict(r) for r in cursor.fetchall()]
+
+            # 슬롯별 BGF 폐기 분류
+            slip_by_slot: Dict[str, set] = {
+                "slot_2am": set(),
+                "slot_2pm": set(),
+                "unclassified": set(),
+            }
+            for row in slip_rows:
+                slot = self._classify_slot(row.get("cre_ymdhms"))
+                slip_by_slot[slot].add(row["item_cd"])
+
+            # 2) Tracking base (02:00 / 14:00 만료 + status != active)
+            cursor.execute(
+                """
+                SELECT DISTINCT item_cd
+                FROM inventory_batches
+                WHERE date(expiry_date) = ?
+                  AND time(expiry_date) = '02:00:00'
+                  AND status != 'active'
+                """,
+                (target_date,),
+            )
+            tracking_2am = {r["item_cd"] for r in cursor.fetchall()}
+
+            cursor.execute(
+                """
+                SELECT DISTINCT item_cd
+                FROM inventory_batches
+                WHERE date(expiry_date) = ?
+                  AND time(expiry_date) = '14:00:00'
+                  AND status != 'active'
+                """,
+                (target_date,),
+            )
+            tracking_2pm = {r["item_cd"] for r in cursor.fetchall()}
+
+            # 3) 슬롯별 매칭 계산
+            def _slot_metrics(tracking: set, slip: set) -> Dict[str, Any]:
+                matched = tracking & slip
+                slip_only = slip - tracking
+                tracking_only = tracking - slip
+                base = len(tracking)
+                return {
+                    "tracking_base": base,
+                    "slip_count": len(slip),
+                    "matched": len(matched),
+                    "slip_only": len(slip_only),
+                    "tracking_only": len(tracking_only),
+                    "match_rate": round(100 * len(matched) / base, 1) if base else 0.0,
+                    "slip_only_items": sorted(slip_only),
+                    "tracking_only_items": sorted(tracking_only),
+                }
+
+            slot_2am = _slot_metrics(tracking_2am, slip_by_slot["slot_2am"])
+            slot_2pm = _slot_metrics(tracking_2pm, slip_by_slot["slot_2pm"])
+
+            # 4) 종합 요약
+            total_base = slot_2am["tracking_base"] + slot_2pm["tracking_base"]
+            total_matched = slot_2am["matched"] + slot_2pm["matched"]
+            false_negative = slot_2am["slip_only"] + slot_2pm["slip_only"]
+            false_positive = slot_2am["tracking_only"] + slot_2pm["tracking_only"]
+
+            return {
+                "date": target_date,
+                "store_id": self.store_id,
+                "slot_2am": slot_2am,
+                "slot_2pm": slot_2pm,
+                "unclassified": len(slip_by_slot["unclassified"]),
+                "summary": {
+                    "overall_match_rate": (
+                        round(100 * total_matched / total_base, 1)
+                        if total_base
+                        else 0.0
+                    ),
+                    "false_negative": false_negative,
+                    "false_positive": false_positive,
+                },
+            }
+        except Exception as e:
+            logger.warning(f"[SlotVerify] {self.store_id} 슬롯 비교 실패: {e}")
+            return {
+                "date": target_date,
+                "store_id": self.store_id,
+                "error": str(e),
+            }
 
     # ================================================================
     # 비교 로직

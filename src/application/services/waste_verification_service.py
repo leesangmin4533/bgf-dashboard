@@ -257,6 +257,44 @@ class WasteVerificationService:
 
         return result
 
+    # ── 슬롯 기반 검증 (waste-verification-slot-based, 2026-04-07) ──
+    def verify_date_by_slot(self, target_date: str) -> Dict[str, Any]:
+        """슬롯별(02시/14시) 폐기 추적 검증.
+
+        BGF 폐기 입력 시각(cre_ymdhms)으로 1차/2차 박스를 자동 분류하고,
+        각 슬롯의 추적 정확도(matched/slip_only/tracking_only)를 측정.
+
+        Args:
+            target_date: 검증 대상 날짜 (YYYY-MM-DD)
+
+        Returns:
+            {date, store_id, slot_2am, slot_2pm, unclassified, summary}
+        """
+        try:
+            result = self.reporter.get_slot_comparison_data(target_date)
+        except Exception as e:
+            logger.warning(f"[SlotVerify] {self.store_id} 실패: {e}")
+            return {
+                "date": target_date,
+                "store_id": self.store_id,
+                "error": str(e),
+            }
+
+        if "error" not in result:
+            s2a = result["slot_2am"]
+            s2p = result["slot_2pm"]
+            logger.info(
+                f"[SlotVerify] {self.store_id} {target_date}: "
+                f"02시 base={s2a['tracking_base']} matched={s2a['matched']} "
+                f"누락={s2a['slip_only']} 과잉={s2a['tracking_only']} "
+                f"({s2a['match_rate']}%) | "
+                f"14시 base={s2p['tracking_base']} matched={s2p['matched']} "
+                f"누락={s2p['slip_only']} 과잉={s2p['tracking_only']} "
+                f"({s2p['match_rate']}%) | "
+                f"unclassified={result['unclassified']}"
+            )
+        return result
+
     def _get_daily_sales_disuse_count(self, target_date: str) -> int:
         """daily_sales에서 특정 날짜의 폐기 건수 (disuse_qty > 0인 행 수)"""
         try:
