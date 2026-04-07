@@ -261,13 +261,29 @@
 
 ---
 
-## [OPEN] collection.py 구문 오류 → 07:00 daily_job 전체 실패 (04-07)
+## [RESOLVED] collection.py 구문 오류 → 07:00 daily_job 전체 실패 (04-07 → 04-08 해소)
 
 **문제**: `collection.py` line 60의 `with` 블록 구문 오류로 07:00 4개 매장 daily_job 전부 실패 (1.5s 내 종료)
 **영향**: 2차 delivery_match 미실행 (07:04 retry에서 자동 복구됨), 발주 실행 지연
-**원인**: `expected an indented block after 'with' statement on line 60 (collection.py, line 63)` — 현재 코드는 정상이므로 .pyc 캐시 불일치 가능성
-**조치**: 07:04 HealthChecker retry로 복구 완료. 재발 방지를 위해 `__pycache__` 정리 또는 원인 파일 확인 필요
-**추적**: 폐기 추적 재설계와 직접 관련 없으나 delivery_match 실행에 영향
+**원인**: 편집 중간 상태가 .pyc로 컴파일된 후 소스 수정으로 일시적 불일치 — .pyc 자동 재컴파일로 자연 해소
+**조치**: 07:04 HealthChecker retry + 04-07 21:50 .pyc 갱신으로 해소
+
+### 검증 (04-08, 사후)
+- syntax OK, import OK, py_compile OK
+- .py(04-07 17:08) → .pyc(04-07 21:50) → 강제 재컴파일(04-08 08:51) 정상
+- **04-08 07:00 daily_job 4매장 전부 정상 실행**:
+  46513=102, 46704=165, 47863=119, 49965=150 order_tracking row
+- 04-09 검증 차단 위험 없음
+
+→ [RESOLVED]. food-underprediction 분석 작업이 04-08 정상 실행을 부수적으로 입증.
+
+## [PLANNED] 010 폐기율 상승 조사 (P2)
+
+**목표**: 카테고리 010 7일 폐기율 10.0%이 30일 평균 4.2% 대비 140% 상승
+**동기**: 자동 감지 (2026-04-07) -- waste_rate
+**선행조건**: 없음
+**예상 영향**: waste_rate 관련 파일
+
 
 ---
 

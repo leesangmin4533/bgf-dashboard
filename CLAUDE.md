@@ -64,7 +64,6 @@ BGF 리테일(CU 편의점) 다매장 자동 발주 시스템
 <!-- ISSUE_TABLE_START -->
 | 상태 | 우선순위 | 이슈 | 파일 | 비고 |
 |:---:|:---:|------|------|------|
-| OPEN | - | collection.py 구문 오류 → 07:00 daily_job 전체 실패 (04-07) | expiry-tracking.md | 없음 |
 | OPEN | - | product_details order_unit_qty 불일치 → 과발주 | order-execution.md |  |
 | WATCHING | - | 묶음 가드 우회 — 49965 햄/소시지·라면 과발주 (04-08 수정) | order-execution.md | 04-09 07:00 검증 대기 |
 | WATCHING | - | 푸드 체계적 과소예측 — WMA 전체-품절 imputation 추가 (04-08 수정) | order-execution.md | 04-09 07:00 검증 대기 |
