@@ -1,5 +1,31 @@
 # BGF 리테일 자동 발주 시스템
 
+## 📖 용어 사전 (Glossary) — Claude 응답 규칙
+
+**모든 응답에 다음 규칙 적용 (사용자가 비개발자임)**:
+
+1. **코드 용어 첫 등장 시 한국어 풀이 동반**:
+   - 예: `BatchSync(재고 정합성 동기화)`, `inventory_batches(박스 추적 테이블)`
+   - 두 번째 이후는 한국어만 또는 짧은 영문
+2. **파일 경로는 핵심만**:
+   - 예: `waste_verification_reporter.py` → "폐기 검증 보고서 코드"
+3. **요약/결정 섹션은 한국어 우선**, 코드 용어는 괄호 보조
+4. **사전에 없는 새 용어 등장 시** → 작업 마무리 단계에서 `docs/glossary.md`에 추가
+5. **사용자가 "쉽게 설명해줘"** 라고 하면 풀이 모드로 전환
+
+**사전 위치**: [`docs/glossary.md`](docs/glossary.md) (80+ 용어 등록, PDCA 작업 시 자동 확장)
+
+용어 검색 빠른 카테고리:
+- 🗂️ DB 테이블 (inventory_batches, waste_slips 등)
+- 🔧 핵심 모듈 (BatchSync, ExpiryChecker, WasteVerificationService)
+- 🎯 변수/개념 (mid_cd, cre_ymdhms, normal_qty 등)
+- 🏷️ 배치 상태 (active/consumed/expired/disposed)
+- 🕐 슬롯 (slot_2am, slot_2pm)
+- 📊 검증 메트릭 (matched, slip_only, tracking_only)
+- 📈 마일스톤 KPI (K1~K4)
+
+---
+
 ## 프로젝트 개요
 
 BGF 리테일(CU 편의점) 다매장 자동 발주 시스템
