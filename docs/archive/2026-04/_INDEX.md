@@ -18,3 +18,4 @@
 | collection-indent-fix | 100% | 2026-04-07 |
 | job-health-monitor | 99.5% | 2026-04-07 |
 | ops-metrics-waste-query-fix | 98% | 2026-04-07 |
+| d1-bgf-collector-import-fix | 100% | 2026-04-07 |

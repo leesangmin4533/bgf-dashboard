@@ -1,9 +1,11 @@
 {
   "d1-bgf-collector-import-fix": {
-    "phase": "do",
-    "matchRate": null,
+    "phase": "archived",
+    "matchRate": 100,
     "iterationCount": 0,
-    "startedAt": "2026-04-07T14:25:00Z"
+    "startedAt": "2026-04-07T14:25:00Z",
+    "archivedAt": "2026-04-07T14:45:00Z",
+    "archivedTo": "docs/archive/2026-04/d1-bgf-collector-import-fix/"
   },
   "ops-metrics-waste-query-fix": {
     "phase": "archived",
