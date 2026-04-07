@@ -68,6 +68,7 @@ BGF 리테일(CU 편의점) 다매장 자동 발주 시스템
 | OPEN | - | product_details order_unit_qty 불일치 → 과발주 | order-execution.md |  |
 | WATCHING | - | 묶음 가드 우회 — 49965 햄/소시지·라면 과발주 (04-08 수정) | order-execution.md | 04-09 07:00 검증 대기 |
 | WATCHING | - | 푸드 체계적 과소예측 — WMA 전체-품절 imputation 추가 (04-08 수정) | order-execution.md | 04-09 07:00 검증 대기 |
+| PLANNED | P2 | 푸드 has_stock 그룹 약한 과소예측 — 2차 원인 (04-08) | order-execution.md | bias -0.22~-0.39 잔존, stage_trace 추적 필요 |
 | WATCHING | - | BatchSync 0판매 + 만료 임박 → 잘못된 consumed 마킹 (04-07 수정) | expiry-tracking.md | scheduler-auto-reload로 자동 적용 확인 (코드 변경 감 |
 | WATCHING | - | D-1 부스트 발주 execute_single_order 누락 + scheduler 모듈 캐시 | expiry-tracking.md | scheduler 재시작 (운영자 수동) |
 | WATCHING | - | K4 expiry_time_mismatch 31일 NOT_MET — 식품 전용 재정의 (04-07 수정) | scheduling.md | 다음 milestone_snapshots K4 NOT_MET → ACHI |

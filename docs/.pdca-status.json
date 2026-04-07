@@ -1,6 +1,6 @@
 {
   "version": "2.0",
-  "lastUpdated": "2026-04-06T14:59:08.695Z",
+  "lastUpdated": "2026-04-07T22:18:26.069Z",
   "activeFeatures": [
     "scripts"
   ],
@@ -15,9 +15,14 @@
       "documents": {},
       "timestamps": {
         "started": "2026-04-06T14:58:54.515Z",
-        "lastUpdated": "2026-04-06T14:59:08.695Z"
+        "lastUpdated": "2026-04-07T22:18:26.069Z"
       },
-      "lastFile": "C:\\Users\\kanur\\OneDrive\\바탕 화면\\bbb\\bgf_auto\\scripts\\analyze_anomaly.py"
+      "lastFile": "C:\\Users\\kanur\\OneDrive\\바탕 화면\\bbb\\bgf_auto\\scripts\\_analyze_anomaly.py"
+    },
+    "food-underprediction-secondary": {
+      "phase": "plan",
+      "startedAt": "2026-04-08T08:30:00+09:00",
+      "planPath": "docs/01-plan/features/food-underprediction-secondary.plan.md"
     }
   },
   "pipeline": {
@@ -28,7 +33,7 @@
   "session": {
     "startedAt": "2026-04-06T14:58:04.061Z",
     "onboardingCompleted": false,
-    "lastActivity": "2026-04-06T14:59:08.695Z"
+    "lastActivity": "2026-04-07T22:18:26.069Z"
   },
   "history": [
     {
@@ -39,6 +44,24 @@
     },
     {
       "timestamp": "2026-04-06T14:59:08.695Z",
+      "feature": "scripts",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-07T04:41:49.526Z",
+      "feature": "scripts",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-07T22:17:53.169Z",
+      "feature": "scripts",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-07T22:18:26.069Z",
       "feature": "scripts",
       "phase": "do",
       "action": "updated"

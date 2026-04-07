@@ -46,6 +46,49 @@ Issue-Chain: order-execution#bundle-guard-bypass-49965
 
 ---
 
+## [PLANNED] 푸드 has_stock 그룹 약한 과소예측 — 2차 원인 (04-08 ~)
+
+**문제**: food-systemic-underprediction 1차 수정(ab98bfc) 후에도 has_stock 그룹(재고 있던 날 존재) 158건이 여전히 평균 bias **-0.22 ~ -0.39** 로 음수. 1차의 절반 강도지만 시스템 전반에 잔존.
+**우선순위**: P2
+**설계 의도**: 재고가 있었던 날은 imputation 정상 작동 → 예측이 실수요 근처여야 함
+**기여 KPI**: K1 (서비스율)
+
+### 사전 조사 (04-08)
+
+**예시 1: 8800279678588 (샌드위치, 49965)**
+- 7일 윈도우: 5일 stock>0 + 2일 stock=0, sale 합 5
+- 이론 imputation 후 WMA = 1.0 (avg_avail × 7일)
+- 실제 `predicted_qty=0.78`, `adjusted_qty=1.21`, `weekday_coef=1.18`, `association_boost=1.08`
+- → imputation 후에도 0.78 로 출력 → **WMA 후속 단계 또는 가중치에서 추가 -22% 발생**
+
+**예시 2: 8800336392501 (도시락, 49965)**
+- 7일 모든 day row 존재, **전부 `stock_qty=-1`** (음수 sentinel)
+- imputation 코드는 `stk>0` available, `stk==0` stockout 만 처리 → -1 은 어느 그룹에도 속하지 않음 → 보정 미적용
+- sum=10/7=1.43, predicted=1.23 → -14% bias
+- 매장별 stock_qty<0 비율: 46513=2, 46704=24, 47863=26, 49965=45 (14일치)
+  → 영향 적지만 명확한 사각지대
+
+### 의심 원인 후보
+1. **WMA 가중치** — 최근일 가중치가 더 크고, 최근일이 우연히 낮으면 평균 이하
+2. **outlier_handler** 가 정상 sale 을 outlier 로 클립하여 하향
+3. **holiday_wma_correction** — 비휴일에도 가중치 감쇄가 적용되는 경계 케이스
+4. **food/dessert 곱셈 체인의 음의 계수** — base × holiday × weather × weekday × season × assoc × trend 어딘가에서 < 1.0
+5. **weekday_coef** — 04 샌드위치 0.84 처럼 일부 카테고리/요일 조합이 -16% 까지 적용
+6. **stock_qty=-1 sentinel** 미인식 — imputation 사각지대 (영향 작음)
+7. **prediction_logs 컬럼 미채움** — `stage_trace`, `rule_order_qty`, `ml_order_qty`, `ml_weight_used` 가 NULL → 단계별 추적 불가가 디버깅 자체를 막음
+
+### 검증 필요
+- [ ] stage_trace 컬럼 채우기 (예측 단계별 값 로깅 활성화)
+- [ ] 8800279678588 에 대해 라이브 predict 실행하여 WMA→base→adjusted 단계별 값 추출
+- [ ] WMA 가중치 분포 확인 (최근일 weight 비중)
+- [ ] outlier_handler 가 푸드 카테고리에 활성화돼 있는지 + clip 발동률
+- [ ] mid_cd 별 weekday_coef 분포 (어느 카테고리/요일 조합이 < 1.0 인지)
+- [ ] stock_qty<0 sentinel 처리 정책 정의
+
+Issue-Chain: order-execution#food-underprediction-secondary
+
+---
+
 ## [WATCHING] 푸드 체계적 과소예측 — 도시락/김밥/샌드위치/햄버거 (04-08 ~)
 
 **문제**: 2026-04-08 49965점 푸드 카테고리 예측이 7일 평균 판매 대비 일관되게 낮음
