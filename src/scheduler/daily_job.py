@@ -927,13 +927,16 @@ def run_second_delivery_adjustment(store_id: Optional[str] = None) -> Dict[str, 
             # Phase 2: 부스트 대상 있을 때만 Selenium
             if result.boost_orders:
                 logger.info(f"[D-1] 부스트 대상 {len(result.boost_orders)}개 → Selenium 세션 시작")
+                collector = None
                 try:
-                    from src.collectors.bgf_collector import BGFCollector
-                    collector = BGFCollector(store_id=sid)
-                    driver = collector.login()
+                    # bgf-collector-import-fix: 존재하지 않는 BGFCollector → SalesCollector 사용
+                    # (SalesCollector._ensure_login() + get_driver() 2단계로 대체)
+                    from src.collectors.sales_collector import SalesCollector
+                    collector = SalesCollector(store_id=sid)
+                    collector._ensure_login()
+                    driver = collector.get_driver()
                     if driver:
                         exec_result = execute_boost_orders(result, driver)
-                        collector.close()
                         all_results[sid] = {
                             "success": True,
                             "boost_targets": result.boost_targets,
@@ -942,11 +945,17 @@ def run_second_delivery_adjustment(store_id: Optional[str] = None) -> Dict[str, 
                             "reduce_logged": result.reduce_logged,
                         }
                     else:
-                        logger.warning(f"[D-1] 로그인 실패 (store={sid})")
-                        all_results[sid] = {"success": False, "error": "login failed"}
+                        logger.warning(f"[D-1] 드라이버 획득 실패 (store={sid})")
+                        all_results[sid] = {"success": False, "error": "driver unavailable"}
                 except Exception as e:
                     logger.error(f"[D-1] Selenium 실행 실패 (store={sid}): {e}")
                     all_results[sid] = {"success": False, "error": str(e)}
+                finally:
+                    if collector is not None:
+                        try:
+                            collector.close()
+                        except Exception as close_err:
+                            logger.debug(f"[D-1] collector.close 실패 무시: {close_err}")
             else:
                 logger.info("[D-1] 부스트 대상 없음 → Selenium 생략")
                 all_results[sid] = {
