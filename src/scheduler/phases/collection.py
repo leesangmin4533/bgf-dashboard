@@ -338,6 +338,13 @@ def run_collection_phases(ctx: Dict[str, Any], job: Any) -> Dict[str, Any]:
                                 f"누락={l2.get('slip_only', 0)} "
                                 f"누락율={l2.get('miss_rate', 0)}%"
                             )
+                            # 슬롯 기반 검증 (waste-verification-slot-based, 2026-04-07)
+                            try:
+                                verifier.verify_date_by_slot(vdate)
+                            except Exception as slot_err:
+                                logger.warning(
+                                    f"[SlotVerify] {vdate} 호출 실패 (무시): {slot_err}"
+                                )
                 else:
                     logger.warning("드라이버 없음, 폐기 전표 수집 건너뜀")
         except Exception as e:
