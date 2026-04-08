@@ -894,12 +894,25 @@ class ImprovedPredictor:
         # dryrun-excel-export: feature blend 전 WMA 원본 (slow/croston은 0)
         _wma_raw = getattr(self, '_last_wma_raw', 0.0)
 
+        # food-underprediction-secondary B안: upstream stage 캐프쳐 (push to ctx via instance var)
+        # base_wma  = WMA 원본 (feature blend 전)
+        # wma_blended = base_prediction (feature blend 후, 계수 적용 전)
+        self._stage_upstream = {
+            "base_wma": round(_wma_raw, 4) if isinstance(_wma_raw, (int, float)) else None,
+            "wma_blended": round(base_prediction, 4) if isinstance(base_prediction, (int, float)) else None,
+        }
+
         # 3. 계수 적용 (연휴, 기온, 요일, 계절, 연관, 트렌드)
         base_prediction, adjusted_prediction, weekday_coef, assoc_boost = (
             self._apply_all_coefficients(
                 base_prediction, item_cd, product, target_date,
                 sqlite_weekday, feat_result
             )
+        )
+
+        # food-underprediction-secondary B안: coef_mul = 계수 곱셈 후 (rule_floor 진입 직전)
+        self._stage_upstream["coef_mul"] = (
+            round(adjusted_prediction, 4) if isinstance(adjusted_prediction, (int, float)) else None
         )
 
         # 4. 현재 재고 및 미입고 조회 (소스 메타 포함)
@@ -1887,7 +1900,9 @@ class ImprovedPredictor:
         ctx["_proposal"] = proposal.to_dict()
 
         # ── 골든 스냅샷용 stages 기록 (OrderResult.stages에서 추적값 사용) ──
-        ctx["_snapshot_stages"] = {
+        # food-underprediction-secondary B안: 푸드 mid (001~005, 012) 한정으로
+        # upstream 단계(base_wma, wma_blended, coef_mul) 함께 기록
+        snapshot = {
             "after_rule": rule_result.qty,
             "after_rop": result.stages.get("after_rop", rule_result.qty) if rop_enabled else rule_result.qty,
             "after_promo": promo_result.qty,
@@ -1906,6 +1921,26 @@ class ImprovedPredictor:
             ] if ctx.get("_stage_io") else [],
             "shadow": ctx.get("_shadow", {}),
         }
+
+        # 푸드 카테고리는 upstream 단계도 기록 (food-underprediction-secondary B안)
+        _food_mids = ('001', '002', '003', '004', '005', '012')
+        if mid_cd in _food_mids:
+            _upstream = getattr(self, '_stage_upstream', None) or {}
+            snapshot["base_wma"] = _upstream.get("base_wma")
+            snapshot["wma_blended"] = _upstream.get("wma_blended")
+            snapshot["coef_mul"] = _upstream.get("coef_mul")
+            # 5단계 요약 (대시보드/분석 쿼리 편의):
+            #   base_wma → wma_blended → coef_mul → rule_floor → ml_blend → final_cap
+            snapshot["food_5stage"] = {
+                "base_wma": _upstream.get("base_wma"),
+                "wma_blended": _upstream.get("wma_blended"),
+                "coef_mul": _upstream.get("coef_mul"),
+                "rule_floor": result.stages.get("after_rop", rule_result.qty) if rop_enabled else rule_result.qty,
+                "ml_blend": ctx.get("_order_qty_after_ml", promo_result.qty),
+                "final_cap": ctx.get("_order_qty_after_cap", promo_result.qty),
+            }
+
+        ctx["_snapshot_stages"] = snapshot
 
         # proposal 이력 로그 + stock_gate 요약
         trace_id = f"{self.store_id}:{item_cd}"

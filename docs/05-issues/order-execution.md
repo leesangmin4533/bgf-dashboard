@@ -113,7 +113,7 @@ Issue-Chain: order-execution#bundle-guard-bypass-49965
 
 ---
 
-## [PLANNED] 푸드 has_stock 그룹 약한 과소예측 — 2차 원인 (04-08 ~)
+## [WATCHING] 푸드 has_stock 그룹 약한 과소예측 — 2차 원인 (04-08 ~)
 
 **문제**: food-systemic-underprediction 1차 수정(ab98bfc) 후에도 has_stock 그룹(재고 있던 날 존재) 158건이 여전히 평균 bias **-0.22 ~ -0.39** 로 음수. 1차의 절반 강도지만 시스템 전반에 잔존.
 **우선순위**: P2
@@ -145,12 +145,54 @@ Issue-Chain: order-execution#bundle-guard-bypass-49965
 7. **prediction_logs 컬럼 미채움** — `stage_trace`, `rule_order_qty`, `ml_order_qty`, `ml_weight_used` 가 NULL → 단계별 추적 불가가 디버깅 자체를 막음
 
 ### 검증 필요
-- [ ] stage_trace 컬럼 채우기 (예측 단계별 값 로깅 활성화)
-- [ ] 8800279678588 에 대해 라이브 predict 실행하여 WMA→base→adjusted 단계별 값 추출
+- [x] stage_trace 컬럼 채우기 (예측 단계별 값 로깅 활성화) — 시도 1 (04-08, ultraplan-B)
+- [ ] 8800279678588 에 대해 라이브 predict 실행하여 WMA→base→adjusted 단계별 값 추출 (04-10 1주 관측 시작)
 - [ ] WMA 가중치 분포 확인 (최근일 weight 비중)
 - [ ] outlier_handler 가 푸드 카테고리에 활성화돼 있는지 + clip 발동률
 - [ ] mid_cd 별 weekday_coef 분포 (어느 카테고리/요일 조합이 < 1.0 인지)
-- [ ] stock_qty<0 sentinel 처리 정책 정의
+- [x] stock_qty<0 sentinel 처리 정책 정의 — 시도 1 (04-08, ultraplan-B)
+
+### 시도 1: stage_trace 5단계 가시화 + stock_qty<0 sentinel 정규화 (04-08, ultraplan-B)
+**왜**: 04-08 토론 결정(B-C-B 조합) — 7가설 모두 데이터 부재로 검증 불가능한 봉쇄 상태.
+관측성 인프라(stage_trace) 없이 표적 패치하면 효과 분리 불가 → A안(블라인드 다발 패치) 퇴행 위험.
+**조치**:
+1. **Schema 드리프트 복구 (v76)** — `prediction_logs.stage_trace TEXT`, `association_boost REAL`
+   2개 컬럼이 `_STORE_COLUMN_PATCHES` 와 CREATE TABLE 양쪽에 누락. prediction_logger.py
+   는 PRAGMA 체크로 silent skip 중이었음. (`schema.py` 양쪽 + `constants.py` v75 → v76)
+2. **upstream stage 캡처** — `improved_predictor.predict()` 의 2단계(WMA) 와 3단계(계수)
+   사이에 `self._stage_upstream` 인스턴스 변수로 `base_wma`, `wma_blended`, `coef_mul` 기록.
+3. **food mid 한정 5단계 스냅샷** — `_compute_safety_and_order` 의 `_snapshot_stages`
+   빌드 시점에 mid_cd ∈ ('001'~'005','012') 일 때만 upstream 키 + `food_5stage` 딕셔너리
+   추가 (DB 부담 절감, 모집단 158건이 푸드에 한정).
+4. **stock_qty<0 sentinel 정규화** — `base_predictor.calculate_weighted_average` 진입 직후
+   `stk < 0 → None` 로 정규화. 기존 imputation 분기(`stk > 0`, `stk == 0`)는 음수를 보정 사각지대로
+   남겼고, 4매장 14일치 97 row 가 영향. 정규화 후 food mid 는 ab98bfc 1차 fix 의 nonzero_signal
+   경로를 통과 (예시 2: 8800336392501 케이스).
+5. **회귀 테스트** — `tests/test_food_stage_trace.py` 신규 9개. 사전 존재 fail 격리.
+   * 부분 -1 → None 처리 ✓
+   * 전체 -1 + nonzero_signal → 1차 fix 트리거 ✓
+   * 비푸드 mid 안전 폴백 ✓
+   * sentinel 없는 정상 데이터 회귀 없음 ✓
+   * food mid 5단계 스냅샷 키 6개 ✓
+   * 비푸드 mid upstream 키 미포함 ✓
+
+**결과**:
+- 9/9 신규 테스트 통과
+- 인접 푸드 테스트(test_food_underorder_fix, test_batch_sync_zero_sales_guard 등) 회귀 0건
+- 사전 존재 fail (test_improved_predictor / test_cold_start_fix `realtime_inventory` 픽스처 누락,
+  test_food_prediction_fix `bgf_sales.db` 경로 가정) 은 본 수정과 무관
+- compile/import OK, schema migration in-memory 검증 OK
+**실패 패턴**: (해소) `#schema-drift` `#observability-blocked-investigation`
+
+### 해결 검증 (04-10 1주 관측 시작)
+- [ ] 04-09 23:00 OneDrive 동기화 후 4매장 매장 DB 에 v76 마이그레이션 적용 확인
+  (`PRAGMA table_info(prediction_logs)` 에 `stage_trace`, `association_boost` 존재)
+- [ ] 04-10 07:00 daily_job 후 prediction_logs.stage_trace 가 푸드 mid 행에 NOT NULL
+  (`SELECT COUNT(*) FROM prediction_logs WHERE mid_cd IN ('001'..'005','012') AND stage_trace IS NOT NULL`)
+- [ ] 04-10~04-16 1주 관측 → has_stock 158건 그룹의 5단계 분포 추출
+- [ ] 단일 지배 stage 식별 (target: bias 의 70% 이상을 설명하는 1개 stage)
+- [ ] 8800336392501 (sentinel 케이스) 의 imputation 발동 → WMA -14% bias → 0% 이내 회복
+- [ ] 04-17 표적 패치 plan 작성 (별도 PDCA)
 
 Issue-Chain: order-execution#food-underprediction-secondary
 

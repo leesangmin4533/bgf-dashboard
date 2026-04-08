@@ -252,7 +252,7 @@ BATCH_EXPIRY_ALERT_DAYS = 1             # 폐기 N일 전 알림
 
 # DB 스키마 버전
 # =====================================================================
-DB_SCHEMA_VERSION = 75  # v75: waste_slips UNIQUE 스키마 드리프트 복구 (47863 중복 저장 방지)
+DB_SCHEMA_VERSION = 76  # v76: prediction_logs.association_boost + stage_trace 스키마 드리프트 복구 (food-underprediction-secondary B안)
 
 # =====================================================================
 # Order Unit Qty Integrity v2 (order-unit-qty-integrity-v2)

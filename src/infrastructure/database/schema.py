@@ -381,7 +381,9 @@ STORE_SCHEMA = [
         is_stock_stale INTEGER DEFAULT 0,
         rule_order_qty INTEGER,
         ml_order_qty INTEGER,
-        ml_weight_used REAL
+        ml_weight_used REAL,
+        association_boost REAL,
+        stage_trace TEXT
     )""",
 
     # eval_outcomes
@@ -1250,6 +1252,10 @@ _STORE_COLUMN_PATCHES = [
     "ALTER TABLE prediction_logs ADD COLUMN rule_order_qty INTEGER",
     "ALTER TABLE prediction_logs ADD COLUMN ml_order_qty INTEGER",
     "ALTER TABLE prediction_logs ADD COLUMN ml_weight_used REAL",
+    # v76: 스키마 드리프트 복구 — association_boost(예측측 기록 코드 존재) +
+    # stage_trace(파이프라인 단계별 중간값 JSON, food-underprediction-secondary B안)
+    "ALTER TABLE prediction_logs ADD COLUMN association_boost REAL",
+    "ALTER TABLE prediction_logs ADD COLUMN stage_trace TEXT",
     # v56: 신제품 안착 판정 컬럼
     "ALTER TABLE detected_new_products ADD COLUMN analysis_window_days INTEGER",
     "ALTER TABLE detected_new_products ADD COLUMN extension_count INTEGER DEFAULT 0",
