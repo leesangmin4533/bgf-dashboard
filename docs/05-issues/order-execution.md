@@ -22,6 +22,26 @@ data/discussions/20260408-bundle-analysis/정밀분석.md §4 참조.
 ### 후속 작업
 - `/pdca plan bundle-suspect-dynamic-master` 진행 중
 
+### 시도 1 (04-08, Step 1~3): Domain/Infra/Test 신규 — 안전 영역
+- **변경**: bundle_classifier.py + bundle_stats_repo.py + test_bundle_classifier.py 신규
+- **결과**: pytest 30 PASS, 라이브 smoke test 정상 동작 (74 mid 분류)
+- **dynamic 결과**: STRONG 16, WEAK 5, UNKNOWN 12, NORMAL 41
+- **합집합 (dynamic STRONG/WEAK ∪ static fallback)**: 28 mid (정적 23 + 신규 10 - 중복 5)
+
+### ★ Step 1~3 중 발견된 설계 결함 (04-08)
+
+**bundle_pct 단독 기준이 진짜 위험을 놓침**
+
+| mid | total | bundle | unit1 | bundle_pct | 현재 분류 | 실제 위험 |
+|---|---|---|---|---|---|---|
+| **023 햄/소시지** | 183 | 10 | **173** | **5.5%** | NORMAL ❌ | unit1=94.5% (BGF 빈값 다수) |
+| 006 라면 | 44 | 0 | 1 | 0% | UNKNOWN | NULL=91% |
+| 014 과자 | 281 | 47 | 11 | 17% | UNKNOWN | NULL=66% |
+
+→ 정적 fallback (190b24f 추가한 023~025) 이 없었다면 dynamic 만으로 023 사고 재발 가능.
+→ 정적 fallback 영구 유지(토론 결정 5 A안) 의 가치가 데이터로 강력 입증됨.
+→ **Design 보강 필요**: BundleClassifier 에 `unit1_ratio` 기반 의심 신호 추가 검토 (04-09 검증 후)
+
 Issue-Chain: order-execution#bundle-suspect-dynamic-master
 
 ---
