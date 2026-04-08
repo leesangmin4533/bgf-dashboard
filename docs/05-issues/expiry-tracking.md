@@ -233,9 +233,34 @@
 - **부정 vs 긍정 변수**: protected_qty 대신 normal_qty가 FIFO 차감 한도와 자연 일치
 - **TDD 효과**: 회귀 테스트가 알고리즘 결함을 첫 실행에서 잡음
 
+### 시도 2: FR-02 우회 경로 차단 + 검증 reporter 노이즈 필터 (04-08)
+- **왜**: 47863 BatchSync false consumed 62건 정밀 조사 중 **가드 배포(04-07 16:28) 이후에도 14건 재발** 발견. 원인: 가드가 `sync_remaining_with_stock`(BatchSync)에만 있고 `sales_repo.save_daily_sales` 내 FR-02 인라인 FIFO 경로에는 누락 → save_daily_sales가 stock=0 보고를 처리할 때 임박 배치를 여전히 consumed 마킹
+- **재현 사례 (47863 04-07~08)**:
+  - 22850 (훈제오리기본1): 04-06 21:51 active 생성 → **04-07 01:51** save_daily_sales 경로에서 consumed (가드 배포 15시간 전이지만 FR-02 경로 확인 용)
+  - 23042 외 12건: 04-07 21:51 ~ 04-08 01:50에 FR-02 경로로 consumed (가드 배포 **후**)
+  - 전부 `expiration_days=1`, 1차/2차 폐기 슬롯 직전
+- **추가 발견**: 검증 reporter가 2026-03-04 백필 시점의 2025년 장기유통기한 입고분(23건)을 오탐으로 잡던 문제 — 운영 데이터와 분리 필요
+- **조치**:
+  1. `sales_repo.py` FR-02 인라인 FIFO에 `sync_remaining_with_stock`와 동일 normal_qty 가드 이식
+  2. `sales_repo.py` FIFO 정렬에 만료 임박 후순위 CASE WHEN 추가
+  3. `waste_verification_reporter._get_tracking_inventory_batches`에 노이즈 필터: `expiration_days <= 30 AND created_at >= target_date - 14일`
+  4. 47863 운영 DB: 가드 배포 후 잘못 consumed된 14건을 expired로 정정 (04-07 1건 + 04-08 13건)
+- **결과**: ✓ 관련 테스트 30건 중 28건 통과, 2건 실패는 pre-existing TestCalibratorSlipSource (무관)
+- **실패 패턴**: (신규) `#guard-single-path-coverage` — 동일 정합성 로직이 여러 경로에 중복 구현돼 있을 때 한 경로에만 가드 추가하면 우회 발생
+
+### 교훈
+- **stock=0 ≠ 모두 팔림**: BGF가 0판매 행을 응답에 포함 안 함 → daily_sales 누락 → BatchSync 잘못 추론
+- **부정 vs 긍정 변수**: protected_qty 대신 normal_qty가 FIFO 차감 한도와 자연 일치
+- **TDD 효과**: 회귀 테스트가 알고리즘 결함을 첫 실행에서 잡음
+- **가드 커버리지 감사 필요** (시도2): 동일 정합성 로직 A/B/C 세 경로에 분산돼 있을 때 한 곳만 고치면 나머지가 우회로 노출. `git grep "inventory_batches.*consumed"`로 모든 쓰기 경로를 명시적으로 열거한 뒤 가드 적용 체크리스트를 유지해야 함
+- **검증 로직은 운영 데이터와 historical 백필을 구분**해야 함 — `created_at` 윈도우 + `expiration_days` 가드로 현실적인 검증 대상만 비교
+
 ### 검증 체크포인트
-- [x] 가드 추가 + 5/5 회귀 테스트 통과
-- [ ] scheduler-auto-reload로 자동 적용 확인 (코드 변경 감지)
+- [x] 가드 추가 + 5/5 회귀 테스트 통과 (BatchSync 경로)
+- [x] FR-02 우회 경로 식별 + 가드 이식 + 운영 데이터 정정 (04-08)
+- [x] 검증 reporter 노이즈 필터 추가 (04-08)
+- [ ] 04-08 23:00 waste_report 후 47863에서 가드 후 false consumed 0건 확인
+- [ ] 04-09 07:00 매장별 검증 로그에서 batch-only 오탐 급감 확인 (47863 67→10 미만 기대)
 - [ ] 다음 14:00 ExpiryChecker가 0판매 만료 상품 폐기 후보 인지
 
 **관련 작업 (archive)**: docs/archive/2026-04/batch-sync-zero-sales-guard/
