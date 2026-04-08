@@ -26,10 +26,12 @@
       "designPath": "docs/02-design/features/food-underprediction-secondary.design.md"
     },
     "bundle-suspect-dynamic-master": {
-      "phase": "design",
+      "phase": "paused",
       "startedAt": "2026-04-08T09:30:00+09:00",
       "planPath": "docs/01-plan/features/bundle-suspect-dynamic-master.plan.md",
-      "designPath": "docs/02-design/features/bundle-suspect-dynamic-master.design.md"
+      "designPath": "docs/02-design/features/bundle-suspect-dynamic-master.design.md",
+      "pausedReason": "상품별 신뢰도 모델로 방향 전환 검토 (04-09 검증 후)",
+      "pausedAt": "2026-04-08T10:00:00+09:00"
     }
   },
   "pipeline": {
