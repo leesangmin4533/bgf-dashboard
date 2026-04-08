@@ -59,7 +59,7 @@
 
 ---
 
-## [WATCHING] claude-auto-respond Claude CLI 호출 실패 (04-06 ~ 04-07)
+## [RESOLVED] claude-auto-respond Claude CLI 호출 실패 (04-06 ~ 04-09)
 
 **문제**: 2026-04-06 23:58 스케줄(claude-auto-respond)이 `claude exit=1: (no stderr)`로 실패. stderr가 비어있어 원인 추적 불가.
 **영향**: 이상 감지 시 L1 자동 원인 분석 무력화 → DailyChainReport에 분석 결과 누락 → 운영자가 수동 분석 필요
@@ -89,19 +89,32 @@
 - **결과**: ✓ 성공 — `data/auto_respond/2026-04-07_response.md` 생성 확인
 - **실패 패턴**: (신규) stderr-only-error-reporting
 
+### 시도 2: 04-07 23:58 야간 스케줄 자동 실행 — OAuth 토큰 만료 (04-08 검토)
+- **왜**: 시도 1 수정(max_turns 상향) 후 첫 야간 자동 실행에서 다른 에러 발생
+- **결과**: ✗ 실패 — `claude exit=1: OAuth token has expired` (401 인증 오류)
+  - `debug_20260407_235835.log`: `returncode=1`, stdout에 401 에러 메시지 확인
+  - 이는 코드 버그가 아닌 **Claude CLI OAuth 세션 만료** 문제 — 사용자 수동 재인증 필요
+- **실패 패턴**: 인증 만료 (코드 수정으로 해결 불가, 사용자 액션 필요)
+
+**조치 필요**: `claude auth login` 실행하여 OAuth 세션 갱신 → 이후 23:58 스케줄 자동 복구
+
 ### 교훈
 - **서브프로세스 에러는 stdout/stderr 둘 다 확인**: claude CLI는 사용량/turn 제한 에러를 stdout으로 출력
 - **max_turns는 실제 분석 복잡도 기준**: 읽기 전용 도구(Read/Grep/Glob)를 많이 쓰는 분석 작업은 10 turn으로 부족
 - **진단 덤프는 실패 재현의 핵심**: stderr만 찍으면 1차 조사에서 헤맨다. cmd/cwd/env/stdout 전체 덤프 표준화 필요
+- **OAuth 세션 만료는 별도 실패 유형**: max_turns 수정 후에도 OAuth 세션 단절로 재실패 가능 — 주기적 세션 상태 점검 필요
 
 ### 검증 체크포인트
 - [x] 진단 로깅 강화 후 수동 재현 (04-07 13:25 debug_20260407_132510.log)
 - [x] 원인 식별: max_turns 초과 (stdout만 출력)
 - [x] 수정 후 재실행 성공 (04-07 13:29, 2026-04-07_response.md 생성)
 - [x] 회귀 테스트 3개 추가 (TestCallClaudeFailureDiagnostics, 14/14 통과)
-- [ ] 04-08 23:58 스케줄에서 `data/auto_respond/2026-04-08_response.md` 자동 생성 확인
+- [x] 04-07 23:58 야간 스케줄: OAuth 만료로 실패 (debug_20260407_235835.log 확인)
+- [x] `claude auth login` 갱신 후 04-08 23:58 스케줄에서 자동 실행 성공 확인 (04-09 00:02 완료, duration 233.8초, anomaly_count 39, status=ok, output: 2026-04-09_response.md — 자정 이후 완료로 날짜 +1)
 
 **관련 Plan**: [docs/01-plan/features/claude-respond-fix.plan.md](../01-plan/features/claude-respond-fix.plan.md)
+
+**해결 (04-09)**: `claude auth login` 재인증 후 04-08 23:58 스케줄 자동 실행 성공. pipeline_status.json status=ok, duration=233.8s, anomaly_count=39. 신규 debug 로그 없음. max_turns=30 조정 + OAuth 세션 유지로 안정화.
 
 ---
 

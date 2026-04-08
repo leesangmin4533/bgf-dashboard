@@ -26,6 +26,19 @@
 
 ---
 
+## 🔄 Ultraplan / 로컬 세션 공유 보드 (필수)
+
+**모든 세션 시작 시 의무**:
+1. [`docs/active/ultraplan_board.md`](docs/active/ultraplan_board.md) 읽기
+2. ACTIVE entry가 있으면 작업 scope 충돌 검사 (같은 디렉토리/파일 패턴인지)
+3. 충돌 시 사용자에게 즉시 보고 후 보류/조정 제안
+4. 신규 plan/ultraplan 시작 시 → 보드에 entry 추가 (commit 권장: ultraplan은 클라우드 스냅샷이 보드를 포함해야 함)
+5. 상태 변경/완료 시 → entry 갱신 + 결정 요약 1~3줄
+
+**규약 상세**: [`docs/ultraplan.md`](docs/ultraplan.md) §6
+
+---
+
 ## 프로젝트 개요
 
 BGF 리테일(CU 편의점) 다매장 자동 발주 시스템
@@ -71,7 +84,6 @@ BGF 리테일(CU 편의점) 다매장 자동 발주 시스템
 | WATCHING | - | K4 expiry_time_mismatch 31일 NOT_MET — 식품 전용 재정의 (04-07 수정) | scheduling.md | 다음 milestone_snapshots K4 NOT_MET → ACHI |
 | WATCHING | - | SLOW 주기 판매 상품 ROP=1 발주 | order-execution.md |  |
 | WATCHING | - | action_proposals v70 컬럼 매장 DB 미적용 | scheduling.md | 내일(04-06) 07:00 로그에서 [Verify] executed_a |
-| WATCHING | - | claude-auto-respond Claude CLI 호출 실패 | scheduling.md | 04-08 23:58 스케줄에서 `data/auto_respond/202 |
 | WATCHING | - | delivery_match 타이밍 불일치 → 2차 매칭 실패 | expiry-tracking.md |  |
 | WATCHING | - | ops_metrics waste_rate mid_cd 컬럼 부재 | scheduling.md | 다음 23:55 OpsMetricsCollector 실행에서 `waste |
 | WATCHING | - | scheduler 모듈 캐시 — 코드 fix 무력화 | scheduling.md | 운영자가 start_scheduler_loop.bat으로 전환 후 다음  |
@@ -83,6 +95,7 @@ BGF 리테일(CU 편의점) 다매장 자동 발주 시스템
 | PLANNED | P1 | 예측 정확도 하락 조사 (4개 카테고리) | prediction.md | 없음 |
 | PLANNED | P1 | 자전 시스템 미해결 항목 (expiry_time_mismatch) | scheduling.md | 없음 |
 | PLANNED | P2 | 010 폐기율 상승 조사 | expiry-tracking.md | 없음 |
+| PLANNED | P2 | BatchSync 가드 우회 의심 18건 (24h 내) | expiry-tracking.md | 없음 |
 | PLANNED | P2 | CLEAR_GHOST_STOCK 자동실행 승격 검토 | scheduling.md | integrity_checks 2주 누적 데이터에서 food_ghost_ |
 | PLANNED | P2 | ML is_payday DB 반영 효과 검증 | prediction.md | f0657a8 커밋 반영 후 최소 2주 운영 데이터 필요 |
 | PLANNED | P2 | PaydayAnalyzer 결과를 ML 학습 데이터에도 반영 | prediction.md | (밀도 승격) P2 효과 검증 완료 후 양수 효과 확인 시 |
