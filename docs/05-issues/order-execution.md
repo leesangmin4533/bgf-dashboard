@@ -1,11 +1,46 @@
 # 발주 실행 이슈 체인
 
-> 최종 갱신: 2026-04-08
-> 현재 상태: 묶음 가드 우회 + 푸드 체계적 과소예측 조사 중 + 메타 원인 동적 마스터화 검토
+> 최종 갱신: 2026-04-09
+> 현재 상태: 묶음 가드 우회 해결 + 상품별 신뢰도 모델 계획 중 + 푸드 과소예측 조사 중
 
 ---
 
-## [PAUSED] 묶음 가드 정적 리스트 → 동적 마스터 전환 (P2, 04-08 ~)
+## [PLANNED] 상품별 묶음 신뢰도 모델 (P2, 04-09 ~)
+
+**문제**: 카테고리 단위 bundle_pct 분류(bundle-suspect-dynamic-master)는 개별 상품 위험을 카테고리 평균으로 희석함. mid=023 bundle_pct=5.5% 이지만 실제 과발주 상품은 unit>1 이었다.
+**사용자 비판 (04-08)**: "동적 마스터 재계산보다 product_details 직접 참조가 더 단순/정확"
+**결론**: 카테고리 set 접근 폐기 → 상품별 신뢰도 모델(4개 신호 가중 합산)로 전환
+**우선순위**: P2
+**설계 의도**: 발주 시 item_cd 단위로 order_unit_qty 신뢰도를 직접 계산 → 임계값 미달 시 BLOCK
+**기여 KPI**: K3 (발주 실패율)
+**Plan 문서**: docs/01-plan/features/bundle-confidence-model.plan.md
+**선행 조건**: bundle-suspect-dynamic-master SUPERSEDED (04-09 검증 통과 확인 완료)
+
+### 신뢰도 신호 (4개)
+1. cross-store 일치성 — 4매장 product_details unit_qty 비교
+2. sibling 일치성 — 같은 mid 형제 상품 median unit_qty 비교
+3. 가격대 — 1,500원 미만 묶음 가능성 낮음
+4. BGF API NULL 비율 — 수집 결함 신호
+
+### Design 단계 결정 항목 (6개)
+→ `/discuss bundle-confidence-model` 로 토론 권장
+
+### 검증 체크포인트
+- [ ] 04-08 사고 상품(8801392060632) 신뢰도 < 임계값 확인
+- [ ] 정적 fallback 회귀 없음 확인
+- [ ] false positive < 5% 확인 (담배/맥주 정상 묶음 BLOCK 여부)
+
+Issue-Chain: order-execution#bundle-confidence-model
+
+---
+
+## [SUPERSEDED] 묶음 가드 정적 리스트 → 동적 마스터 전환 (P2, 04-08 ~ 04-09)
+
+**04-09 대체**: 카테고리 분류 접근 자체를 폐기하고 상품별 신뢰도 모델로 전환 결정.
+bundle-suspect-dynamic-master 에서 구현된 BundleStatsRepo 는 신뢰도 모델에서 재사용.
+bundle_classifier.py 는 폐기 후보 (Design 단계 확정 후).
+
+## [PAUSED → SUPERSEDED] 묶음 가드 정적 리스트 → 동적 마스터 전환 (P2, 04-08 ~)
 
 **04-08 일시 중단**: Step 1~3 완료 후 사용자 비판 — "상품별 직접 참조 / 신뢰도 모델이 더 단순/정확하지 않은가?" — 본질적 통찰. 1차 수정(190b24f)으로 당장 사고는 차단된 상태이므로 04-09 검증 통과 확인 후 **상품별 신뢰도 모델 (cross-store + sibling 비교)** 로 방향 전환 예정. Step 1~3 의 BundleStatsRepo 는 신뢰도 모델에서 재사용 가능, classifier 는 폐기 후보.
 

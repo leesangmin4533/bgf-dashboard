@@ -1,6 +1,6 @@
 {
   "version": "2.0",
-  "lastUpdated": "2026-04-07T22:18:26.069Z",
+  "lastUpdated": "2026-04-08T15:00:01.150Z",
   "activeFeatures": [
     "scripts"
   ],
@@ -15,9 +15,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-04-06T14:58:54.515Z",
-        "lastUpdated": "2026-04-07T22:18:26.069Z"
+        "lastUpdated": "2026-04-08T15:00:01.150Z"
       },
-      "lastFile": "C:\\Users\\kanur\\OneDrive\\바탕 화면\\bbb\\bgf_auto\\scripts\\_analyze_anomaly.py"
+      "lastFile": "C:\\Users\\kanur\\OneDrive\\바탕 화면\\bbb\\bgf_auto\\scripts\\_tmp_anomaly_query.py"
     },
     "food-underprediction-secondary": {
       "phase": "design",
@@ -26,12 +26,20 @@
       "designPath": "docs/02-design/features/food-underprediction-secondary.design.md"
     },
     "bundle-suspect-dynamic-master": {
-      "phase": "paused",
+      "phase": "superseded",
       "startedAt": "2026-04-08T09:30:00+09:00",
       "planPath": "docs/01-plan/features/bundle-suspect-dynamic-master.plan.md",
       "designPath": "docs/02-design/features/bundle-suspect-dynamic-master.design.md",
-      "pausedReason": "상품별 신뢰도 모델로 방향 전환 검토 (04-09 검증 후)",
-      "pausedAt": "2026-04-08T10:00:00+09:00"
+      "supersededBy": "bundle-confidence-model",
+      "supersededAt": "2026-04-09T00:00:00+09:00",
+      "supersededReason": "카테고리 접근 폐기 — 상품별 신뢰도 모델로 전환 (04-09 검증 통과 확인)"
+    },
+    "bundle-confidence-model": {
+      "phase": "plan",
+      "startedAt": "2026-04-09T00:00:00+09:00",
+      "planPath": "docs/01-plan/features/bundle-confidence-model.plan.md",
+      "predecessor": "bundle-suspect-dynamic-master",
+      "kpi": "K3"
     }
   },
   "pipeline": {
@@ -42,7 +50,7 @@
   "session": {
     "startedAt": "2026-04-06T14:58:04.061Z",
     "onboardingCompleted": false,
-    "lastActivity": "2026-04-07T22:18:26.069Z"
+    "lastActivity": "2026-04-08T15:00:01.150Z"
   },
   "history": [
     {
@@ -71,6 +79,12 @@
     },
     {
       "timestamp": "2026-04-07T22:18:26.069Z",
+      "feature": "scripts",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-08T15:00:01.150Z",
       "feature": "scripts",
       "phase": "do",
       "action": "updated"

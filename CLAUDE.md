@@ -105,6 +105,7 @@ BGF 리테일(CU 편의점) 다매장 자동 발주 시스템
 | PLANNED | P2 | 하네스 엔지니어링 Week 3 — AI 요약 서비스 | scheduling.md | executed_at 검증 완료 (WATCHING 이슈 해결) |
 | PLANNED | P3 | hourly 시간대별 판매 소급 수집 안정화 | data-collection.md | 없음 (독립 작업) |
 | PLANNED | - | 8801043016049 site 발주 출처 추적 (P3, 04-08 ~) | order-execution.md |  |
+| PLANNED | P2 | 상품별 묶음 신뢰도 모델 — 카테고리 접근 폐기 (04-09 ~) | order-execution.md | bundle-suspect-dynamic-master SUPERSEDED 후 전환 |
 <!-- ISSUE_TABLE_END -->
 
 > 이 테이블은 `python scripts/sync_issue_table.py`로 자동 갱신됩니다.
