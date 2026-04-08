@@ -13,9 +13,10 @@
 - **Scope**: 신규 `src/application/services/ai_summary/**`, 기존 코드 무간섭 (읽기만)
 - **Goal**: 하네스 엔지니어링 Week 3 — AI 요약 서비스 신규 설계 (일일 운영 로그·이슈 체인·milestone 요약 자동화)
 - **Session link**: (발행 후 갱신)
-- **Status**: drafting
-- **Last update**: 2026-04-08 04:10
-- **Decisions**: (ready 후 기록)
+- **Status**: ready (로컬 Plan 작성 완료, /ultraplan 비교 대기)
+- **Last update**: 2026-04-08 04:30
+- **Decisions**: Phase 1 MVP=카카오 5줄(23:50, Haiku, ~$0.30/월), 신규 schema v77 ai_summaries, 폴백=규칙기반. 선행: action_proposals executed_at 검증(04-09 07:00). 식품 예측 모듈 무간섭.
+- **Plan**: docs/01-plan/features/harness-week3-ai-summary.plan.md
 
 **큐 (완료 후 순차 진행)**:
 1. `expiry-time-mismatch-redesign` (P1 자전 시스템 식품 전용 재정의)
