@@ -914,9 +914,11 @@ class WasteSlipCollector:
             return result
 
         except Exception as e:
-            logger.error(f"[WasteSlip] 수집 오류: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.error(
+                f"[WasteSlip] 수집 오류 [store={self.store_id} "
+                f"{from_date}~{to_date}]: {e}",
+                exc_info=True,
+            )
             return {"success": False, "error": str(e)}
 
         finally:

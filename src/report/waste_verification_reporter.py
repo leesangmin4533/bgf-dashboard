@@ -495,7 +495,11 @@ class WasteVerificationReporter:
             return str(filepath)
 
         except Exception as e:
-            logger.warning(f"폐기 검증 보고서 저장 실패: {e}")
+            logger.warning(
+                f"폐기 검증 보고서 저장 실패 "
+                f"[store={self.store_id} date={target_date}]: {e}",
+                exc_info=True,
+            )
             return None
 
     # ================================================================

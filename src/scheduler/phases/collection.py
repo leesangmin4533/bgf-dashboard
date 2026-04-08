@@ -316,10 +316,23 @@ def run_collection_phases(ctx: Dict[str, Any], job: Any) -> Dict[str, Any]:
                         to_date=today_str.replace("-", ""),
                         save_to_db=True,
                     )
-                    logger.info(f"폐기 전표 수집: {waste_slip_stats.get('count', 0)}건")
+                    # success=False 케이스도 가시화 (silent fail 방지)
+                    if waste_slip_stats.get("success"):
+                        logger.info(
+                            f"폐기 전표 수집 [store={job.store_id}]: "
+                            f"{waste_slip_stats.get('count', 0)}건"
+                        )
+                    else:
+                        logger.warning(
+                            f"폐기 전표 수집 실패 [store={job.store_id}]: "
+                            f"count={waste_slip_stats.get('count', 0)} "
+                            f"error={waste_slip_stats.get('error')}"
+                        )
 
                     # 전날+당일 심층 검증 + 비교 보고서 생성
-                    if waste_slip_stats.get("success"):
+                    # 가드 완화: 수집 실패여도 DB 기반 VerifyDeep는 독립 실행
+                    # (waste_slip_stats is not None 이면 collector가 어떤 형태로든 반환)
+                    if waste_slip_stats is not None:
                         from src.application.services.waste_verification_service import (
                             WasteVerificationService,
                         )

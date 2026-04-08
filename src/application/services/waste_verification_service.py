@@ -218,7 +218,11 @@ class WasteVerificationService:
             )
             summary = comparison_data.get("summary", {})
         except Exception as e:
-            logger.warning(f"[VerifyDeep] 상세 비교 실패: {e}")
+            logger.warning(
+                f"[VerifyDeep] 상세 비교 실패 "
+                f"[store={self.store_id} date={target_date}]: {e}",
+                exc_info=True,
+            )
             summary = {
                 "slip_count": 0,
                 "tracking_count": 0,
@@ -236,7 +240,11 @@ class WasteVerificationService:
                     target_date
                 )
             except Exception as e:
-                logger.warning(f"[VerifyDeep] 보고서 생성 실패: {e}")
+                logger.warning(
+                    f"[VerifyDeep] 보고서 생성 실패 "
+                    f"[store={self.store_id} date={target_date}]: {e}",
+                    exc_info=True,
+                )
 
         result = {
             "date": target_date,
@@ -246,7 +254,7 @@ class WasteVerificationService:
         }
 
         logger.info(
-            f"[VerifyDeep] {target_date}: "
+            f"[VerifyDeep] {self.store_id} {target_date}: "
             f"L1={level1.get('status')} | "
             f"매칭={summary.get('matched', 0)} "
             f"전표만={summary.get('slip_only', 0)} "

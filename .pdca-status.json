@@ -1,4 +1,10 @@
 {
+  "waste-lightweight-46704-missing": {
+    "phase": "plan",
+    "matchRate": 0,
+    "iterationCount": 0,
+    "startedAt": "2026-04-08T14:10:00Z"
+  },
   "waste-verification-slot-based": {
     "phase": "archived",
     "matchRate": 100,
