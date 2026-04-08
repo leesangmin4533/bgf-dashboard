@@ -6,6 +6,10 @@ food-underprediction-secondary B안 회귀 테스트
 2. 정규화 후 만성-품절 1차 fix(ab98bfc) 가 정상 작동 (전체 -1 윈도우)
 3. food mid (001~005, 012) snapshot_stages JSON 구조에 5단계(base_wma, wma_blended,
    coef_mul, food_5stage) 가 포함되는지 확인 (스키마 가시화)
+4. PR #4 리뷰 P1: SCHEMA_MIGRATIONS[76] 항목이 init_db legacy 경로의 schema_version
+   정렬을 보장하는지
+5. PR #4 리뷰 P2: prediction_logger._is_stage_trace_target 게이트가 비푸드 카테고리를
+   stage_trace 적재에서 차단하는지
 
 본 테스트는 신규 파일이며, 사전 존재 20 fail (promo_status / promotion_stats) 와
 독립이다. 의도적으로 import 표면을 좁혀 격리한다.
@@ -230,3 +234,110 @@ class TestFoodFiveStageSchema:
         for key in ("after_rule", "after_rop", "after_promo", "after_ml",
                     "after_cap", "after_round", "final"):
             assert key in snap
+
+
+# =============================================================================
+# 3. PR #4 review fixes — P1 (SCHEMA_MIGRATIONS[76]) + P2 (적재 게이트)
+# =============================================================================
+
+class TestSchemaMigrationV76:
+    """리뷰 P1: legacy init_db 경로의 schema_version 정렬을 위해 SCHEMA_MIGRATIONS[76] 필수"""
+
+    def test_schema_migrations_has_v76_entry(self):
+        from src.db.models import SCHEMA_MIGRATIONS
+        from src.settings.constants import DB_SCHEMA_VERSION
+
+        assert DB_SCHEMA_VERSION == 76, f"DB_SCHEMA_VERSION should be 76, got {DB_SCHEMA_VERSION}"
+        assert 76 in SCHEMA_MIGRATIONS, "SCHEMA_MIGRATIONS[76] missing — init_db 가 schema_version=75 에 멈춤"
+
+    def test_v76_migration_idempotent_on_existing_db(self):
+        """v76 마이그레이션이 이미 컬럼이 있는 DB 에서 duplicate column 무시되는지"""
+        import sqlite3
+        from src.db.models import SCHEMA_MIGRATIONS
+
+        conn = sqlite3.connect(":memory:")
+        cursor = conn.cursor()
+        # 이미 stage_trace 가 있는 prediction_logs (멱등성 시뮬레이션)
+        cursor.execute("""
+            CREATE TABLE prediction_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                association_boost REAL,
+                stage_trace TEXT
+            )
+        """)
+
+        script = SCHEMA_MIGRATIONS[76]
+        raw_stmts = [s.strip() for s in script.split(';') if s.strip()]
+        statements = []
+        for s in raw_stmts:
+            lines = [l for l in s.split('\n') if l.strip() and not l.strip().startswith('--')]
+            if lines:
+                statements.append(s)
+
+        # init_db 의 try/except 로직을 모방
+        for stmt in statements:
+            try:
+                cursor.execute(stmt)
+            except sqlite3.OperationalError as e:
+                err_msg = str(e).lower()
+                if "duplicate column" in err_msg or "already exists" in err_msg:
+                    pass  # 멱등 — 정상
+                else:
+                    raise
+
+        cols = [c[1] for c in cursor.execute("PRAGMA table_info(prediction_logs)").fetchall()]
+        assert "association_boost" in cols
+        assert "stage_trace" in cols
+        conn.close()
+
+    def test_v76_migration_adds_columns_to_legacy_db(self):
+        """v75 prediction_logs 에 v76 마이그레이션을 적용하면 컬럼 2개 추가"""
+        import sqlite3
+        from src.db.models import SCHEMA_MIGRATIONS
+
+        conn = sqlite3.connect(":memory:")
+        cursor = conn.cursor()
+        # v75 시점 prediction_logs (새 컬럼 없음)
+        cursor.execute("""
+            CREATE TABLE prediction_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                prediction_date TEXT,
+                item_cd TEXT,
+                mid_cd TEXT,
+                weekday_coef REAL
+            )
+        """)
+
+        script = SCHEMA_MIGRATIONS[76]
+        raw_stmts = [s.strip() for s in script.split(';') if s.strip()]
+        for s in raw_stmts:
+            lines = [l for l in s.split('\n') if l.strip() and not l.strip().startswith('--')]
+            if lines:
+                cursor.execute(s)
+
+        cols = [c[1] for c in cursor.execute("PRAGMA table_info(prediction_logs)").fetchall()]
+        assert "association_boost" in cols, "v76 마이그레이션이 association_boost 추가 실패"
+        assert "stage_trace" in cols, "v76 마이그레이션이 stage_trace 추가 실패"
+        conn.close()
+
+
+class TestStageTraceTargetGate:
+    """리뷰 P2: prediction_logger._is_stage_trace_target 게이트가 푸드 mid 한정인지"""
+
+    def test_food_mids_pass_gate(self):
+        from src.prediction.prediction_logger import _is_stage_trace_target
+        for mid in ('001', '002', '003', '004', '005', '012'):
+            assert _is_stage_trace_target(mid), f"food mid {mid} should pass gate"
+
+    def test_non_food_mids_blocked(self):
+        from src.prediction.prediction_logger import _is_stage_trace_target
+        # 비푸드 카테고리는 stage_trace 적재 대상 아님
+        for mid in ('006', '049', '050', '072', '073', '010', '021', '900'):
+            assert not _is_stage_trace_target(mid), f"non-food mid {mid} should be blocked"
+
+    def test_none_or_empty_mid_blocked(self):
+        """None / 빈 문자열 / 미상 입력 안전 처리"""
+        from src.prediction.prediction_logger import _is_stage_trace_target
+        assert not _is_stage_trace_target(None)
+        assert not _is_stage_trace_target("")
+        assert not _is_stage_trace_target("xxx")

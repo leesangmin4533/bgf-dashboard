@@ -65,12 +65,8 @@ BGF 리테일(CU 편의점) 다매장 자동 발주 시스템
 | 상태 | 우선순위 | 이슈 | 파일 | 비고 |
 |:---:|:---:|------|------|------|
 | OPEN | - | product_details order_unit_qty 불일치 → 과발주 | order-execution.md |  |
-| WATCHING | - | 묶음 가드 우회 — 49965 햄/소시지·라면 과발주 (04-08 수정) | order-execution.md | 04-09 07:00 검증 대기 |
-| WATCHING | - | 푸드 체계적 과소예측 — WMA 전체-품절 imputation 추가 (04-08 수정) | order-execution.md | 04-09 07:00 검증 대기 |
-| WATCHING | - | 푸드 has_stock 그룹 약한 과소예측 — stage_trace 가시화 + sentinel 정규화 (04-08, ultraplan-B) | order-execution.md | v76 스키마 + 5단계 캡처, 04-10 1주 관측 시작 |
-| PAUSED | P2 | 묶음 가드 — 카테고리 마스터 → 상품별 신뢰도 모델로 방향 전환 (04-08) | order-execution.md | 04-09 검증 후 재설계, Step 1~3 일부 재사용 |
-| PLANNED | P3 | 8801043016049 site 발주 출처 추적 (04-08) | order-execution.md | 자동 시스템 무관, 사이트 채널 책임 규명 |
-| WATCHING | - | BatchSync 0판매 + 만료 임박 → 잘못된 consumed 마킹 (04-07 수정) | expiry-tracking.md | scheduler-auto-reload로 자동 적용 확인 (코드 변경 감 |
+| WATCHING | - | 46704 폐기 검증 보고서 정시 생성 실패 (04-08 수정) | expiry-tracking.md | 04-09 10:00 정밀폐기 세션에서 46704 포함 4매장 보고서 파 |
+| WATCHING | - | BatchSync 0판매 + 만료 임박 → 잘못된 consumed 마킹 (04-07 수정) | expiry-tracking.md | **🚨 라이브 발견 1**: 4매장 모두 false consumed 발생 |
 | WATCHING | - | D-1 부스트 발주 execute_single_order 누락 + scheduler 모듈 캐시 | expiry-tracking.md | scheduler 재시작 (운영자 수동) |
 | WATCHING | - | K4 expiry_time_mismatch 31일 NOT_MET — 식품 전용 재정의 (04-07 수정) | scheduling.md | 다음 milestone_snapshots K4 NOT_MET → ACHI |
 | WATCHING | - | SLOW 주기 판매 상품 ROP=1 발주 | order-execution.md |  |
@@ -79,11 +75,10 @@ BGF 리테일(CU 편의점) 다매장 자동 발주 시스템
 | WATCHING | - | delivery_match 타이밍 불일치 → 2차 매칭 실패 | expiry-tracking.md |  |
 | WATCHING | - | ops_metrics waste_rate mid_cd 컬럼 부재 | scheduling.md | 다음 23:55 OpsMetricsCollector 실행에서 `waste |
 | WATCHING | - | scheduler 모듈 캐시 — 코드 fix 무력화 | scheduling.md | 운영자가 start_scheduler_loop.bat으로 전환 후 다음  |
-| WATCHING | - | 슬롯 기반 폐기 추적 검증 도입 (04-07, 04-08 스키마 드리프트 수정) | expiry-tracking.md | 04-09 07:00/23:00 스케줄에서 매장별 로그 분리+중복 재발 없음 검증 |
-| WATCHING | - | 47863 BatchSync false consumed (04-08 FR-02 우회 가드 이식) | expiry-tracking.md | 04-08 23:00/04-09 07:00 가드 후 false consumed 0건 · batch-only 오탐 급감 확인 |
-| OPEN | P1 | 4매장 false consumed 131건 라이브 감지 (scheduler 모듈 캐시 의심) | expiry-tracking.md | scheduler 재기동 + 24h 후 ops-metrics 재측정 |
-| WATCHING | - | 46704 폐기 검증 보고서 정시 생성 실패 (archived: 2026-04/waste-lightweight-46704-missing, 100%) | expiry-tracking.md | 04-09 정밀폐기 3회 정시 생성 + ops_metrics false-positive 0 확인 |
-| WATCHING | - | ops-metrics 자동 감지 지표 2개 추가 (archived: 2026-04/ops-metrics-monitor-extension, 99%) | expiry-tracking.md | 04-09 23:55 첫 자동 실행에서 알림/등록 동작 확인 |
+| WATCHING | - | 묶음 가드 우회 — 49965 햄/소시지·라면 과발주 | order-execution.md | 04-08 07:00 49965 daily_job 로그에서 두 item_ |
+| WATCHING | - | 슬롯 기반 폐기 추적 검증 도입 (04-07) | expiry-tracking.md | 04-09 07:00 스케줄에서 4매장 `waste_verificatio |
+| WATCHING | - | 푸드 has_stock 그룹 약한 과소예측 — 2차 원인 | order-execution.md | 8800279678588 에 대해 라이브 predict 실행하여 WMA→ |
+| WATCHING | - | 푸드 체계적 과소예측 — 도시락/김밥/샌드위치/햄버거 | order-execution.md | 04-09 07:00 49965 푸드 카테고리 predicted_qty가 |
 | WATCHING | - | 행사 종료 임박 상품 발주 감량 자동화 | order-execution.md | 다음 행사 종료 상품에서 D-5~D-4 감량 로그 확인 (수동) |
 | PLANNED | P1 | 예측 정확도 하락 조사 (4개 카테고리) | prediction.md | 없음 |
 | PLANNED | P1 | 자전 시스템 미해결 항목 (expiry_time_mismatch) | scheduling.md | 없음 |
@@ -94,6 +89,7 @@ BGF 리테일(CU 편의점) 다매장 자동 발주 시스템
 | PLANNED | P2 | 폐기 알림 OT 폴백 완전 제거 | expiry-tracking.md | (밀도 승격) [WATCHING] 과도기 알림 누락 → [RESOLVED] 전환 후 |
 | PLANNED | P2 | 하네스 엔지니어링 Week 3 — AI 요약 서비스 | scheduling.md | executed_at 검증 완료 (WATCHING 이슈 해결) |
 | PLANNED | P3 | hourly 시간대별 판매 소급 수집 안정화 | data-collection.md | 없음 (독립 작업) |
+| PLANNED | - | 8801043016049 site 발주 출처 추적 (P3, 04-08 ~) | order-execution.md |  |
 <!-- ISSUE_TABLE_END -->
 
 > 이 테이블은 `python scripts/sync_issue_table.py`로 자동 갱신됩니다.

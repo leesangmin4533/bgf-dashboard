@@ -14,6 +14,20 @@ from src.utils.logger import get_logger
 logger = get_logger(__name__)
 
 
+# food-underprediction-secondary B안:
+# stage_trace JSON 적재는 푸드 카테고리(001~005, 012)에 한정한다.
+# - 모집단 158건 has_stock 그룹이 푸드에만 존재 → 비푸드 mid는 관측 가치 없음
+# - 비푸드까지 확장하면 prediction_logs 일별 0.4MB → 수 MB 로 증가 (DB 부담)
+# - improved_predictor 의 _compute_safety_and_order 는 모든 mid 에 snapshot 을 채우지만,
+#   이 게이트가 적재 시점에 비푸드 snapshot 을 차단한다.
+_STAGE_TRACE_TARGET_MIDS = ('001', '002', '003', '004', '005', '012')
+
+
+def _is_stage_trace_target(mid_cd) -> bool:
+    """stage_trace JSON 적재 대상 카테고리 여부 (food mid 한정)"""
+    return mid_cd in _STAGE_TRACE_TARGET_MIDS
+
+
 class PredictionLogger:
     """예측 로그 관리"""
 
@@ -56,10 +70,14 @@ class PredictionLogger:
 
             if 'weekday_coef' in columns:
                 if has_stock_source:
-                    # stage_trace: 파이프라인 단계별 중간값 JSON
+                    # stage_trace: 파이프라인 단계별 중간값 JSON (food mid 한정 — B안)
                     import json as _json
                     _snapshot = getattr(result, 'snapshot_stages', None)
-                    _stage_trace = _json.dumps(_snapshot, ensure_ascii=False) if _snapshot else None
+                    _stage_trace = (
+                        _json.dumps(_snapshot, ensure_ascii=False)
+                        if _snapshot and _is_stage_trace_target(result.mid_cd)
+                        else None
+                    )
                     _has_stage_trace = 'stage_trace' in columns
 
                     if has_ml_weight:
@@ -271,6 +289,9 @@ class PredictionLogger:
             has_stock_source = 'stock_source' in columns
 
             has_ml_weight = 'rule_order_qty' in columns
+            # food-underprediction-secondary B안: 배치 경로(운영 hot path) stage_trace 적재
+            has_stage_trace = 'stage_trace' in columns
+            import json as _json_batch
 
             saved_count = 0
             if 'weekday_coef' in columns:
@@ -279,9 +300,55 @@ class PredictionLogger:
                         _rule_oq = getattr(result, 'rule_order_qty', None)
                         _ml_oq = getattr(result, 'ml_order_qty', None)
                         _ml_w = getattr(result, 'ml_weight_used', None)
+                        # stage_trace JSON: food mid 한정으로만 직렬화
+                        _snapshot_b = getattr(result, 'snapshot_stages', None)
+                        _stage_trace_b = (
+                            _json_batch.dumps(_snapshot_b, ensure_ascii=False)
+                            if _snapshot_b and _is_stage_trace_target(result.mid_cd)
+                            else None
+                        )
 
                         if has_stock_source:
                             if has_ml_weight:
+                                if has_stage_trace and _stage_trace_b:
+                                    # food mid + stage_trace 컬럼 존재 → 22컬럼 INSERT
+                                    cursor.execute("""
+                                        INSERT INTO prediction_logs (
+                                            prediction_date, item_cd, mid_cd, target_date,
+                                            predicted_qty, adjusted_qty,
+                                            weekday_coef, confidence, current_stock, safety_stock,
+                                            order_qty, model_type, store_id,
+                                            stock_source, pending_source, is_stock_stale,
+                                            rule_order_qty, ml_order_qty, ml_weight_used,
+                                            association_boost, stage_trace,
+                                            created_at
+                                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                    """, (
+                                        prediction_date,
+                                        result.item_cd,
+                                        result.mid_cd,
+                                        result.target_date,
+                                        result.predicted_qty,
+                                        result.adjusted_qty,
+                                        result.weekday_coef,
+                                        result.confidence,
+                                        result.current_stock,
+                                        result.safety_stock,
+                                        result.order_qty,
+                                        result.model_type,
+                                        self.store_id,
+                                        getattr(result, 'stock_source', ''),
+                                        getattr(result, 'pending_source', ''),
+                                        1 if getattr(result, 'is_stock_stale', False) else 0,
+                                        _rule_oq,
+                                        _ml_oq,
+                                        _ml_w,
+                                        getattr(result, 'association_boost', 1.0),
+                                        _stage_trace_b,
+                                        now.isoformat()
+                                    ))
+                                    saved_count += 1
+                                    continue
                                 cursor.execute("""
                                     INSERT INTO prediction_logs (
                                         prediction_date, item_cd, mid_cd, target_date,
