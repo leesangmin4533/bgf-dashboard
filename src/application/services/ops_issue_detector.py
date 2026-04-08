@@ -38,6 +38,15 @@ class OpsIssueDetector:
             except Exception as e:
                 logger.warning(f"[OpsIssueDetector] {ctx.store_id} 감지 실패: {e}")
 
+        # 2026-04-08: 시스템 전역 지표 (매장 무관, 1회 수집)
+        # ops-metrics-monitor-extension — verification_log_files_missing 등
+        try:
+            system_metrics = OpsMetrics.collect_system()
+            system_anomalies = detect_anomalies(system_metrics)
+            all_anomalies.extend(system_anomalies)
+        except Exception as e:
+            logger.warning(f"[OpsIssueDetector] 시스템 지표 감지 실패: {e}")
+
         # 매장 간 중복 제거 (동일 지표가 여러 매장에서 감지)
         unique = self._deduplicate_cross_store(all_anomalies)
 
