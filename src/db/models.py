@@ -1880,6 +1880,15 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_job_runs_missed_unique
     ON job_runs(job_name, COALESCE(store_id, ''), scheduled_for)
     WHERE status = 'missed';
     """,
+    75: """
+-- v75: waste_slips UNIQUE 제약 스키마 드리프트 복구
+-- 47863 매장에 한해 v33에서 UNIQUE(store_id, chit_date, chit_no)가 누락된 상태로 생성되어,
+-- INSERT OR REPLACE가 무력화되고 동일 전표가 5~10회 중복 저장되는 문제 발견 (2026-04-08).
+-- CREATE UNIQUE INDEX는 기존 UNIQUE 제약이 있어도 멱등하게 동작하므로 전 매장에 안전 적용.
+-- ⚠️ 이 마이그레이션 전에 운영 스크립트로 기존 중복을 반드시 먼저 정리해야 함 (47863만 해당).
+CREATE UNIQUE INDEX IF NOT EXISTS ux_waste_slips_store_date_no
+    ON waste_slips(store_id, chit_date, chit_no);
+    """,
 }
 
 

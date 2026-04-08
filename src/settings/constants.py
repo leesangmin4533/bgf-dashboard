@@ -252,7 +252,7 @@ BATCH_EXPIRY_ALERT_DAYS = 1             # 폐기 N일 전 알림
 
 # DB 스키마 버전
 # =====================================================================
-DB_SCHEMA_VERSION = 74  # v74: job_runs 스케줄 잡 실행 로그 (job-health-monitor)
+DB_SCHEMA_VERSION = 75  # v75: waste_slips UNIQUE 스키마 드리프트 복구 (47863 중복 저장 방지)
 
 # =====================================================================
 # Order Unit Qty Integrity v2 (order-unit-qty-integrity-v2)

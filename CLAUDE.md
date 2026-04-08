@@ -79,7 +79,8 @@ BGF 리테일(CU 편의점) 다매장 자동 발주 시스템
 | WATCHING | - | delivery_match 타이밍 불일치 → 2차 매칭 실패 | expiry-tracking.md |  |
 | WATCHING | - | ops_metrics waste_rate mid_cd 컬럼 부재 | scheduling.md | 다음 23:55 OpsMetricsCollector 실행에서 `waste |
 | WATCHING | - | scheduler 모듈 캐시 — 코드 fix 무력화 | scheduling.md | 운영자가 start_scheduler_loop.bat으로 전환 후 다음  |
-| WATCHING | - | 슬롯 기반 폐기 추적 검증 도입 (04-07) | expiry-tracking.md | 47863 02시 누락 7건 원인 조사 (별도) |
+| WATCHING | - | 슬롯 기반 폐기 추적 검증 도입 (04-07, 04-08 스키마 드리프트 수정) | expiry-tracking.md | 04-09 07:00/23:00 스케줄에서 매장별 로그 분리+중복 재발 없음 검증 |
+| OPEN | P1 | 47863 BatchSync 62건 false consumed (04-07 실데이터) | expiry-tracking.md | 중복 제거 후 재분석, zero-sales-guard 대규모 재발 의심 |
 | WATCHING | - | 행사 종료 임박 상품 발주 감량 자동화 | order-execution.md | 다음 행사 종료 상품에서 D-5~D-4 감량 로그 확인 (수동) |
 | PLANNED | P1 | 예측 정확도 하락 조사 (4개 카테고리) | prediction.md | 없음 |
 | PLANNED | P1 | 자전 시스템 미해결 항목 (expiry_time_mismatch) | scheduling.md | 없음 |

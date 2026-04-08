@@ -4,7 +4,7 @@
 전표 상세 품목 (실제 폐기) vs 추적모듈 (daily_sales, order_tracking, inventory_batches)
 비교 결과를 일별 텍스트 파일로 저장.
 
-파일: data/logs/waste_verification_YYYY-MM-DD.txt
+파일: data/logs/waste_verification_{store_id}_YYYY-MM-DD.txt
 """
 
 import sqlite3
@@ -464,7 +464,7 @@ class WasteVerificationReporter:
         )
 
         # 5) 보고서 작성
-        filename = f"waste_verification_{target_date}.txt"
+        filename = f"waste_verification_{self.store_id}_{target_date}.txt"
         filepath = self._log_dir / filename
 
         try:
