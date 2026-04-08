@@ -1,8 +1,22 @@
 {
-  "sessionCount": 3,
+  "sessionCount": 9,
   "lastSession": {
-    "startedAt": "2026-04-07T04:25:37.478Z",
+    "startedAt": "2026-04-08T02:23:45.804Z",
     "platform": "claude",
     "level": "Dynamic"
+  },
+  "pdca": {
+    "currentFeature": null,
+    "phase": null
+  },
+  "archivedFeatures": {
+    "ops-metrics-monitor-extension": {
+      "phase": "archived",
+      "matchRate": 99,
+      "iterationCount": 0,
+      "startedAt": "2026-04-08T11:50:00+09:00",
+      "archivedAt": "2026-04-08T13:28:38.348694",
+      "archivedTo": "docs/archive/2026-04/ops-metrics-monitor-extension/"
+    }
   }
 }

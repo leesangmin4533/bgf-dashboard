@@ -25,3 +25,5 @@
 | waste-verification-slot-based | 100% | 2026-04-07 |
 | claude-respond-traceability | 95% | 2026-04-07 |
 | scheduler-wrapper-restart | 97% | 2026-04-07 |
+| ops-metrics-monitor-extension | 99% | 2026-04-08 |
+| waste-lightweight-46704-missing | 100% | 2026-04-08 |

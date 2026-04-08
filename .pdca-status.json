@@ -1,4 +1,12 @@
 {
+  "waste-lightweight-46704-missing": {
+    "phase": "archived",
+    "matchRate": 100,
+    "iterationCount": 0,
+    "startedAt": "2026-04-08T14:10:00Z",
+    "archivedAt": "2026-04-08T14:30:00Z",
+    "archivedTo": "docs/archive/2026-04/waste-lightweight-46704-missing/"
+  },
   "waste-verification-slot-based": {
     "phase": "archived",
     "matchRate": 100,

@@ -26,6 +26,9 @@ METRIC_TO_FILE = {
     "waste_rate": "expiry-tracking.md",
     "collection_failure": "data-collection.md",
     "integrity_unresolved": "scheduling.md",
+    # 2026-04-08: ops-metrics-monitor-extension
+    "false_consumed_post_guard": "expiry-tracking.md",
+    "verification_log_files_missing": "expiry-tracking.md",
 }
 
 # P1 승격 조건
@@ -67,6 +70,9 @@ def detect_anomalies(metrics: dict) -> List[OpsAnomaly]:
         ("waste_rate", _check_waste_rate),
         ("collection_failure", _check_collection_failure),
         ("integrity_unresolved", _check_integrity_unresolved),
+        # 2026-04-08: ops-metrics-monitor-extension
+        ("false_consumed", _check_false_consumed_post_guard),
+        ("verification_log_files", _check_verification_log_files),
     ]
 
     for metric_name, checker in checkers:
@@ -246,4 +252,63 @@ def _check_integrity_unresolved(data: dict) -> Optional[OpsAnomaly]:
             f"anomaly 발생 중 ({len(unresolved)}개 항목)"
         ),
         evidence={"unresolved_checks": unresolved},
+    )
+
+
+def _check_false_consumed_post_guard(data: dict) -> Optional[OpsAnomaly]:
+    """가드 우회 감지: 만료 24h 이내 시점에 consumed 마킹된 단기유통기한 배치
+
+    2026-04-08 도입 (ops-metrics-monitor-extension).
+    BatchSync FR-02 우회 사건 후속. 가드 위반의 SQL 정의 그대로 사용.
+    """
+    cnt = data.get("cnt", 0)
+    if cnt == 0:
+        return None
+    sample = (data.get("sample_items") or "")[:60]
+    return OpsAnomaly(
+        metric_name="false_consumed_post_guard",
+        issue_chain_file=METRIC_TO_FILE["false_consumed_post_guard"],
+        title=f"BatchSync 가드 우회 의심 {cnt}건 (24h 내)",
+        priority="P2",
+        description=(
+            f"단기유통기한(<=7일) 배치 {cnt}건이 만료 24h 이내에 consumed 마킹됨. "
+            f"가드 우회 경로 또는 신규 false consumed 재발 의심. "
+            f"최근 발생: {data.get('latest_at')}, 샘플: {sample}"
+        ),
+        evidence={
+            "count": cnt,
+            "latest_at": data.get("latest_at"),
+            "sample_items": data.get("sample_items"),
+        },
+    )
+
+
+def _check_verification_log_files(data: dict) -> Optional[OpsAnomaly]:
+    """매장별 검증 로그 파일 누락 감지
+
+    2026-04-08 도입 (ops-metrics-monitor-extension).
+    waste_verification_reporter 분리 로직(fce1594) 회귀 감지용.
+    """
+    missing_count = data.get("missing_count", 0)
+    if missing_count == 0:
+        return None
+    missing_stores = data.get("missing_stores", [])
+    yesterday = data.get("yesterday", "?")
+    expected = data.get("expected_count", 0)
+    return OpsAnomaly(
+        metric_name="verification_log_files_missing",
+        issue_chain_file=METRIC_TO_FILE["verification_log_files_missing"],
+        title=f"매장별 검증 로그 {missing_count}개 누락 ({yesterday})",
+        priority="P3",
+        description=(
+            f"어제({yesterday}) 매장별 폐기 검증 로그 파일이 {missing_count}개 누락. "
+            f"예상 {expected}, 누락 매장: {', '.join(missing_stores)}. "
+            f"waste_verification_reporter 분리 로직 또는 23:00 waste_report_flow 회귀 의심."
+        ),
+        evidence={
+            "missing_count": missing_count,
+            "expected_count": expected,
+            "missing_stores": missing_stores,
+            "yesterday": yesterday,
+        },
     )

@@ -316,31 +316,65 @@ class SalesRepository(BaseRepository):
             batch_total = cursor.fetchone()[0]
             if batch_total > stock_qty and batch_total > 0:
                 to_consume = batch_total - stock_qty
-                # 인라인 FIFO 차감 (InventoryBatchRepository 인스턴스 없이 cursor 직접 사용)
+
+                # ★ batch-sync-zero-sales-guard (2026-04-08, FR-02 우회 경로 차단):
+                # BatchSync.sync_remaining_with_stock와 동일 가드를 FR-02 인라인 FIFO에도 적용.
+                # 만료 24h 이내 active 배치는 ExpiryChecker/폐기 슬롯이 처리하도록 보호.
+                # 47863 04-07~08 13건 false consumed 사건: 가드가 batch_repo에만 있고
+                # sales_repo FR-02에는 없어서 save_daily_sales 경로로 0판매 + 임박 배치가
+                # 여전히 잘못 consumed 마킹되던 문제 차단.
                 cursor.execute(
                     """
-                    SELECT id, remaining_qty FROM inventory_batches
-                    WHERE item_cd = ? AND store_id = ? AND status = ? AND remaining_qty > 0
-                    ORDER BY receiving_date ASC, id ASC
+                    SELECT COALESCE(SUM(remaining_qty), 0) AS normal_qty
+                    FROM inventory_batches
+                    WHERE item_cd = ? AND store_id = ? AND status = ?
+                      AND remaining_qty > 0
+                      AND (expiry_date IS NULL
+                           OR julianday(expiry_date) - julianday('now') >= 1.0)
                     """,
                     (item_cd, store_id, BATCH_STATUS_ACTIVE)
                 )
-                remaining_consume = to_consume
-                consumed_total = 0
-                for batch_row in cursor.fetchall():
-                    if remaining_consume <= 0:
-                        break
-                    b_id = batch_row[0]
-                    b_remaining = batch_row[1]
-                    b_deduct = min(b_remaining, remaining_consume)
-                    new_remaining = b_remaining - b_deduct
-                    new_status = BATCH_STATUS_CONSUMED if new_remaining == 0 else BATCH_STATUS_ACTIVE
-                    cursor.execute(
-                        "UPDATE inventory_batches SET remaining_qty = ?, status = ?, updated_at = ? WHERE id = ?",
-                        (new_remaining, new_status, now, b_id)
+                normal_qty = int(cursor.fetchone()[0] or 0)
+
+                if normal_qty == 0:
+                    # 모든 active 배치가 만료 임박 → FR-02 보류 (ExpiryChecker가 처리)
+                    logger.info(
+                        f"[FR-02 guard] {item_cd}: 모든 active 배치 만료 임박, "
+                        f"FIFO 차감 보류 (to_consume={to_consume})"
                     )
-                    remaining_consume -= b_deduct
-                    consumed_total += b_deduct
+                else:
+                    if to_consume > normal_qty:
+                        to_consume = normal_qty
+
+                    # 인라인 FIFO 차감 (임박 배치는 후순위로 정렬하여 정상 배치만 차감)
+                    cursor.execute(
+                        """
+                        SELECT id, remaining_qty FROM inventory_batches
+                        WHERE item_cd = ? AND store_id = ? AND status = ? AND remaining_qty > 0
+                        ORDER BY
+                            CASE WHEN expiry_date IS NOT NULL
+                                 AND julianday(expiry_date) - julianday('now') < 1.0
+                                 THEN 1 ELSE 0 END,
+                            receiving_date ASC, id ASC
+                        """,
+                        (item_cd, store_id, BATCH_STATUS_ACTIVE)
+                    )
+                    remaining_consume = to_consume
+                    consumed_total = 0
+                    for batch_row in cursor.fetchall():
+                        if remaining_consume <= 0:
+                            break
+                        b_id = batch_row[0]
+                        b_remaining = batch_row[1]
+                        b_deduct = min(b_remaining, remaining_consume)
+                        new_remaining = b_remaining - b_deduct
+                        new_status = BATCH_STATUS_CONSUMED if new_remaining == 0 else BATCH_STATUS_ACTIVE
+                        cursor.execute(
+                            "UPDATE inventory_batches SET remaining_qty = ?, status = ?, updated_at = ? WHERE id = ?",
+                            (new_remaining, new_status, now, b_id)
+                        )
+                        remaining_consume -= b_deduct
+                        consumed_total += b_deduct
 
                 # FR-02 후속: FIFO 차감분만큼 realtime_inventory.stock_qty도 보정
                 # (daily_sales.stock_qty가 이미 실제 재고이므로, 여기서는 배치와의 정합성만 확인)

@@ -233,9 +233,38 @@
 - **부정 vs 긍정 변수**: protected_qty 대신 normal_qty가 FIFO 차감 한도와 자연 일치
 - **TDD 효과**: 회귀 테스트가 알고리즘 결함을 첫 실행에서 잡음
 
+### 시도 2: FR-02 우회 경로 차단 + 검증 reporter 노이즈 필터 (04-08)
+- **왜**: 47863 BatchSync false consumed 62건 정밀 조사 중 **가드 배포(04-07 16:28) 이후에도 14건 재발** 발견. 원인: 가드가 `sync_remaining_with_stock`(BatchSync)에만 있고 `sales_repo.save_daily_sales` 내 FR-02 인라인 FIFO 경로에는 누락 → save_daily_sales가 stock=0 보고를 처리할 때 임박 배치를 여전히 consumed 마킹
+- **재현 사례 (47863 04-07~08)**:
+  - 22850 (훈제오리기본1): 04-06 21:51 active 생성 → **04-07 01:51** save_daily_sales 경로에서 consumed (가드 배포 15시간 전이지만 FR-02 경로 확인 용)
+  - 23042 외 12건: 04-07 21:51 ~ 04-08 01:50에 FR-02 경로로 consumed (가드 배포 **후**)
+  - 전부 `expiration_days=1`, 1차/2차 폐기 슬롯 직전
+- **추가 발견**: 검증 reporter가 2026-03-04 백필 시점의 2025년 장기유통기한 입고분(23건)을 오탐으로 잡던 문제 — 운영 데이터와 분리 필요
+- **조치**:
+  1. `sales_repo.py` FR-02 인라인 FIFO에 `sync_remaining_with_stock`와 동일 normal_qty 가드 이식
+  2. `sales_repo.py` FIFO 정렬에 만료 임박 후순위 CASE WHEN 추가
+  3. `waste_verification_reporter._get_tracking_inventory_batches`에 노이즈 필터: `expiration_days <= 30 AND created_at >= target_date - 14일`
+  4. 47863 운영 DB: 가드 배포 후 잘못 consumed된 14건을 expired로 정정 (04-07 1건 + 04-08 13건)
+- **결과**: ✓ 관련 테스트 30건 중 28건 통과, 2건 실패는 pre-existing TestCalibratorSlipSource (무관)
+- **실패 패턴**: (신규) `#guard-single-path-coverage` — 동일 정합성 로직이 여러 경로에 중복 구현돼 있을 때 한 경로에만 가드 추가하면 우회 발생
+
+### 교훈
+- **stock=0 ≠ 모두 팔림**: BGF가 0판매 행을 응답에 포함 안 함 → daily_sales 누락 → BatchSync 잘못 추론
+- **부정 vs 긍정 변수**: protected_qty 대신 normal_qty가 FIFO 차감 한도와 자연 일치
+- **TDD 효과**: 회귀 테스트가 알고리즘 결함을 첫 실행에서 잡음
+- **가드 커버리지 감사 필요** (시도2): 동일 정합성 로직 A/B/C 세 경로에 분산돼 있을 때 한 곳만 고치면 나머지가 우회로 노출. `git grep "inventory_batches.*consumed"`로 모든 쓰기 경로를 명시적으로 열거한 뒤 가드 적용 체크리스트를 유지해야 함
+- **검증 로직은 운영 데이터와 historical 백필을 구분**해야 함 — `created_at` 윈도우 + `expiration_days` 가드로 현실적인 검증 대상만 비교
+
 ### 검증 체크포인트
-- [x] 가드 추가 + 5/5 회귀 테스트 통과
-- [ ] scheduler-auto-reload로 자동 적용 확인 (코드 변경 감지)
+- [x] 가드 추가 + 5/5 회귀 테스트 통과 (BatchSync 경로)
+- [x] FR-02 우회 경로 식별 + 가드 이식 + 운영 데이터 정정 (04-08)
+- [x] 검증 reporter 노이즈 필터 추가 (04-08)
+- [x] 자동 감지 지표 2개 추가 (ops-metrics-monitor-extension, 8dd9090) — 04-08 23:55부터 자동 알림
+- [ ] **🚨 라이브 발견 1**: 4매장 모두 false consumed 발생 중 (46513=18, 46704=44, 47863=12, 49965=57, 총 131건). latest 시각이 04-08 07:10 ~ 09:51 → ae9d05f 가드 fix(11:30경) 이전에 시작된 scheduler 모듈 캐시 가능성 1순위. **scheduler 재기동 후 24h 재측정 필수**
+- [ ] **🚨 라이브 발견 2**: 46704 매장의 04-07 검증 로그 파일 누락 (다른 3매장은 정상). waste_report_flow 매장별 회귀 의심, 별도 조사
+- [ ] **🚨 라이브 발견 3 (04-08, gap-detector 검증)**: 46704 04-07 푸드(중001/002/003) 입고 41건(1차 22 + 2차 19) 중 `inventory_batches` **21건만 생성 + 슬롯 100% 손실** (02:00=0, 14:00=0, 시간없음=21). 동일 날짜 46513은 14시 슬롯 5건 정상 등록. 46704 04-08은 정상 복귀(02:00=14, 14:00=20). 시점이 fce1594(04-07 17:11) **이전** FR-02 우회 경로 가드 미배포 구간과 일치 → 시도 2의 "46704=44건 false consumed"와 동일 사건 가능성. 14시 슬롯 누락 ↔ false consumed 교차 확인 필요. (검증 쿼리: `data/stores/46704.db` receiving_history vs inventory_batches 04-06~09 mid_cd IN ('001','002','003'))
+- [ ] 04-08 23:00 waste_report 후 47863에서 가드 후 false consumed 0건 확인
+- [ ] 04-09 07:00 매장별 검증 로그에서 batch-only 오탐 급감 확인 (47863 67→10 미만 기대)
 - [ ] 다음 14:00 ExpiryChecker가 0판매 만료 상품 폐기 후보 인지
 
 **관련 작업 (archive)**: docs/archive/2026-04/batch-sync-zero-sales-guard/
@@ -300,6 +329,54 @@
 - 04-09 검증 차단 위험 없음
 
 → [RESOLVED]. food-underprediction 분석 작업이 04-08 정상 실행을 부수적으로 입증.
+
+## [WATCHING] 46704 폐기 검증 보고서 정시 생성 실패 (04-08 수정)
+
+**설계 의도**: 4매장 모두 정밀폐기 경량화 세션(10:00/14:00/22:00)에서 `waste_verification_{store}_{date}.txt` 파일이 동일 시각에 생성되어야 함. `ops_metrics` 23:55 `verification_log_files_missing` 지표가 누락을 자동 감지.
+
+**문제**: 46704만 10:11 세션에서 파일 생성 누락, 13:52에 지연 생성. 04-07/04-08 이틀 재현. ops_metrics가 false-positive P3 알림 발생.
+
+**원인 (타임라인 추적 확정, 04-08 14:00)**:
+1. `collect_waste_slips`가 46704에서 silent exception으로 `{"success": False, "count": 0}` 반환 (외부 try/except가 `traceback.print_exc()`만 사용해 파일 로그에 stack trace 안 남음)
+2. `collection.py:322` 가드 `if waste_slip_stats.get("success"):` 탈락 → `verify_date_deep` 호출 자체 스킵
+3. DB에 저장된 슬립이 있어도 검증이 돌지 않음 — 가드가 "수집 결과"와 "DB 기반 검증"을 부적절하게 결합
+4. 13:52 재실행 세션에서 우연히 수집 성공 → 그제서야 파일 생성
+
+**증거 (logs/bgf_auto.log)**:
+- run=47693385 (10:10:48, store=46704, lightweight): "폐기 전표 수집: 0건" → Phase 1.15 Completed 1.1초 → VerifyDeep 라인 없음 → reporter 파일 없음
+- run=011654de (13:52:04, store=46704): "폐기 전표 수집: 2건" → VerifyDeep + 파일 생성 ✅
+
+### 시도 1: 가드 완화 + 4개 지점 로그 가시화 (b5d458a, 04-08)
+- **왜**: DB 기반 검증은 수집 결과와 독립. Repository가 소스 오브 트루스이므로 수집 실패여도 VerifyDeep는 돌아야 함. 동시에 silent fail을 뿌리뽑기 위해 4지점 exc_info 추가.
+- **수정**:
+  - `collection.py:322` 가드 `success → is not None`으로 완화
+  - `collection.py:319` 수집 결과 로깅 분기 (success/fail 모두 store_id 포함)
+  - `waste_slip_collector.py:916` `traceback.print_exc()` → `exc_info=True`, store/date 포함
+  - `waste_verification_reporter.py:497` warning에 `exc_info=True`, store/date 포함
+  - `waste_verification_service.py` 2곳(VerifyDeep 상세 비교 실패, 보고서 생성 실패) exc_info 추가
+  - `[VerifyDeep]` INFO 라인에 store_id 명시 (run_id 역추적 불필요)
+- **결과**: 대기 중 (04-09 정밀폐기 세션 3회에서 검증)
+- **실패 패턴**: `#silent-fail`, `#guard-coupling`
+
+### 교훈
+- **외부 try/except + traceback.print_exc()는 파일 로그에 안 남는다** — 항상 `logger.error(..., exc_info=True)`로 통일
+- **"수집 성공"과 "검증 가능"은 독립** — 수집 실패여도 과거 DB 슬립은 검증 가능
+- **silent exception을 허용하면 2일간 false-positive**가 발동한다 (ops_metrics 자동 감지의 필수 전제는 진실된 실패 신호)
+
+### 검증 체크포인트
+- [ ] 04-09 10:00 정밀폐기 세션에서 46704 포함 4매장 보고서 파일 정시 생성 (세션 시작 ±2분)
+- [ ] 04-09 14:00 정밀폐기 세션 동일 검증
+- [ ] 04-09 22:00 정밀폐기 세션 동일 검증
+- [ ] 04-09 23:55 ops_metrics 실행에서 `verification_log_files_missing = 0`
+- [ ] 만약 여전히 silent exception이 발생한다면, 새 exc_info stack trace로 **진짜 원인**(예: DB lock, 넥사크로 프레임 전환 실패) 식별 가능해야 함
+- [ ] 2주 연속(04-09 ~ 04-22) 동일 매장 재발 0건 → [RESOLVED]
+- [ ] logs에서 `[VerifyDeep] {store_id}` 형식으로 매장 식별 가능 확인
+
+### 연관
+- → scheduling.md#scheduler 모듈 캐시 — 코드 fix 무력화 (본 수정이 모듈 캐시 재기동으로만 활성화되면 P1 이슈와 중첩)
+- → scheduling.md#verification_log_files_missing false-positive 회고
+
+---
 
 ## [PLANNED] 010 폐기율 상승 조사 (P2)
 

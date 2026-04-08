@@ -9,6 +9,8 @@ from src.domain.ops_anomaly import (
     _check_waste_rate,
     _check_collection_failure,
     _check_integrity_unresolved,
+    _check_false_consumed_post_guard,
+    _check_verification_log_files,
 )
 
 
@@ -212,3 +214,61 @@ class TestIntegrityUnresolved:
 
     def test_empty_checks(self):
         assert _check_integrity_unresolved({"checks": []}) is None
+
+
+class TestCheckFalseConsumedPostGuard:
+    """가드 우회 감지 (ops-metrics-monitor-extension, 2026-04-08)"""
+
+    def test_zero_count_returns_none(self):
+        assert _check_false_consumed_post_guard({"cnt": 0}) is None
+
+    def test_one_count_returns_p2(self):
+        a = _check_false_consumed_post_guard(
+            {
+                "cnt": 3,
+                "latest_at": "2026-04-08 01:51:00",
+                "sample_items": "8800279671893,8800279676348,8800279675723",
+            }
+        )
+        assert a is not None
+        assert a.priority == "P2"
+        assert "3건" in a.title
+        assert a.metric_name == "false_consumed_post_guard"
+        assert a.issue_chain_file == "expiry-tracking.md"
+
+    def test_evidence_passthrough(self):
+        a = _check_false_consumed_post_guard(
+            {"cnt": 1, "latest_at": "T", "sample_items": "X"}
+        )
+        assert a.evidence["count"] == 1
+        assert a.evidence["latest_at"] == "T"
+
+
+class TestCheckVerificationLogFiles:
+    """검증 로그 파일 누락 감지 (ops-metrics-monitor-extension, 2026-04-08)"""
+
+    def test_zero_missing_returns_none(self):
+        assert _check_verification_log_files(
+            {
+                "verification_log_files": {
+                    "expected_count": 4,
+                    "missing_count": 0,
+                    "missing_stores": [],
+                    "yesterday": "2026-04-07",
+                }
+            }.get("verification_log_files")
+        ) is None
+
+    def test_one_missing_returns_p3(self):
+        a = _check_verification_log_files(
+            {
+                "expected_count": 4,
+                "missing_count": 1,
+                "missing_stores": ["47863"],
+                "yesterday": "2026-04-07",
+            }
+        )
+        assert a is not None
+        assert a.priority == "P3"
+        assert "47863" in a.description
+        assert a.metric_name == "verification_log_files_missing"

@@ -65,7 +65,8 @@ BGF 리테일(CU 편의점) 다매장 자동 발주 시스템
 | 상태 | 우선순위 | 이슈 | 파일 | 비고 |
 |:---:|:---:|------|------|------|
 | OPEN | - | product_details order_unit_qty 불일치 → 과발주 | order-execution.md |  |
-| WATCHING | - | BatchSync 0판매 + 만료 임박 → 잘못된 consumed 마킹 (04-07 수정) | expiry-tracking.md | scheduler-auto-reload로 자동 적용 확인 (코드 변경 감 |
+| WATCHING | - | 46704 폐기 검증 보고서 정시 생성 실패 (04-08 수정) | expiry-tracking.md | 04-09 10:00 정밀폐기 세션에서 46704 포함 4매장 보고서 파 |
+| WATCHING | - | BatchSync 0판매 + 만료 임박 → 잘못된 consumed 마킹 (04-07 수정) | expiry-tracking.md | **🚨 라이브 발견 1**: 4매장 모두 false consumed 발생 |
 | WATCHING | - | D-1 부스트 발주 execute_single_order 누락 + scheduler 모듈 캐시 | expiry-tracking.md | scheduler 재시작 (운영자 수동) |
 | WATCHING | - | K4 expiry_time_mismatch 31일 NOT_MET — 식품 전용 재정의 (04-07 수정) | scheduling.md | 다음 milestone_snapshots K4 NOT_MET → ACHI |
 | WATCHING | - | SLOW 주기 판매 상품 ROP=1 발주 | order-execution.md |  |

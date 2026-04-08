@@ -19,14 +19,95 @@ class OpsMetrics:
         self.store_id = store_id
 
     def collect_all(self) -> dict:
-        """5개 지표 전부 수집 -> dict 반환"""
+        """매장별 지표 전부 수집 -> dict 반환
+
+        2026-04-08: false_consumed (#6) 추가 — BatchSync 가드 우회 감지
+        """
         return {
             "prediction_accuracy": self._prediction_accuracy(),
             "order_failure": self._order_failure(),
             "waste_rate": self._waste_rate(),
             "collection_failure": self._collection_failure(),
             "integrity_unresolved": self._integrity_unresolved(),
+            "false_consumed": self._false_consumed_post_guard(),
         }
+
+    @staticmethod
+    def collect_system() -> dict:
+        """시스템 전역 지표 (매장 무관) -> dict 반환
+
+        2026-04-08: verification_log_files (#7) 추가
+        — 매장별 검증 로그 파일 분리 로직 회귀 감지
+        """
+        from datetime import date, timedelta
+        from pathlib import Path
+        from src.settings.store_context import StoreContext
+
+        yesterday = (date.today() - timedelta(days=1)).isoformat()
+        log_dir = Path("data/logs")
+        try:
+            active_store_ids = [c.store_id for c in StoreContext.get_all_active()]
+        except Exception as e:
+            logger.warning(f"[OpsMetrics] active stores 조회 실패: {e}")
+            return {"verification_log_files": {"insufficient_data": True}}
+
+        expected = len(active_store_ids)
+        missing: list[str] = []
+        for sid in active_store_ids:
+            fname = f"waste_verification_{sid}_{yesterday}.txt"
+            if not (log_dir / fname).exists():
+                missing.append(sid)
+
+        return {
+            "verification_log_files": {
+                "expected_count": expected,
+                "missing_count": len(missing),
+                "missing_stores": missing,
+                "yesterday": yesterday,
+            }
+        }
+
+    def _false_consumed_post_guard(self) -> dict:
+        """가드 우회 감지: 만료 24h 이내 시점에 consumed 마킹된 단기유통기한 배치
+
+        2026-04-08 도입 (BatchSync FR-02 우회 사건 후속).
+        - 슬라이딩 윈도우: 최근 24h 내 updated_at
+        - expiration_days <= 7 (백필 노이즈 차단)
+        - julianday(expiry_date) - julianday(updated_at) < 1.0 (가드 위반의 SQL 정의 그대로)
+        """
+        conn = DBRouter.get_store_connection(self.store_id)
+        try:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT COUNT(*) AS cnt,
+                       MAX(updated_at) AS latest_at,
+                       GROUP_CONCAT(item_cd, ',') AS sample_items
+                FROM inventory_batches
+                WHERE store_id = ?
+                  AND status = 'consumed'
+                  AND COALESCE(expiration_days, 999) <= 7
+                  AND updated_at >= datetime('now', '-24 hours')
+                  AND expiry_date IS NOT NULL
+                  AND julianday(expiry_date) - julianday(updated_at) < 1.0
+                """,
+                (self.store_id,),
+            )
+            row = cursor.fetchone()
+            if not row or (row[0] or 0) == 0:
+                return {"cnt": 0}
+            return {
+                "cnt": int(row[0]),
+                "latest_at": row[1],
+                "sample_items": row[2] or "",
+            }
+        except Exception as e:
+            logger.warning(
+                f"[OpsMetrics] {self.store_id} false_consumed_post_guard 실패: {e}"
+            )
+            return {"cnt": 0}  # 실패는 정상 취급(과알림 방지)
+        finally:
+            conn.close()
 
     def _prediction_accuracy(self) -> dict:
         """eval_outcomes에서 카테고리별 7d/14d MAE 집계"""
