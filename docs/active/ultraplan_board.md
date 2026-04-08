@@ -18,9 +18,9 @@
 - **Decisions**: Phase 1 MVP=카카오 5줄(23:50, Haiku, ~$0.30/월), 신규 schema v77 ai_summaries, 폴백=규칙기반. 선행: action_proposals executed_at 검증(04-09 07:00). 식품 예측 모듈 무간섭.
 - **Plan**: docs/01-plan/features/harness-week3-ai-summary.plan.md
 
-**큐 (완료 후 순차 진행)**:
-1. `expiry-time-mismatch-redesign` (P1 자전 시스템 식품 전용 재정의)
-2. `prediction-accuracy-regression-4cats` (P1 4개 카테고리 예측 정확도 하락 근본원인 조사)
+**큐 (처리 결과)**:
+1. ~~`expiry-time-mismatch-redesign`~~ — **SKIP**: WATCHING(04-07 식품 전용+7일 임계값 fix)으로 이미 해결됨. 04-09 milestone 관측만 남음. PLANNED 항목은 stale 자동 감지.
+2. `prediction-accuracy-regression-4cats` — **Plan 작성 완료** (`docs/01-plan/features/prediction-accuracy-regression-4cats.plan.md`). ultraplan 비교 대기.
 
 ---
 
