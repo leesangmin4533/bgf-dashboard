@@ -87,10 +87,10 @@ BGF 리테일(CU 편의점) 다매장 자동 발주 시스템
 | WATCHING | - | delivery_match 타이밍 불일치 → 2차 매칭 실패 | expiry-tracking.md |  |
 | WATCHING | - | ops_metrics waste_rate mid_cd 컬럼 부재 | scheduling.md | 다음 23:55 OpsMetricsCollector 실행에서 `waste |
 | WATCHING | - | scheduler 모듈 캐시 — 코드 fix 무력화 | scheduling.md | 운영자가 start_scheduler_loop.bat으로 전환 후 다음  |
-| WATCHING | - | 묶음 가드 우회 — 49965 햄/소시지·라면 과발주 | order-execution.md | 04-08 07:00 49965 daily_job 로그에서 두 item_ |
+| RESOLVED | - | 묶음 가드 우회 — 49965 햄/소시지·라면 과발주 (04-09 검증) | order-execution.md | 두 상품 미발주 확인, L3 가드 mid=023/032 정상 동작 |
 | WATCHING | - | 슬롯 기반 폐기 추적 검증 도입 (04-07) | expiry-tracking.md | 04-09 07:00 스케줄에서 4매장 `waste_verificatio |
 | WATCHING | - | 푸드 has_stock 그룹 약한 과소예측 — 2차 원인 | order-execution.md | 8800279678588 에 대해 라이브 predict 실행하여 WMA→ |
-| WATCHING | - | 푸드 체계적 과소예측 — 도시락/김밥/샌드위치/햄버거 | order-execution.md | 04-09 07:00 49965 푸드 카테고리 predicted_qty가 |
+| RESOLVED | - | 푸드 체계적 과소예측 — 도시락/김밥/샌드위치/햄버거 (04-09 검증) | order-execution.md | 전체 bias 72% 개선(0.455→0.127), 5/6 mid 50%+ ✓ |
 | WATCHING | - | 행사 종료 임박 상품 발주 감량 자동화 | order-execution.md | 다음 행사 종료 상품에서 D-5~D-4 감량 로그 확인 (수동) |
 | PLANNED | P1 | 예측 정확도 하락 조사 (4개 카테고리) | prediction.md | 없음 |
 | PLANNED | P1 | 자전 시스템 미해결 항목 (expiry_time_mismatch) | scheduling.md | 없음 |
@@ -99,6 +99,8 @@ BGF 리테일(CU 편의점) 다매장 자동 발주 시스템
 | PLANNED | P2 | CLEAR_GHOST_STOCK 자동실행 승격 검토 | scheduling.md | integrity_checks 2주 누적 데이터에서 food_ghost_ |
 | PLANNED | P2 | ML is_payday DB 반영 효과 검증 | prediction.md | f0657a8 커밋 반영 후 최소 2주 운영 데이터 필요 |
 | PLANNED | P2 | PaydayAnalyzer 결과를 ML 학습 데이터에도 반영 | prediction.md | (밀도 승격) P2 효과 검증 완료 후 양수 효과 확인 시 |
+| PLANNED | P2 | mid_cd 016 과자류 MAE 20 이상 이상 급등 — 행사/수집 원인 미규명 | prediction.md | 없음 |
+| PLANNED | P2 | mid_cd 605 DefaultStrategy 오분류 — 카테고리 매핑 누락 | prediction.md | 없음 |
 | PLANNED | P2 | 폐기 알림 OT 폴백 완전 제거 | expiry-tracking.md | (밀도 승격) [WATCHING] 과도기 알림 누락 → [RESOLVED] 전환 후 |
 | PLANNED | P2 | 하네스 엔지니어링 Week 3 — AI 요약 서비스 | scheduling.md | executed_at 검증 완료 (WATCHING 이슈 해결) |
 | PLANNED | P3 | hourly 시간대별 판매 소급 수집 안정화 | data-collection.md | 없음 (독립 작업) |
