@@ -1889,6 +1889,17 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_job_runs_missed_unique
 CREATE UNIQUE INDEX IF NOT EXISTS ux_waste_slips_store_date_no
     ON waste_slips(store_id, chit_date, chit_no);
     """,
+
+    76: """
+-- v76: prediction_logs 스키마 드리프트 복구 — association_boost + stage_trace
+-- food-underprediction-secondary B안 (관측성 봉쇄 해소).
+-- prediction_logger.py 는 두 컬럼을 INSERT 하지만 _STORE_COLUMN_PATCHES / CREATE TABLE
+-- 양쪽에 누락되어 PRAGMA 체크로 silent skip 중이었음. 7가설 모두 데이터 부재로 검증 불가능.
+-- 본 마이그레이션은 init_db (legacy/common DB 경로) 의 schema_version 정렬을 위해 추가 — 실제 컬럼은
+-- _STORE_COLUMN_PATCHES (매장별 store DB) 와 CREATE TABLE (신규 DB) 양쪽에서 멱등 적용된다.
+ALTER TABLE prediction_logs ADD COLUMN association_boost REAL;
+ALTER TABLE prediction_logs ADD COLUMN stage_trace TEXT;
+    """,
 }
 
 
