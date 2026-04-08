@@ -129,6 +129,13 @@ class WasteVerificationReporter:
             # waste-verification-slot-based (2026-04-07):
             # status='expired'만 보던 사각지대 해소 → 'consumed'/'disposed'/'expired' 모두 포함.
             # batch-sync-zero-sales-guard 사건처럼 잘못 consumed 마킹된 배치도 검증 base에 포함.
+            #
+            # waste-verification-historical-noise-filter (2026-04-08):
+            # 47863 스키마 드리프트 조사 중 발견 — 백필 시점(2026-03-04)에 2025년 입고분이
+            # 일괄 consumed로 생성되어 검증 오탐을 유발. 다음 두 가드 추가:
+            #   1) expiration_days <= 30: 장기 유통기한(공산품/담배 등)은 일별 폐기 검증 대상 아님
+            #   2) created_at >= 14일 이내: 백필 historical 레코드 제외
+            # (waste_slips는 실시간 수집이라 이 필터가 불일치를 만들지 않음)
             cursor.execute(
                 """
                 SELECT
@@ -139,9 +146,11 @@ class WasteVerificationReporter:
                 FROM inventory_batches
                 WHERE date(expiry_date) = ?
                   AND status != 'active'
+                  AND COALESCE(expiration_days, 999) <= 30
+                  AND date(COALESCE(created_at, '1970-01-01')) >= date(?, '-14 days')
                 ORDER BY item_cd
                 """,
-                (target_date,),
+                (target_date, target_date),
             )
             return [dict(r) for r in cursor.fetchall()]
         except Exception as e:
