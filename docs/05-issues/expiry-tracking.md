@@ -329,6 +329,54 @@
 
 → [RESOLVED]. food-underprediction 분석 작업이 04-08 정상 실행을 부수적으로 입증.
 
+## [WATCHING] 46704 폐기 검증 보고서 정시 생성 실패 (04-08 수정)
+
+**설계 의도**: 4매장 모두 정밀폐기 경량화 세션(10:00/14:00/22:00)에서 `waste_verification_{store}_{date}.txt` 파일이 동일 시각에 생성되어야 함. `ops_metrics` 23:55 `verification_log_files_missing` 지표가 누락을 자동 감지.
+
+**문제**: 46704만 10:11 세션에서 파일 생성 누락, 13:52에 지연 생성. 04-07/04-08 이틀 재현. ops_metrics가 false-positive P3 알림 발생.
+
+**원인 (타임라인 추적 확정, 04-08 14:00)**:
+1. `collect_waste_slips`가 46704에서 silent exception으로 `{"success": False, "count": 0}` 반환 (외부 try/except가 `traceback.print_exc()`만 사용해 파일 로그에 stack trace 안 남음)
+2. `collection.py:322` 가드 `if waste_slip_stats.get("success"):` 탈락 → `verify_date_deep` 호출 자체 스킵
+3. DB에 저장된 슬립이 있어도 검증이 돌지 않음 — 가드가 "수집 결과"와 "DB 기반 검증"을 부적절하게 결합
+4. 13:52 재실행 세션에서 우연히 수집 성공 → 그제서야 파일 생성
+
+**증거 (logs/bgf_auto.log)**:
+- run=47693385 (10:10:48, store=46704, lightweight): "폐기 전표 수집: 0건" → Phase 1.15 Completed 1.1초 → VerifyDeep 라인 없음 → reporter 파일 없음
+- run=011654de (13:52:04, store=46704): "폐기 전표 수집: 2건" → VerifyDeep + 파일 생성 ✅
+
+### 시도 1: 가드 완화 + 4개 지점 로그 가시화 (b5d458a, 04-08)
+- **왜**: DB 기반 검증은 수집 결과와 독립. Repository가 소스 오브 트루스이므로 수집 실패여도 VerifyDeep는 돌아야 함. 동시에 silent fail을 뿌리뽑기 위해 4지점 exc_info 추가.
+- **수정**:
+  - `collection.py:322` 가드 `success → is not None`으로 완화
+  - `collection.py:319` 수집 결과 로깅 분기 (success/fail 모두 store_id 포함)
+  - `waste_slip_collector.py:916` `traceback.print_exc()` → `exc_info=True`, store/date 포함
+  - `waste_verification_reporter.py:497` warning에 `exc_info=True`, store/date 포함
+  - `waste_verification_service.py` 2곳(VerifyDeep 상세 비교 실패, 보고서 생성 실패) exc_info 추가
+  - `[VerifyDeep]` INFO 라인에 store_id 명시 (run_id 역추적 불필요)
+- **결과**: 대기 중 (04-09 정밀폐기 세션 3회에서 검증)
+- **실패 패턴**: `#silent-fail`, `#guard-coupling`
+
+### 교훈
+- **외부 try/except + traceback.print_exc()는 파일 로그에 안 남는다** — 항상 `logger.error(..., exc_info=True)`로 통일
+- **"수집 성공"과 "검증 가능"은 독립** — 수집 실패여도 과거 DB 슬립은 검증 가능
+- **silent exception을 허용하면 2일간 false-positive**가 발동한다 (ops_metrics 자동 감지의 필수 전제는 진실된 실패 신호)
+
+### 검증 체크포인트
+- [ ] 04-09 10:00 정밀폐기 세션에서 46704 포함 4매장 보고서 파일 정시 생성 (세션 시작 ±2분)
+- [ ] 04-09 14:00 정밀폐기 세션 동일 검증
+- [ ] 04-09 22:00 정밀폐기 세션 동일 검증
+- [ ] 04-09 23:55 ops_metrics 실행에서 `verification_log_files_missing = 0`
+- [ ] 만약 여전히 silent exception이 발생한다면, 새 exc_info stack trace로 **진짜 원인**(예: DB lock, 넥사크로 프레임 전환 실패) 식별 가능해야 함
+- [ ] 2주 연속(04-09 ~ 04-22) 동일 매장 재발 0건 → [RESOLVED]
+- [ ] logs에서 `[VerifyDeep] {store_id}` 형식으로 매장 식별 가능 확인
+
+### 연관
+- → scheduling.md#scheduler 모듈 캐시 — 코드 fix 무력화 (본 수정이 모듈 캐시 재기동으로만 활성화되면 P1 이슈와 중첩)
+- → scheduling.md#verification_log_files_missing false-positive 회고
+
+---
+
 ## [PLANNED] 010 폐기율 상승 조사 (P2)
 
 **목표**: 카테고리 010 7일 폐기율 10.0%이 30일 평균 4.2% 대비 140% 상승
