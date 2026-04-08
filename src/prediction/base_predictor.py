@@ -290,6 +290,17 @@ class BasePredictor:
 
         original_count = len(sales_history)
 
+        # food-underprediction-secondary B안: stock_qty<0 sentinel(예: -1) 정규화
+        # 일부 매장 daily_sales는 미수집/오류 값을 -1로 저장한다. 기존 imputation은
+        # `stk > 0` (available)과 `stk == 0` (stockout) 두 분기뿐이라 음수는 어느
+        # 그룹에도 속하지 않아 보정 사각지대에 빠진다. 의미상 미수집(=None)에 가까우므로
+        # 단계 진입 전에 None으로 정규화한다.
+        if sales_history and len(sales_history[0]) >= 3:
+            sales_history = [
+                (row[0], row[1], None) if (row[2] is not None and row[2] < 0) else row
+                for row in sales_history
+            ]
+
         # 품절일 imputation (3-tuple이고 설정 활성화 시)
         stockout_cfg = PREDICTION_PARAMS.get("stockout_filter", {})
         has_stock_info = len(sales_history[0]) >= 3
