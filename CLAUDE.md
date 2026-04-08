@@ -83,7 +83,7 @@ BGF 리테일(CU 편의점) 다매장 자동 발주 시스템
 | WATCHING | - | 47863 BatchSync false consumed (04-08 FR-02 우회 가드 이식) | expiry-tracking.md | 04-08 23:00/04-09 07:00 가드 후 false consumed 0건 · batch-only 오탐 급감 확인 |
 | OPEN | P1 | 4매장 false consumed 131건 라이브 감지 (scheduler 모듈 캐시 의심) | expiry-tracking.md | scheduler 재기동 + 24h 후 ops-metrics 재측정 |
 | OPEN | P3 | 46704 04-07 검증 로그 파일 누락 | expiry-tracking.md | waste_report_flow 매장별 회귀 조사 |
-| WATCHING | - | ops-metrics 자동 감지 지표 2개 추가 (8dd9090) | expiry-tracking.md | 04-09 23:55 첫 자동 실행에서 알림/등록 동작 확인 |
+| WATCHING | - | ops-metrics 자동 감지 지표 2개 추가 (archived: 2026-04/ops-metrics-monitor-extension, 99%) | expiry-tracking.md | 04-09 23:55 첫 자동 실행에서 알림/등록 동작 확인 |
 | WATCHING | - | 행사 종료 임박 상품 발주 감량 자동화 | order-execution.md | 다음 행사 종료 상품에서 D-5~D-4 감량 로그 확인 (수동) |
 | PLANNED | P1 | 예측 정확도 하락 조사 (4개 카테고리) | prediction.md | 없음 |
 | PLANNED | P1 | 자전 시스템 미해결 항목 (expiry_time_mismatch) | scheduling.md | 없음 |
