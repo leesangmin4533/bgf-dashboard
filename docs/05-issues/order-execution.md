@@ -1,7 +1,50 @@
 # 발주 실행 이슈 체인
 
 > 최종 갱신: 2026-04-08
-> 현재 상태: 묶음 가드 우회 + 푸드 체계적 과소예측 조사 중
+> 현재 상태: 묶음 가드 우회 + 푸드 체계적 과소예측 조사 중 + 메타 원인 동적 마스터화 검토
+
+---
+
+## [PLANNED] 묶음 가드 정적 리스트 → 동적 마스터 전환 (P2, 04-08 ~)
+
+**문제**: `BUNDLE_SUSPECT_MID_CDS` 가 정적 set 으로 관리됨. 04-06~04-08 사고 5단계가 모두 반응형 패치(사고 → 카테고리 추가)였고, 04-08 mid=023 누락도 동일 패턴.
+**우선순위**: P2
+**설계 의도**: BGF DB 의 `order_unit_qty` 분포를 동적으로 읽어 가드 대상을 산출하여 반응형 패치 사이클 종료
+**기여 KPI**: K3 (발주 실패율)
+
+### 메타 원인 (정밀분석 결과)
+data/discussions/20260408-bundle-analysis/정밀분석.md §4 참조.
+- 반응형 패치 사이클: 음료/주류 사고 → 그 카테고리만 추가 → 식육가공 누락
+- 카테고리 마스터 부재: BGF 묶음발주 표준 mid 정리 안 됨
+- mid 별 회귀 테스트 부재
+- DB 자동 점검 잡 부재
+
+### 후속 작업
+- `/pdca plan bundle-suspect-dynamic-master` 진행 중
+
+Issue-Chain: order-execution#bundle-suspect-dynamic-master
+
+---
+
+## [PLANNED] 8801043016049 site 발주 출처 추적 (P3, 04-08 ~)
+
+**문제**: 49965 04-08 8801043016049 가 `order_source='site'`, `created_at='07:04:57'` 로 자동 시스템 시작 전에 발주됨. 자동 시스템(07:26)은 BLOCK 으로 정상 차단했음에도 3개 입고 발생.
+**우선순위**: P3
+**설계 의도**: site 채널 발주의 출처(점주 수동 vs 본부 시스템)를 명확히 구분하여 책임 소재 규명
+**기여 KPI**: 없음 (조사)
+
+### 사실
+- order_tracking id=3947, order_source='site'
+- created_at=07:04:57 (daily_job 자동 발주는 07:26부터)
+- BGF 묶음 unit=3 적용으로 3개 도착 추정
+
+### 검증 필요
+- [ ] BGF 사이트 STBJ030 ord_input_id 로 입력자 식별 가능 여부
+- [ ] manual_order_detector 로그에 동시각 기록 있는지
+- [ ] 점주 인터뷰 (정말 1을 입력했는지)
+- [ ] 본부 일괄 발주 시스템에서 같은 시각 푸시 있었는지
+
+Issue-Chain: order-execution#site-channel-attribution
 
 ---
 
