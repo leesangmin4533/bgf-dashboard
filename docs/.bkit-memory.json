@@ -7,8 +7,9 @@
   },
   "pdca": {
     "currentFeature": "ops-metrics-monitor-extension",
-    "phase": "check",
+    "phase": "completed",
     "startedAt": "2026-04-08T11:50:00+09:00",
-    "matchRate": 99
+    "matchRate": 99,
+    "completedAt": "2026-04-08T13:25:00+09:00"
   }
 }
