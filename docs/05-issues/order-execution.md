@@ -225,14 +225,36 @@ Issue-Chain: order-execution#bundle-guard-bypass-49965
 **실패 패턴**: (해소) `#schema-drift` `#observability-blocked-investigation`
 
 ### 해결 검증 (04-10 1주 관측 시작)
-- [ ] 04-09 23:00 OneDrive 동기화 후 4매장 매장 DB 에 v76 마이그레이션 적용 확인
-  (`PRAGMA table_info(prediction_logs)` 에 `stage_trace`, `association_boost` 존재)
-- [ ] 04-10 07:00 daily_job 후 prediction_logs.stage_trace 가 푸드 mid 행에 NOT NULL
+- [x] 04-09 23:00 OneDrive 동기화 후 4매장 매장 DB 에 v76 마이그레이션 적용 확인
+  (`PRAGMA table_info(prediction_logs)` 에 `stage_trace`, `association_boost` 존재) ✅ 4매장 전부 확인
+- [x] 04-10 07:00 daily_job 후 prediction_logs.stage_trace 가 푸드 mid 행에 NOT NULL
   (`SELECT COUNT(*) FROM prediction_logs WHERE mid_cd IN ('001'..'005','012') AND stage_trace IS NOT NULL`)
+  ✅ 46513=70건/null=0, 46704=126건/null=0, 47863=103건/null=0, 49965=181건/null=0 — NULL rate 0%
 - [ ] 04-10~04-16 1주 관측 → has_stock 158건 그룹의 5단계 분포 추출
 - [ ] 단일 지배 stage 식별 (target: bias 의 70% 이상을 설명하는 1개 stage)
 - [ ] 8800336392501 (sentinel 케이스) 의 imputation 발동 → WMA -14% bias → 0% 이내 회복
 - [ ] 04-17 표적 패치 plan 작성 (별도 PDCA)
+
+### 관측 1 (04-10 Phase A 배포 후 첫 실행)
+
+**stage_trace 가시화 (A-1)**: 정상
+- 4매장 480건 푸드 예측 전부 NOT NULL. food_5stage 키 6개 완전 채워짐:
+  `['base_wma', 'wma_blended', 'coef_mul', 'rule_floor', 'ml_blend', 'final_cap']`
+- 예시: 8801771034445(도시락/46513) base_wma=1.0 → wma_blended=1.0 → coef_mul=1.20
+
+**sentinel 정규화 (A-2)**: 적용 완료
+- current_stock<0 행: 4매장 04-09/04-10 모두 0건 — sentinel (-1) 이 None 으로 정규화되어
+  prediction_logs 저장 시 음수 재고 row 미생성 확인.
+- 8800336392501 (도시락 sentinel 케이스): 04-10 pred=1.87 (04-08=1.23 대비 +52%)
+  → sentinel 정규화 + nonzero_signal 경로 작동으로 편향 완화 추정 (실제 판매량 대조는 04-11 수집 후)
+
+**비푸드 회귀 (mid=072/049/010)**:
+- mid=072(음료): 46513 +12.8%, 46704 -23.0%, 47863 -18.3%, 49965 -0.3%
+  → 04-08(화) vs 04-10(목) 요일 차이에 의한 자연 변동으로 판단 (weekday_coef 영향권)
+  → 과발주 카톡 알림 04-10 0건 — 실제 발주량 비정상 없음
+- mid=049(과자): 49965만 비교 가능 +22.2% — 표본 부족(2건), 주의 모니터링
+
+**다음 단계**: 관측 1주(04-10~04-16) 진행 중. 04-17 07:30 stage_trace 분해 분석 예정.
 
 Issue-Chain: order-execution#food-underprediction-secondary
 
