@@ -277,7 +277,9 @@
 - **`inventory_batches` 단독 조회는 반드시 stock_qty 교차검증과 짝**: `_get_receiving_items_expiring_at`은 이미 있었고, `_get_batch_items_expiring_at`에만 없었던 건 단순 누락. 같은 테이블 대상 조회 함수는 교차검증 템플릿을 공유해야 함.
 
 ### 검증 체크포인트
-- [ ] 04-09 14:00 ExpiryChecker 실행에서 배치 경로 `[ExpiryAlert/batch] ... 제외: stock=0` 로그 출현 여부 확인
+- [x] **04-09 사전 dry-run** (시도 3 패치 동작 확인): 14:00 슬롯 4매장 9건 알림 모두 stock_qty≥1, 오탐 0건
+- [x] **04-09 누적 정리**: 02:00 false-active 7건(46513×1, 47863×2, 49965×4) + 4/9 14시~4/10 14시 슬롯 사전 스캔 11건(46704×3, 47863×1, 49965×7) = **총 18건** 정리
+- [ ] 04-09 14:00 라이브 실행에서 배치 경로 `[ExpiryAlert/batch] ... 제외: stock=0` 로그 출현 여부 확인
 - [ ] 04-09 이후 04-10까지 slot_2am/slot_2pm 알림에서 판매 완료 상품이 더 이상 등장 안 하는지 확인
 - [ ] 4매장 `waste_verification_*` 보고서에서 batch-only 오탐 추가 감소 확인
 
