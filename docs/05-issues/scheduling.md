@@ -272,5 +272,27 @@
 **선행조건**: 없음
 **예상 영향**: integrity_unresolved 관련 파일
 
+---
+
+## [WATCHING] 스케줄러 SrcWatcher auto-reload 후 장기 다운 (04-09)
+
+**문제**: 04-09 14:41:50 SrcWatcher가 src 변경 감지 → 14:42:31 graceful exit(0) → 04-10 00:05:46 OpsMetrics 재개까지 약 9시간 다운. 22:00 정밀폐기 세션 + 23:55 ops_issue_pipeline 미실행.
+
+**원인**:
+- 패턴은 04-07 scheduler-wrapper-restart와 동일. wrapper가 재기동은 했으나 다음 scheduled job 실행까지 오랜 지연이 있었거나, 혹은 wrapper 재기동 자체가 늦었음.
+- 04-09 14:42~04-10 00:05 사이 bgf_auto.log에 아무 엔트리 없음 (약 9.4시간 공백).
+
+**영향**:
+- 22:00 정밀폐기 세션 미실행 (4매장 × 22:00 슬롯 폐기 확인 불가)
+- 04-09 23:55 ops_issue_pipeline 미실행 (verification_log_files_missing 검증 불가)
+- waste-lightweight-46704-missing 이슈의 22:00/23:55 체크포인트 미검증 상태
+
+**현황**: 04-10 00:05 OpsMetrics가 재개 — 스케줄러는 복구됨
+
+### 검증 체크포인트
+- [ ] 04-10 22:00 정밀폐기 세션 정상 실행 확인 (4매장 파일 생성)
+- [ ] 04-10 23:55 ops_metrics 정상 실행 확인 (verification_log_files_missing = 0)
+- [ ] 04-09 이후 1주간 동일 패턴(낮 시간대 auto-reload → 야간 잡 미실행) 재발 모니터링
+
 
 ---
