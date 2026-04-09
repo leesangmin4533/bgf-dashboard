@@ -594,6 +594,20 @@ class ExpiryChecker:
                 mid_cd = row['mid_cd']
                 exp_str = row['expiry_date']
 
+                # ★ batch-alert-stock-cross-check (2026-04-09):
+                # 04-08 FR-02 가드(ae9d05f)가 만료 24h 이내 배치의 FIFO 차감을 보류하면서
+                # 이 경로를 "ExpiryChecker가 처리"한다고 가정했지만, 본 함수는 판매 기반
+                # 차감 로직이 없어 판매 완료된 배치(stock_qty=0)가 그대로 알림으로 튀어나옴.
+                # 46513 8801771304173 사건: 4/8 12시 판매됐으나 4/9 02시 오알림 발사.
+                # _get_receiving_items_expiring_at과 동일한 교차검증 적용.
+                stock_qty, _ = self._get_latest_stock_with_date(cursor, row['item_cd'])
+                if stock_qty is not None and stock_qty <= 0:
+                    logger.debug(
+                        f"[ExpiryAlert/batch] {row['item_cd']} 제외: "
+                        f"stock={stock_qty} (판매 완료 또는 재고 없음)"
+                    )
+                    continue
+
                 # 시간 포함 여부에 따라 파싱
                 expiry_time = None
                 for fmt in ('%Y-%m-%d %H:%M:%S', '%Y-%m-%d %H:%M'):

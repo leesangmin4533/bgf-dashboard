@@ -1,6 +1,6 @@
 # 폐기 추적 이슈 체인
 
-> 최종 갱신: 2026-04-07
+> 최종 갱신: 2026-04-08
 > 현재 상태: confirmed_orders + delivery_match 기반 (9aca17d) — Gap 분석 완료
 
 ---
@@ -267,6 +267,20 @@
 - [ ] 04-09 07:00 매장별 검증 로그에서 batch-only 오탐 급감 확인 (47863 67→10 미만 기대)
 - [ ] 다음 14:00 ExpiryChecker가 0판매 만료 상품 폐기 후보 인지
 
+### 시도 3: ExpiryChecker 배치 경로 stock_qty 교차검증 (04-09)
+- **왜**: FR-02 가드(ae9d05f)는 만료 24h 이내 배치의 FIFO 차감을 보류하고 "ExpiryChecker가 처리"한다고 선언. 하지만 `_get_batch_items_expiring_at`은 판매 기반 차감 로직이 없어 판매 완료(stock_qty=0) 배치가 그대로 알림으로 튀어나감 → 46513 8801771304173 사건: 4/7 입고/4/8 12시 판매인데 4/9 02시 오알림.
+- **결과**: ✓ `_get_receiving_items_expiring_at`과 동일 패턴(`_get_latest_stock_with_date`)을 배치 경로에 이식. 4/9 02:00 대상 스캔에서 4매장 7건 false-active 배치 정리(remaining→0, consumed) — 46513×1, 47863×2, 49965×4.
+- **실패 패턴**: #patch-on-patch (가드 contract 분산 미일치)
+
+### 교훈
+- **가드 contract는 양쪽 끝에서 일치해야 함**: "이쪽 경로에서 보류하면 저쪽이 처리한다"는 분업 설계는 양측 구현이 실제로 대응돼야 함. 04-08 FR-02 가드의 "ExpiryChecker가 처리" 주석은 구현 공백을 가렸다. 가드를 추가할 때 위임 대상의 실제 동작을 반드시 확인 필요.
+- **`inventory_batches` 단독 조회는 반드시 stock_qty 교차검증과 짝**: `_get_receiving_items_expiring_at`은 이미 있었고, `_get_batch_items_expiring_at`에만 없었던 건 단순 누락. 같은 테이블 대상 조회 함수는 교차검증 템플릿을 공유해야 함.
+
+### 검증 체크포인트
+- [ ] 04-09 14:00 ExpiryChecker 실행에서 배치 경로 `[ExpiryAlert/batch] ... 제외: stock=0` 로그 출현 여부 확인
+- [ ] 04-09 이후 04-10까지 slot_2am/slot_2pm 알림에서 판매 완료 상품이 더 이상 등장 안 하는지 확인
+- [ ] 4매장 `waste_verification_*` 보고서에서 batch-only 오탐 추가 감소 확인
+
 **관련 작업 (archive)**: docs/archive/2026-04/batch-sync-zero-sales-guard/
 
 **관련 Plan**: [docs/01-plan/features/batch-sync-zero-sales-guard.plan.md](../01-plan/features/batch-sync-zero-sales-guard.plan.md)
@@ -384,6 +398,14 @@
 **동기**: 자동 감지 (2026-04-07) -- waste_rate
 **선행조건**: 없음
 **예상 영향**: waste_rate 관련 파일
+
+
+## [PLANNED] BatchSync 가드 우회 의심 18건 (24h 내) (P2)
+
+**목표**: 단기유통기한(<=7일) 배치 18건이 만료 24h 이내에 consumed 마킹됨. 가드 우회 경로 또는 신규 false consumed 재발 의심. 최근 발생: 2026-04-08T07:10:07.657139, 샘플: 8801115212713,8809196620533,8801068402278,8801062475711,8801
+**동기**: 자동 감지 (2026-04-08) -- false_consumed_post_guard
+**선행조건**: 없음
+**예상 영향**: false_consumed_post_guard 관련 파일
 
 
 ---
