@@ -294,6 +294,12 @@ class SalesRepository(BaseRepository):
                             (sales_date, expiration_days)
                         )
                         expiry_date = cursor.fetchone()[0]
+
+                        # 2차 전용 카테고리(006 조리면 등): 폐기시간 14:00 부여
+                        _SECOND_DELIVERY_ONLY_MIDS = {'006'}
+                        if mid_cd in _SECOND_DELIVERY_ONLY_MIDS and expiry_date and ' ' not in str(expiry_date):
+                            expiry_date = f'{expiry_date} 14:00:00'
+
                         cursor.execute(
                             """
                             INSERT INTO inventory_batches

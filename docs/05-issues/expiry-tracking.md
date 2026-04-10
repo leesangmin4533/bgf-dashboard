@@ -17,9 +17,17 @@
 1. `receiving_collector.py` `_determine_delivery_type()`: `SECOND_DELIVERY_ONLY_MIDS = {'006'}` 추가
 2. `delivery_utils.py` `get_delivery_type()`: mid_cd 기반 3순위 폴백 + `SECOND_DELIVERY_MID_FALLBACK` 추가
 
+**추가 수정 (04-10, 2차 커밋)**:
+3. `receiving_collector._calc_expiry_datetime()`: mid=006은 상품별 expiration_days + 14:00 동적 계산
+4. `sales_repo.py` 배치 자동생성: mid=006 expiry_date에 14:00:00 부여
+
+조리면은 상품별 유통기한이 2일/3일/30일로 다르므로 하드코딩(FOOD_EXPIRY_CONFIG) 불가.
+상품별 product_details.expiration_days를 읽어서 `입고일 + expiration_days + 14:00` 동적 계산.
+
 ### 검증 체크포인트
 - [ ] 다음 조리면 입고 시 delivery_type='2차', expiry_date에 14:00:00 포함 확인
 - [ ] 14:00 ExpiryChecker에서 조리면 폐기 대상 감지 확인
+- [ ] 유통기한 2일/3일/30일 상품 각각 expiry_date 정확성 확인
 
 Issue-Chain: expiry-tracking#noodle-006-delivery-type-missing
 

@@ -811,11 +811,13 @@ class ReceivingCollector:
 
     def _calc_expiry_datetime(
         self, recv_date: str, recv_time: str,
-        mid_cd: str, delivery_type: str
+        mid_cd: str, delivery_type: str,
+        expiration_days: int = 0, item_cd: str = None,
     ) -> Optional[str]:
         """mid_cd + delivery_type 기반 정확한 폐기시간 계산
 
         FOOD_EXPIRY_CONFIG에 매핑이 있으면 차수별 정밀 시간 반환.
+        2차 전용 카테고리(006 조리면 등)는 상품별 expiration_days + 14:00 고정.
         없으면 None → 기존 date 기반 expiry_date 사용.
 
         Args:
@@ -823,10 +825,13 @@ class ReceivingCollector:
             recv_time: 입고 시간 (HH:MM)
             mid_cd: 중분류 코드
             delivery_type: '1차'/'2차'/'ambient'
+            expiration_days: 상품별 유통기한 (일) — 동적 폐기시간 계산용
+            item_cd: 상품코드 (로깅용)
 
         Returns:
             'YYYY-MM-DD HH:MM:SS' 또는 None (폴백 시)
         """
+        # 1순위: FOOD_EXPIRY_CONFIG (도시락~햄버거, 하드코딩 차수별 시간)
         config = FOOD_EXPIRY_CONFIG.get(mid_cd, {})
         dt_config = config.get(delivery_type)
 
@@ -835,6 +840,17 @@ class ReceivingCollector:
             recv_dt = datetime.strptime(recv_date, '%Y-%m-%d')
             expiry_dt = recv_dt + timedelta(days=days_offset)
             return expiry_dt.strftime('%Y-%m-%d') + f' {expiry_hour:02d}:00:00'
+
+        # 2순위: 2차 전용 카테고리 (006 조리면 등) — 상품별 유통기한 + 14:00 고정
+        SECOND_DELIVERY_ONLY_MIDS = {'006'}
+        if mid_cd in SECOND_DELIVERY_ONLY_MIDS and expiration_days and expiration_days > 0:
+            recv_dt = datetime.strptime(recv_date, '%Y-%m-%d')
+            expiry_dt = recv_dt + timedelta(days=expiration_days)
+            logger.debug(
+                f"[폐기시간] {item_cd or mid_cd}: "
+                f"입고={recv_date} + {expiration_days}일 = {expiry_dt.strftime('%Y-%m-%d')} 14:00"
+            )
+            return expiry_dt.strftime('%Y-%m-%d') + ' 14:00:00'
 
         return None
 
@@ -1067,7 +1083,8 @@ class ReceivingCollector:
 
                 # 정확한 폐기시간 계산 (차수별 시간 반영)
                 expiry_datetime = self._calc_expiry_datetime(
-                    recv_date, recv_time or '', mid_cd, delivery_type
+                    recv_date, recv_time or '', mid_cd, delivery_type,
+                    expiration_days=expiration_days, item_cd=item_cd,
                 )
 
                 # 푸드류 처리: order_tracking + inventory_batches 모두 생성
