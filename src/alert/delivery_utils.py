@@ -94,18 +94,21 @@ def get_delivery_types_batch(
 
 
 def get_delivery_type(
-    item_nm: str, item_cd: str = None, store_id: str = None
+    item_nm: str, item_cd: str = None, store_id: str = None,
+    mid_cd: str = None,
 ) -> Optional[str]:
     """
     배송 차수 판별
 
     item_cd가 주어지면 order_tracking에서 먼저 조회하고,
     없으면 상품명 끝자리 로직으로 폴백.
+    그래도 없으면 mid_cd 기반 폴백 (조리면 등 상품명 끝자리가 숫자가 아닌 카테고리).
 
     Args:
         item_nm: 상품명 (예: "도)압도적두툼돈까스정식1")
         item_cd: 상품코드 (선택, order_tracking 조회용)
         store_id: 매장코드 (선택, 미지정 시 전체 활성 매장 순회)
+        mid_cd: 중분류 코드 (선택, 상품명 폴백 실패 시 사용)
 
     Returns:
         "1차", "2차", or None
@@ -117,18 +120,25 @@ def get_delivery_type(
             return ot_type
 
     # 2순위(기존 로직): 상품명 끝자리 확인
-    # [원본 보존] 기존에는 이 로직만 사용했음
-    if not item_nm:
-        return None
+    if item_nm:
+        last_char = item_nm.strip()[-1]
+        if last_char == "1":
+            return "1차"
+        elif last_char == "2":
+            return "2차"
 
-    last_char = item_nm.strip()[-1]
-
-    if last_char == "1":
-        return "1차"
-    elif last_char == "2":
+    # 3순위: mid_cd 기반 폴백 (상품명 끝자리가 숫자가 아닌 2차 배송 카테고리)
+    if mid_cd and mid_cd in SECOND_DELIVERY_MID_FALLBACK:
         return "2차"
 
     return None
+
+
+# 상품명 끝자리로 배송 차수를 판별할 수 없는 2차 배송 카테고리
+# (조리면, 빵 등 — 상품명이 "면)투움바파스타" 처럼 숫자로 안 끝남)
+SECOND_DELIVERY_MID_FALLBACK = {
+    "006",  # 조리면
+}
 
 
 def _lookup_delivery_type_from_order_tracking(

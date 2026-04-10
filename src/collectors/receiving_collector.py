@@ -299,9 +299,10 @@ class ReceivingCollector:
 
     def _determine_delivery_type(self, center_nm: str, item_nm: str, mid_cd: str = '') -> str:
         """
-        배송 타입 결정 (1차/2차 판별: item_nm 끝자리 우선)
+        배송 타입 결정 (1차/2차 판별: item_nm 끝자리 우선, mid_cd 폴백)
 
-        mid_cd가 푸드류(001~005,012)인 경우만 1차/2차 구분.
+        mid_cd가 푸드류(001~005,012)인 경우: 상품명 끝자리 1→1차, 2→2차.
+        mid_cd가 2차 전용 카테고리(006 조리면 등)인 경우: 무조건 2차.
         비푸드류는 'ambient' 반환.
 
         Args:
@@ -313,12 +314,17 @@ class ReceivingCollector:
             배송타입 ('1차', '2차', 'ambient')
         """
         FOOD_MID_CDS = {'001', '002', '003', '004', '005', '012'}
+        # 상품명 끝자리가 숫자가 아닌 2차 배송 카테고리
+        SECOND_DELIVERY_ONLY_MIDS = {'006'}  # 조리면
 
         if mid_cd in FOOD_MID_CDS:
             if item_nm and item_nm.strip().endswith('2'):
                 return '2차'
             elif item_nm and item_nm.strip().endswith('1'):
                 return '1차'
+
+        if mid_cd in SECOND_DELIVERY_ONLY_MIDS:
+            return '2차'
 
         return 'ambient'
 

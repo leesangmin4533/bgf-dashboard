@@ -1,7 +1,27 @@
 # 폐기 추적 이슈 체인
 
-> 최종 갱신: 2026-04-08
-> 현재 상태: confirmed_orders + delivery_match 기반 (9aca17d) — Gap 분석 완료
+> 최종 갱신: 2026-04-10
+> 현재 상태: confirmed_orders + delivery_match 기반 (9aca17d) — Gap 분석 완료 + 조리면(006) 2차 배송 누락 수정
+
+---
+
+## [WATCHING] 조리면(006) 2차 배송 미분류 → 14시 폐기 감지 누락 (04-10)
+
+**문제**: mid=006(조리면)은 2차 배송인데 시스템이 'ambient'로 분류.
+- `_determine_delivery_type()`: FOOD_MID_CDS={001~005,012}에 006 미포함 → ambient 반환
+- `get_delivery_type()`: 상품명 끝자리("면)투움바파스타")가 숫자가 아님 → None
+- 결과: delivery_type=None/ambient, expiry_date에 시간 없음 → 14:00 폐기 필터 누락
+- 실제 사례: 46513 면)투움바파스타 1개 폐기 발생했으나 시스템 미감지
+
+**수정**:
+1. `receiving_collector.py` `_determine_delivery_type()`: `SECOND_DELIVERY_ONLY_MIDS = {'006'}` 추가
+2. `delivery_utils.py` `get_delivery_type()`: mid_cd 기반 3순위 폴백 + `SECOND_DELIVERY_MID_FALLBACK` 추가
+
+### 검증 체크포인트
+- [ ] 다음 조리면 입고 시 delivery_type='2차', expiry_date에 14:00:00 포함 확인
+- [ ] 14:00 ExpiryChecker에서 조리면 폐기 대상 감지 확인
+
+Issue-Chain: expiry-tracking#noodle-006-delivery-type-missing
 
 ---
 
