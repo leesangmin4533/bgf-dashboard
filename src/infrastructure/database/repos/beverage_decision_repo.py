@@ -171,6 +171,28 @@ class BeverageDecisionRepository(BaseRepository):
 
         return {row[0] for row in cursor.fetchall()}
 
+    def get_stop_recommended_items(self, store_id: Optional[str] = None) -> Set[str]:
+        """STOP_RECOMMEND 상태인 음료 상품 코드 반환 (발주 즉시 차단용)"""
+        sid = store_id or self.store_id
+        conn = self._get_conn()
+
+        cursor = conn.execute("""
+            SELECT DISTINCT d.item_cd
+            FROM dessert_decisions d
+            INNER JOIN (
+                SELECT item_cd, MAX(judgment_period_end) as max_date
+                FROM dessert_decisions
+                WHERE store_id = ? AND category_type = 'beverage'
+                GROUP BY item_cd
+            ) latest ON d.item_cd = latest.item_cd
+                    AND d.judgment_period_end = latest.max_date
+            WHERE d.store_id = ?
+              AND d.category_type = 'beverage'
+              AND d.decision = 'STOP_RECOMMEND'
+        """, (sid, sid))
+
+        return {row[0] for row in cursor.fetchall()}
+
     def get_pending_stop_count(
         self,
         store_id: Optional[str] = None,

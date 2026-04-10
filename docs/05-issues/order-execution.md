@@ -1,7 +1,73 @@
 # 발주 실행 이슈 체인
 
-> 최종 갱신: 2026-04-09
-> 현재 상태: 묶음 가드 우회 해결 + 상품별 신뢰도 모델 계획 중 + 푸드 과소예측 조사 중
+> 최종 갱신: 2026-04-10
+> 현재 상태: 발주입수 522건 DB 보정 완료 + 디저트 STOP_RECOMMEND 즉시차단 + 햄버거 Cap 원인 분석 완료
+
+---
+
+## [RESOLVED] 발주입수(order_unit_qty) 전수 덤프 + DB 보정 (04-10)
+
+**문제**: product_details.order_unit_qty가 1로 잘못 저장된 상품에서 과발주 발생.
+- 46704 스프라이트제로P500: DB=1, 실제=6 → PYUN=14 × 6 = 84개 (4일간 384개 누적)
+- 46704 배달봉투특대: DB=1, 실제=100 → PYUN=22 × 100 = 2,200개
+- mid=044, 900이 BUNDLE_SUSPECT_MID_CDS에 미포함 → 가드 무효
+**설계 의도**: Direct API 전수 덤프로 BGF 실제 입수를 수집하여 DB 일괄 보정
+**기여 KPI**: K3 (발주 실패율)
+
+### 시도 1 (04-10): 전수 덤프 + 대조 + 갱신
+- **도구**: `scripts/dump_order_unit_qty.py` (DirectPopupFetcher 배치 수집)
+- **결과**: 7,571/7,622건 수집(99.3%), **522건 불일치 발견 → DB 갱신 완료**
+  - unit>1: 2,306 → **2,824** (+518)
+  - unit=1: 4,170 → **3,852** (-318)
+  - null/0: 1,127 → **927** (-200)
+- **리포트**: `data/reports/order_unit_mismatch.json`
+- **교훈**: BGF API가 ORD_UNIT_QTY를 빈값 반환 → DB에 1 고착 → 정기 재수집 필요
+
+### 검증 체크포인트
+- [x] 522건 DB 갱신 완료 (04-10)
+- [ ] 다음 발주(04-11 07:00)에서 스프라이트제로 PYUN_QTY 확인 (기대: ceil(need/6))
+- [ ] order-unit-guard 교차검증 로직 구현 (Design 완료, Do 대기)
+
+Issue-Chain: order-execution#order-unit-qty-dump-fix
+
+---
+
+## [RESOLVED] 햄버거(mid=005) food_daily_cap 과소발주 원인 분석 (04-10)
+
+**문제**: 46513 햄버거 9품목 중 1개만 발주, 나머지 8개 탈락.
+**원인**: food_daily_cap 입고예정 차감
+- 요일평균 2.2 + 버퍼 1 = 예산 3
+- 입고예정 2 차감 → **auto 상한 = 1**
+- 9품목(qty합=10) → 1품목(qty합=1)로 절삭
+- 행사(할인) 상품 케요네즈불고기버거1만 우선순위로 생존
+**설계 의도**: food_daily_cap은 카테고리 총량 과발주 방지용이나, 입고예정 차감이 과도하면 과소발주 유발
+**기여 KPI**: K2 (예측 정확도)
+**상태**: 원인 분석 완료, 수정은 보류 (Cap 로직 자체는 설계대로 동작)
+
+Issue-Chain: order-execution#hamburger-cap-underorder
+
+---
+
+## [WATCHING] 디저트 STOP_RECOMMEND 즉시 차단 + 자동 확정 (04-10)
+
+**문제**: STOP_RECOMMEND 1,228개 중 운영자 CONFIRMED_STOP 미확정 → 판매 0 상품도 계속 발주됨.
+4일간(4/7~4/10) 32개 불필요 발주 발생.
+**수정**:
+1. `order_filter.py`: **디저트만** STOP_RECOMMEND도 즉시 발주 제외 (음료는 CONFIRMED_STOP만)
+2. `dessert_decision_service.py` + `beverage_decision_service.py`: `auto_confirm_stale_stops()` 추가
+   - 조건: STOP_RECOMMEND 7일 경과 + 판매 0 + 운영자 미개입 → 자동 CONFIRMED_STOP
+3. `constants.py`: `STOP_RECOMMEND_AUTO_CONFIRM_DAYS=7`, `ENABLED=True`
+4. 46513 디저트 21건 수동 CONFIRMED_STOP 확정
+**설계 의도**: 디저트는 유통기한 짧아 즉시 차단 안전, 음료는 운영자 확인 필수
+**기여 KPI**: K2 (예측 정확도), 폐기율 감소
+
+### 검증 체크포인트
+- [x] 46513 디저트 21건 CONFIRMED_STOP 확정 (04-10)
+- [x] 자동확정 실행: 디저트 2건 + 음료 39건 (04-10)
+- [ ] 다음 발주(04-11 07:00) 로그에서 "디저트 발주정지 N개 (CONFIRMED=X, STOP_RECOMMEND=Y)" 확인
+- [ ] 음료 STOP_RECOMMEND 상품이 여전히 발주되는지 확인 (의도된 동작)
+
+Issue-Chain: order-execution#dessert-stop-recommend-block
 
 ---
 

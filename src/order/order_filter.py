@@ -132,35 +132,43 @@ class OrderFilter:
         except Exception as e:
             logger.warning(f"발주정지 상품 조회 실패: {e}")
 
-        # 디저트 판단 정지 상품 제외 (CONFIRMED_STOP만)
+        # 디저트 판단 정지 상품 제외 (CONFIRMED_STOP + STOP_RECOMMEND)
         try:
             from src.settings.constants import DESSERT_DECISION_ENABLED
             if DESSERT_DECISION_ENABLED:
                 from src.infrastructure.database.repos import DessertDecisionRepository
                 dessert_repo = DessertDecisionRepository(store_id=self.store_id)
                 dessert_stop_items = dessert_repo.get_confirmed_stop_items()
-                if dessert_stop_items:
+                dessert_recommend_items = dessert_repo.get_stop_recommended_items()
+                dessert_all_stop = dessert_stop_items | dessert_recommend_items
+                if dessert_all_stop:
                     before_count = len(order_list)
                     excluded_items = [item for item in order_list
-                                      if item.get("item_cd") in dessert_stop_items]
+                                      if item.get("item_cd") in dessert_all_stop]
                     order_list = [item for item in order_list
-                                  if item.get("item_cd") not in dessert_stop_items]
+                                  if item.get("item_cd") not in dessert_all_stop]
                     excluded = before_count - len(order_list)
                     if excluded > 0:
-                        logger.info(f"디저트 발주정지(CONFIRMED_STOP) {excluded}개 상품 제외")
+                        confirmed_cnt = sum(1 for ei in excluded_items if ei.get("item_cd") in dessert_stop_items)
+                        recommend_cnt = excluded - confirmed_cnt
+                        logger.info(
+                            f"디저트 발주정지 {excluded}개 상품 제외 "
+                            f"(CONFIRMED={confirmed_cnt}, STOP_RECOMMEND={recommend_cnt})"
+                        )
                         for ei in excluded_items:
+                            stop_type = "CONFIRMED_STOP" if ei.get("item_cd") in dessert_stop_items else "STOP_RECOMMEND"
                             exclusion_records.append({
                                 "item_cd": ei.get("item_cd"),
                                 "item_nm": ei.get("item_nm"),
                                 "mid_cd": ei.get("mid_cd"),
                                 "exclusion_type": ExclusionType.DESSERT_STOP,
                                 "predicted_qty": ei.get("order_qty", 0),
-                                "detail": "디저트 판단 정지 확정(CONFIRMED_STOP)",
+                                "detail": f"디저트 판단 정지({stop_type})",
                             })
         except Exception as e:
             logger.warning(f"디저트 발주정지 조회 실패: {e}")
 
-        # 음료 판단 정지 상품 제외 (CONFIRMED_STOP만)
+        # 음료 판단 정지 상품 제외 (CONFIRMED_STOP만 — 운영자 확인 필수)
         try:
             from src.settings.constants import BEVERAGE_DECISION_ENABLED
             if BEVERAGE_DECISION_ENABLED:

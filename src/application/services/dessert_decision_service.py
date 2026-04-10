@@ -199,6 +199,93 @@ class DessertDecisionService:
         }
 
     # =========================================================================
+    # 스케줄 기반 자동 확정 (독립 실행 가능)
+    # =========================================================================
+
+    def auto_confirm_stale_stops(self) -> Dict[str, Any]:
+        """STOP_RECOMMEND N일 경과 + 판매 0 → 자동 CONFIRMED_STOP
+
+        run()과 독립적으로 스케줄러에서 호출 가능.
+        dessert_decisions 테이블의 기존 STOP_RECOMMEND 레코드를 대상으로 함.
+
+        Returns:
+            {"confirmed": int, "items": [item_cd, ...]}
+        """
+        from src.settings.constants import (
+            STOP_RECOMMEND_AUTO_CONFIRM_DAYS,
+            STOP_RECOMMEND_AUTO_CONFIRM_ENABLED,
+        )
+        if not STOP_RECOMMEND_AUTO_CONFIRM_ENABLED:
+            return {"confirmed": 0, "items": []}
+
+        days = STOP_RECOMMEND_AUTO_CONFIRM_DAYS
+        conn = self.decision_repo._get_conn()
+
+        try:
+            # STOP_RECOMMEND이고, operator_action 미개입이고,
+            # 판정일(judgment_period_end)로부터 N일 경과한 상품
+            cutoff_date = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+            sale_cutoff = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+
+            cursor = conn.execute("""
+                SELECT DISTINCT d.item_cd
+                FROM dessert_decisions d
+                INNER JOIN (
+                    SELECT item_cd, MAX(judgment_period_end) as max_date
+                    FROM dessert_decisions
+                    WHERE store_id = ? AND category_type = 'dessert'
+                    GROUP BY item_cd
+                ) latest ON d.item_cd = latest.item_cd
+                        AND d.judgment_period_end = latest.max_date
+                WHERE d.store_id = ?
+                  AND d.category_type = 'dessert'
+                  AND d.decision = 'STOP_RECOMMEND'
+                  AND (d.operator_action IS NULL OR d.operator_action = '')
+                  AND d.judgment_period_end <= ?
+            """, (self.store_id, self.store_id, cutoff_date))
+            candidates = [row[0] for row in cursor.fetchall()]
+
+            if not candidates:
+                return {"confirmed": 0, "items": []}
+
+            # N일 내 판매 있는 상품 제외
+            placeholders = ",".join("?" * len(candidates))
+            cursor = conn.execute(f"""
+                SELECT DISTINCT item_cd
+                FROM daily_sales
+                WHERE item_cd IN ({placeholders})
+                  AND sales_date >= ?
+                  AND sale_qty > 0
+            """, candidates + [sale_cutoff])
+            has_sales = {row[0] for row in cursor.fetchall()}
+
+            to_confirm = [ic for ic in candidates if ic not in has_sales]
+            if not to_confirm:
+                return {"confirmed": 0, "items": []}
+
+            confirmed = self.decision_repo.batch_update_operator_action(
+                item_cds=to_confirm,
+                action="CONFIRMED_STOP",
+                operator_note=f"auto: {days}d stale + 0 sales",
+                store_id=self.store_id,
+            )
+            confirmed_cds = [c["item_cd"] for c in confirmed]
+
+            if confirmed_cds:
+                logger.info(
+                    f"[디저트판단] 스케줄 자동확정 {len(confirmed_cds)}건 "
+                    f"(STOP_RECOMMEND {days}일 경과 + 판매0 → CONFIRMED_STOP)"
+                )
+
+            return {"confirmed": len(confirmed_cds), "items": confirmed_cds}
+
+        except Exception as e:
+            logger.warning(f"[디저트판단] 자동확정 실패: {e}")
+            return {"confirmed": 0, "items": [], "error": str(e)}
+        finally:
+            conn.close()
+
+    # =========================================================================
     # Internal methods
     # =========================================================================
 
