@@ -95,7 +95,10 @@ BGF 리테일(CU 편의점) 다매장 자동 발주 시스템
 | PLANNED | P1 | 예측 정확도 하락 조사 (4개 카테고리) | prediction.md | 없음 |
 | PLANNED | P1 | 자전 시스템 미해결 항목 (expiry_time_mismatch) | scheduling.md | 없음 |
 | PLANNED | P2 | 010 폐기율 상승 조사 | expiry-tracking.md | 없음 |
-| PLANNED | P2 | BatchSync 가드 우회 의심 18건 (24h 내) | expiry-tracking.md | 없음 |
+| OPEN | P1 | BatchSync 가드 우회 건수 18→250건 급증 (04-10) — 재진입 패턴 의심 | expiry-tracking.md | 04-10 야간 21:51~21:52 4회 탐지, 중복 상품코드 재진입 의심 |
+| PLANNED | P2 | mid_cd 048/049 MAE 동시 악화 — 봄 계절전환 계절계수 지연 | prediction.md | 04-17 1주 관측 후 계절계수 조정 검토 |
+| PLANNED | P2 | mid_cd 073 전자담배 MAE 급등 — TobaccoStrategy 파라미터 불일치 | prediction.md | 없음 |
+| PLANNED | P2 | mid_cd 032 면류 MAE 악화 + 폐기율 동시 상승 — RamenStrategy 과예측 전환 의심 | prediction.md | Phase A 보정 간섭 가능성 조사 |
 | PLANNED | P2 | CLEAR_GHOST_STOCK 자동실행 승격 검토 | scheduling.md | integrity_checks 2주 누적 데이터에서 food_ghost_ |
 | PLANNED | P2 | ML is_payday DB 반영 효과 검증 | prediction.md | f0657a8 커밋 반영 후 최소 2주 운영 데이터 필요 |
 | PLANNED | P2 | PaydayAnalyzer 결과를 ML 학습 데이터에도 반영 | prediction.md | (밀도 승격) P2 효과 검증 완료 후 양수 효과 확인 시 |
