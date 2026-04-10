@@ -33,6 +33,35 @@ Issue-Chain: expiry-tracking#noodle-006-delivery-type-missing
 
 ---
 
+## [OPEN] batch-sync-guard가 유통기한 1일 상품 FIFO 차감 전면 차단 (04-10)
+
+**문제**: `sync_remaining_with_stock()`의 만료임박 보호 가드가 유통기한 1일 2차 배송 상품에서 FIFO 차감을 **항상** 차단.
+- 유통기한 1일 + 2차 배송 → 배치 생성 시점부터 만료까지 항상 < 24h
+- `normal_qty(만료 24h 이상) = 0` → 가드 발동 → 차감 스킵
+- 결과: 판매가 있어도 remaining_qty 미감소 → 폐기 알림 과다 (실제 0~1개인데 3개로 보고)
+
+**사례**: 46513 삼)참치마요삼각2 (8800279675778)
+- 4/9 입고 3개, 4/9 판매 3개 → 실재고 0
+- 배치 #29147 remaining=3 (가드에 의해 차감 안 됨)
+- 14:00 ExpiryChecker가 rem=3으로 폐기 대상 보고 (실제 0개)
+
+**영향 범위**: mid=001~003(도시락/주먹밥/김밥) 유통기한 1일 + 2차 배송 전체
+
+**원래 가드 의도** (04-07, batch-sync-zero-sales-guard):
+- 0판매 + 만료 임박 상품이 stock=0으로 잘못 consumed 마킹 → 폐기 인지 누락 방지
+- 47863 13건 false consumed 사건 대응
+
+**수정 방향**: 판매 실적이 있는 경우(sale_qty > 0)는 가드 면제 → FIFO 차감 허용
+
+### 검증 체크포인트
+- [ ] 수정 후 유통기한 1일 2차 상품의 remaining_qty가 판매 반영되는지 확인
+- [ ] 0판매 만료 임박 상품은 여전히 보호되는지 확인 (가드 원래 목적 유지)
+- [ ] ExpiryChecker 폐기 대상 수량이 실재고와 일치하는지 확인
+
+Issue-Chain: expiry-tracking#batch-sync-guard-blocks-short-expiry-fifo
+
+---
+
 ## [RESOLVED] remaining_qty 미갱신 → 입고 기반 재설계 (03-29 ~ 04-05)
 
 **문제**: order_tracking.remaining_qty가 판매 후에도 안 줄어듦

@@ -323,12 +323,9 @@ class SalesRepository(BaseRepository):
             if batch_total > stock_qty and batch_total > 0:
                 to_consume = batch_total - stock_qty
 
-                # ★ batch-sync-zero-sales-guard (2026-04-08, FR-02 우회 경로 차단):
-                # BatchSync.sync_remaining_with_stock와 동일 가드를 FR-02 인라인 FIFO에도 적용.
-                # 만료 24h 이내 active 배치는 ExpiryChecker/폐기 슬롯이 처리하도록 보호.
-                # 47863 04-07~08 13건 false consumed 사건: 가드가 batch_repo에만 있고
-                # sales_repo FR-02에는 없어서 save_daily_sales 경로로 0판매 + 임박 배치가
-                # 여전히 잘못 consumed 마킹되던 문제 차단.
+                # ★ batch-sync-zero-sales-guard (2026-04-08, FR-02 우회 경로 차단, 04-10 개선):
+                # 만료 24h 이내 active 배치는 ExpiryChecker가 처리하도록 보호.
+                # 단, 판매 실적(sale_qty > 0)이 있으면 가드 면제 → FIFO 차감 허용.
                 cursor.execute(
                     """
                     SELECT COALESCE(SUM(remaining_qty), 0) AS normal_qty
@@ -343,11 +340,21 @@ class SalesRepository(BaseRepository):
                 normal_qty = int(cursor.fetchone()[0] or 0)
 
                 if normal_qty == 0:
-                    # 모든 active 배치가 만료 임박 → FR-02 보류 (ExpiryChecker가 처리)
-                    logger.info(
-                        f"[FR-02 guard] {item_cd}: 모든 active 배치 만료 임박, "
-                        f"FIFO 차감 보류 (to_consume={to_consume})"
-                    )
+                    # 모든 active 배치가 만료 임박
+                    # → 현재 처리 중인 sale_qty로 판매 실적 확인
+                    if sale_qty and int(sale_qty) > 0:
+                        # 판매 있음 → 가드 면제, 임박 배치도 FIFO 차감 허용
+                        logger.debug(
+                            f"[FR-02 guard] {item_cd}: 만료임박 가드 면제 "
+                            f"(sale_qty={sale_qty} → FIFO 차감 허용)"
+                        )
+                    else:
+                        # 0판매 + 만료 임박 → FR-02 보류
+                        logger.info(
+                            f"[FR-02 guard] {item_cd}: 모든 active 배치 만료 임박, "
+                            f"FIFO 차감 보류 (to_consume={to_consume})"
+                        )
+                        to_consume = 0  # 차감하지 않음
                 else:
                     if to_consume > normal_qty:
                         to_consume = normal_qty

@@ -1113,12 +1113,11 @@ class InventoryBatchRepository(BaseRepository):
                 # batch_total > stock_qty -> 초과분 FIFO 차감
                 to_consume = batch_total - stock_qty
 
-                # ★ batch-sync-zero-sales-guard (2026-04-07):
+                # ★ batch-sync-zero-sales-guard (2026-04-07, 04-10 개선):
                 # 만료 24h 이내 active 배치는 ExpiryChecker가 처리하도록 보호.
-                # 차감 대상에서 정상 배치(만료 24h 이상)를 우선 사용하고,
-                # 정상 배치 잔량이 충분하면 임박 배치는 보호.
-                # 0판매 + 만료 임박 상품이 stock=0 보고로 잘못 consumed 마킹되어
-                # 폐기 인지가 누락되는 사례 차단.
+                # 단, 판매 실적(sale_qty > 0)이 있는 상품은 가드 면제 → FIFO 차감 허용.
+                # (유통기한 1일 2차 배송 상품은 항상 24h 이내라 가드에 걸려
+                #  판매가 있어도 remaining_qty 미감소 → 폐기 알림 과다 문제 수정)
                 cursor.execute(
                     """
                     SELECT COALESCE(SUM(remaining_qty), 0) AS normal_qty
@@ -1133,12 +1132,37 @@ class InventoryBatchRepository(BaseRepository):
                 normal_qty = int(cursor.fetchone()[0] or 0)
 
                 if normal_qty == 0:
-                    # 모든 active 배치가 만료 임박 → 보류 (ExpiryChecker가 처리)
-                    protected_skipped += 1
-                    continue
+                    # 모든 active 배치가 만료 임박
+                    # → 최근 판매 실적 확인: 판매 있으면 가드 면제 (FIFO 차감 허용)
+                    has_recent_sale = False
+                    try:
+                        cursor.execute(
+                            """
+                            SELECT COALESCE(SUM(sale_qty), 0) as recent_sales
+                            FROM daily_sales
+                            WHERE item_cd = ? AND store_id = ?
+                              AND sales_date >= date('now', '-2 days')
+                              AND sale_qty > 0
+                            """,
+                            (item_cd, store_id),
+                        )
+                        recent_sales = int(cursor.fetchone()[0] or 0)
+                        has_recent_sale = recent_sales > 0
+                    except Exception:
+                        pass
 
-                # 정상 배치만큼만 차감 (임박 배치는 보호)
-                if to_consume > normal_qty:
+                    if not has_recent_sale:
+                        # 0판매 + 만료 임박 → 보류 (ExpiryChecker가 처리)
+                        protected_skipped += 1
+                        continue
+                    # else: 판매 실적 있음 → 가드 면제, 임박 배치도 FIFO 차감 허용
+                    logger.debug(
+                        f"[BatchSync] {item_cd}: 만료임박 가드 면제 "
+                        f"(최근 2일 판매 {recent_sales}개 → FIFO 차감 허용)"
+                    )
+
+                # 정상 배치만큼만 차감 (임박 배치는 보호) — 가드 면제 시 전량 차감
+                if normal_qty > 0 and to_consume > normal_qty:
                     to_consume = normal_qty
 
                 adjusted += 1
