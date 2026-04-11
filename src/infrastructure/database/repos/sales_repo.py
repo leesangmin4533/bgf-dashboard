@@ -260,6 +260,41 @@ class SalesRepository(BaseRepository):
                     )
                     remaining_to_deduct -= deduct
 
+            # FR-01.5: inventory_batches 판매 시점 FIFO 차감 (batch-sale-time-consume)
+            # 가장 먼저 만료되는 active 배치부터 sale_qty_diff만큼 순차 차감
+            # → 배치 remaining이 실물과 항상 일치하도록 보장
+            if sale_qty_diff > 0:
+                cursor.execute(
+                    """
+                    SELECT id, remaining_qty FROM inventory_batches
+                    WHERE item_cd = ? AND store_id = ? AND status = 'active'
+                    AND remaining_qty > 0
+                    ORDER BY expiry_date ASC, id ASC
+                    """,
+                    (item_cd, store_id)
+                )
+                _remain = sale_qty_diff
+                _consumed_count = 0
+                for _b_row in cursor.fetchall():
+                    if _remain <= 0:
+                        break
+                    _b_id, _b_rem = _b_row[0], _b_row[1]
+                    _deduct = min(_b_rem, _remain)
+                    _new_rem = _b_rem - _deduct
+                    _new_st = BATCH_STATUS_CONSUMED if _new_rem == 0 else BATCH_STATUS_ACTIVE
+                    cursor.execute(
+                        "UPDATE inventory_batches SET remaining_qty = ?, status = ?, updated_at = ? WHERE id = ?",
+                        (_new_rem, _new_st, now, _b_id)
+                    )
+                    _remain -= _deduct
+                    if _new_st == BATCH_STATUS_CONSUMED:
+                        _consumed_count += 1
+                if sale_qty_diff > 0:
+                    logger.debug(
+                        f"[FR-01.5] {item_cd}: 판매 {sale_qty_diff}개 → "
+                        f"배치 FIFO 차감 (consumed={_consumed_count}, 미차감={_remain})"
+                    )
+
             from src.alert.config import ALERT_CATEGORIES
             is_food = mid_cd in ALERT_CATEGORIES
 
@@ -314,7 +349,10 @@ class SalesRepository(BaseRepository):
                         )
                         logger.info(f"배치 자동생성: {item_cd} 수량={buy_qty_diff} 폐기예정={expiry_date}")
 
-            # FR-02: inventory_batches FIFO sync (활성 배치 있는 경우)
+            # FR-02: inventory_batches 보정 (batch-sale-time-consume: 보정 전용)
+            # FR-01.5가 판매 시점 즉시 차감하므로, FR-02는 오차 보정만 수행.
+            # 허용 오차 2개 이내면 스킵.
+            _FR02_TOLERANCE = 2
             cursor.execute(
                 "SELECT COALESCE(SUM(remaining_qty), 0) FROM inventory_batches WHERE item_cd = ? AND store_id = ? AND status = ?",
                 (item_cd, store_id, BATCH_STATUS_ACTIVE)
@@ -323,41 +361,9 @@ class SalesRepository(BaseRepository):
             if batch_total > stock_qty and batch_total > 0:
                 to_consume = batch_total - stock_qty
 
-                # ★ batch-sync-zero-sales-guard (2026-04-08, FR-02 우회 경로 차단, 04-10 개선):
-                # 만료 24h 이내 active 배치는 ExpiryChecker가 처리하도록 보호.
-                # 단, 판매 실적(sale_qty > 0)이 있으면 가드 면제 → FIFO 차감 허용.
-                cursor.execute(
-                    """
-                    SELECT COALESCE(SUM(remaining_qty), 0) AS normal_qty
-                    FROM inventory_batches
-                    WHERE item_cd = ? AND store_id = ? AND status = ?
-                      AND remaining_qty > 0
-                      AND (expiry_date IS NULL
-                           OR julianday(expiry_date) - julianday('now') >= 1.0)
-                    """,
-                    (item_cd, store_id, BATCH_STATUS_ACTIVE)
-                )
-                normal_qty = int(cursor.fetchone()[0] or 0)
-
-                if normal_qty == 0:
-                    # 모든 active 배치가 만료 임박
-                    # → 현재 처리 중인 sale_qty로 판매 실적 확인
-                    if sale_qty and int(sale_qty) > 0:
-                        # 판매 있음 → 가드 면제, 임박 배치도 FIFO 차감 허용
-                        logger.debug(
-                            f"[FR-02 guard] {item_cd}: 만료임박 가드 면제 "
-                            f"(sale_qty={sale_qty} → FIFO 차감 허용)"
-                        )
-                    else:
-                        # 0판매 + 만료 임박 → FR-02 보류
-                        logger.info(
-                            f"[FR-02 guard] {item_cd}: 모든 active 배치 만료 임박, "
-                            f"FIFO 차감 보류 (to_consume={to_consume})"
-                        )
-                        to_consume = 0  # 차감하지 않음
-                else:
-                    if to_consume > normal_qty:
-                        to_consume = normal_qty
+                # 허용 오차 이내면 스킵
+                if to_consume <= _FR02_TOLERANCE:
+                    to_consume = 0
 
                     # 인라인 FIFO 차감 (임박 배치는 후순위로 정렬하여 정상 배치만 차감)
                     cursor.execute(

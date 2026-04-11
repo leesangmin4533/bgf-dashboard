@@ -1103,7 +1103,11 @@ class InventoryBatchRepository(BaseRepository):
             consumed_count = 0
             protected_skipped = 0  # batch-sync-zero-sales-guard
 
-            # 3) 상품별 FIFO 보정
+            # 3) 상품별 FIFO 보정 (batch-sale-time-consume: 보정 전용)
+            # FR-01.5(판매 시점 즉시 차감)가 주도하므로, BatchSync는 오차 보정만.
+            # 허용 오차 TOLERANCE 이내면 스킵하여 과잉/과소 차감 방지.
+            BATCH_SYNC_TOLERANCE = 2
+
             for item_cd, batch_total in batch_totals.items():
                 stock_qty = stock_map.get(item_cd, 0)
 
@@ -1113,56 +1117,9 @@ class InventoryBatchRepository(BaseRepository):
                 # batch_total > stock_qty -> 초과분 FIFO 차감
                 to_consume = batch_total - stock_qty
 
-                # ★ batch-sync-zero-sales-guard (2026-04-07, 04-10 개선):
-                # 만료 24h 이내 active 배치는 ExpiryChecker가 처리하도록 보호.
-                # 단, 판매 실적(sale_qty > 0)이 있는 상품은 가드 면제 → FIFO 차감 허용.
-                # (유통기한 1일 2차 배송 상품은 항상 24h 이내라 가드에 걸려
-                #  판매가 있어도 remaining_qty 미감소 → 폐기 알림 과다 문제 수정)
-                cursor.execute(
-                    """
-                    SELECT COALESCE(SUM(remaining_qty), 0) AS normal_qty
-                    FROM inventory_batches
-                    WHERE item_cd = ? AND store_id = ? AND status = ?
-                      AND remaining_qty > 0
-                      AND (expiry_date IS NULL
-                           OR julianday(expiry_date) - julianday('now') >= 1.0)
-                    """,
-                    (item_cd, store_id, BATCH_STATUS_ACTIVE),
-                )
-                normal_qty = int(cursor.fetchone()[0] or 0)
-
-                if normal_qty == 0:
-                    # 모든 active 배치가 만료 임박
-                    # → 최근 판매 실적 확인: 판매 있으면 가드 면제 (FIFO 차감 허용)
-                    has_recent_sale = False
-                    try:
-                        cursor.execute(
-                            """
-                            SELECT COALESCE(SUM(sale_qty), 0) as recent_sales
-                            FROM daily_sales
-                            WHERE item_cd = ? AND store_id = ?
-                              AND sales_date >= date('now', '-2 days')
-                              AND sale_qty > 0
-                            """,
-                            (item_cd, store_id),
-                        )
-                        recent_sales = int(cursor.fetchone()[0] or 0)
-                        has_recent_sale = recent_sales > 0
-                    except Exception:
-                        pass
-
-                    if not has_recent_sale:
-                        # 0판매 + 만료 임박 → 보류 (ExpiryChecker가 처리)
-                        protected_skipped += 1
-                        continue
-                    # else: 판매 실적 있음 → 가드 면제, 임박 배치도 FIFO 차감 허용
-                    logger.debug(
-                        f"[BatchSync] {item_cd}: 만료임박 가드 면제 "
-                        f"(최근 2일 판매 {recent_sales}개 → FIFO 차감 허용)"
-                    )
-
-                # 정상 배치만큼만 차감 (임박 배치는 보호) — 가드 면제 시 전량 차감
-                if normal_qty > 0 and to_consume > normal_qty:
+                # 허용 오차 이내면 스킵 (FR-01.5가 주도 차감하므로 작은 오차 허용)
+                if to_consume <= BATCH_SYNC_TOLERANCE:
+                    continue
                     to_consume = normal_qty
 
                 adjusted += 1

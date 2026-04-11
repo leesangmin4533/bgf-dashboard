@@ -103,6 +103,16 @@ Issue-Chain: expiry-tracking#batch-sync-over-consume
 **해결 방향**: save_daily_sales() 시점에 sale_qty만큼 즉시 FIFO 차감
 - hourly_sales_detail 활용 가능 (시간대별 판매 → 배치 귀속 정밀화)
 
+**구현 완료 (04-11)**:
+1. `sales_repo.py`: FR-01.5 추가 — sale_qty_diff 발생 시 inventory_batches 즉시 FIFO 차감
+2. `inventory_batch_repo.py`: BatchSync 허용 오차 ±2 + 가드 제거 (보정 전용)
+3. `sales_repo.py` FR-02: 동일하게 허용 오차 ±2 + 가드 제거
+
+### 검증 체크포인트
+- [ ] 다음 07:00 발주 후 BatchSync adjusted=0 확인 (FR-01.5가 차감)
+- [ ] 14:00 ExpiryChecker remaining이 실재고와 ±1 이내 일치 확인
+- [ ] 0판매 만료임박 상품은 remaining 유지되는지 확인
+
 Issue-Chain: expiry-tracking#batch-sale-time-consume
 
 ---
