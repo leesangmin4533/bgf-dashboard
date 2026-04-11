@@ -83,6 +83,7 @@ BGF 리테일(CU 편의점) 다매장 자동 발주 시스템
 | OPEN | - | batch-sync-guard가 유통기한 1일 상품 FIFO 차감 전면 차단 (04-10) | expiry-tracking.md |  |
 | OPEN | - | product_details order_unit_qty 불일치 → 과발주 | order-execution.md |  |
 | OPEN | - | 폐기추적 근본 개선 — 판매 시점 배치 차감 (04-11) | expiry-tracking.md |  |
+| WATCHING | - | product_details 매장별 분리 — orderable_day 교차오염 (04-12 수정) | order-execution.md | 04-13 07:00 46704 수집 확인, 04-19 일요일 필터링 확인 |
 | WATCHING | - | 46704 폐기 검증 보고서 정시 생성 실패 (04-08 수정) | expiry-tracking.md | 04-09 22:00 정밀폐기 세션 동일 검증 |
 | WATCHING | - | BatchSync 0판매 + 만료 임박 → 잘못된 consumed 마킹 (04-07 수정) | expiry-tracking.md | **🚨 라이브 발견 1**: 4매장 모두 false consumed 발생 |
 | WATCHING | - | D-1 부스트 발주 execute_single_order 누락 + scheduler 모듈 캐시 | expiry-tracking.md | scheduler 재시작 (운영자 수동) |

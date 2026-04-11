@@ -507,6 +507,32 @@ Issue-Chain: order-execution#food-systemic-underprediction
 - [ ] 다음 행사 종료 상품에서 D-5~D-4 감량 로그 확인 (수동)
 - [ ] 1주 운영 후 폐기 건수 비교
 
+## [WATCHING] product_details 매장별 분리 — orderable_day 교차오염 수정 (04-12)
+
+**설계 의도**: product_details는 매장별로 orderable_day가 다를 수 있으므로 PK=(store_id, item_cd)로 분리 저장
+**문제**: product_details PK=item_cd 단일 → 46513 데이터만 7,639건 → 46704 발주 시 46513 orderable_day 참조
+- 46704에서 일요일 발주불가 상품 100건이 발주됨 (전체 63%=4,811건이 일요일 불가)
+- `is_orderable_today()` 체크가 46513 "일월화수목금토"를 읽어 통과
+**기여 KPI**: K3 (발주 실패율)
+
+### 시도 1: PK 변경 + store_id 전달 (63b40c1, 04-12)
+- **왜**: 근본 원인은 DB 스키마. 매장별 분리가 유일한 해법
+- **수정**: v77 마이그레이션(PK 변경) + 13파일 store_id 전달
+- **결과**: ✓ DB 마이그레이션 성공, 기능 검증 통과
+- 46704 product_details는 다음 발주 실행 시 자동 수집
+
+### 검증 체크포인트
+- [x] common.db v77 마이그레이션 적용 확인 (04-12)
+- [x] 매장별 분리 저장 기능 테스트 통과 (04-12)
+- [ ] 46704 product_details 자동 수집 확인 (04-13 07:00 스케줄)
+- [ ] 46704 일요일 발주불가 상품 필터링 확인 (다음 일요일 04-19)
+
+### 교훈
+- common.db의 product_details에 store_id 컬럼은 있었지만 PK에 미포함 → 다매장 시스템에서 교차오염 발생
+- Direct API 발주 시 그리드 읽기가 생략되어 orderable_day 갱신 기회도 놓침
+
+---
+
 ## [PLANNED] 비식품 20개+ 카테고리 폐기율 동반 상승 — order_unit_qty 522건 보정(2dbc763) 파급 효과 의심 (P2)
 
 **목표**: 019/023/034/042/046/050/054/056/300 등 비식품 카테고리에서 rate_7d가 rate_30d 대비 63~221% 상승. 패턴이 04-10 order_unit_qty 522건 전수 보정 커밋(2dbc763) 이후 집중. 단일 mid가 아닌 전체 동시 상승으로 보정으로 인한 발주량 변화 파급이 주 원인인지 검증 필요.
