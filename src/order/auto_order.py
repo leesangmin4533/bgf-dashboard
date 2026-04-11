@@ -2383,6 +2383,10 @@ class AutoOrderManager:
             # 상품 상세 정보 (매장별 분리)
             product_info = self.product_repo.get(item_cd, store_id=self.store_id)
 
+            # mid_cd 보강 (product_details에 없으므로 rec에서 가져옴)
+            if product_info and not product_info.get("mid_cd"):
+                product_info["mid_cd"] = rec.get("mid_cd", "")
+
             # 발주 가능 여부 확인
             if check_orderable and product_info:
                 if not self.converter.is_orderable_today(product_info):
