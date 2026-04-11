@@ -62,6 +62,26 @@ Issue-Chain: expiry-tracking#batch-sync-guard-blocks-short-expiry-fifo
 
 ---
 
+## [OPEN] BatchSync 과잉 차감 — remaining=0인데 실물 잔존 (04-11)
+
+**문제**: BatchSync 가드 면제(04-10 수정) 후 FIFO 차감이 정상 작동하지만, **과잉 차감**으로 실물이 남아있는데 remaining=0이 되는 역방향 문제 발생.
+
+**사례**: 46513 04-11 14:00 폐기
+- 삼)참치소고기고추장더블2 (8800271903480): 배치 #29339 initial=2 → remaining=0 (consumed), **실물 1개 폐기**
+- 김)계란초밥김밥2 (8801771303336): 배치 #29341 initial=2 → remaining=0 (consumed), **실물 1개 폐기**
+- ExpiryChecker: "14:00 폐기 대상 없음" (remaining=0이라 감지 못함)
+
+**근본 원인**: stock_qty는 해당 상품의 **전체 재고**(여러 배치 합산)인데, BatchSync는 이를 기준으로 개별 배치의 remaining을 차감. 신규 입고분과 기존 재고가 합산된 stock_qty에서 FIFO 차감하면, 특정 배치가 과잉 차감될 수 있음.
+
+**이전 문제와의 관계**:
+- 04-10: 가드가 차감을 **전면 차단** → remaining 과다 (폐기 과다 알림)
+- 04-11(수정 후): 가드 면제로 차감 **허용** → remaining 과소 (폐기 감지 누락)
+- **진자 운동**: 차단↔허용 사이에서 정확한 균형점을 못 찾고 있음
+
+Issue-Chain: expiry-tracking#batch-sync-over-consume
+
+---
+
 ## [RESOLVED] remaining_qty 미갱신 → 입고 기반 재설계 (03-29 ~ 04-05)
 
 **문제**: order_tracking.remaining_qty가 판매 후에도 안 줄어듦

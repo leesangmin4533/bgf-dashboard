@@ -234,23 +234,29 @@ class DailyCollectionJob:
             phase_timings = {}
 
             # ── 3단계: PhaseCheckpoint (재시도 시 완료 Phase 스킵) ──
+            # collect_only 모드(정밀폐기 수집 등)에서는 체크포인트 비활성화
+            # — 07:00 발주 체크포인트가 13:50 폐기 수집을 스킵하는 문제 방지
             from src.application.scheduler.job_guard import PhaseCheckpoint
-            _checkpoint = PhaseCheckpoint("daily_order", self.store_id)
-            _resume_phase = _checkpoint.get_resume_phase()
-            if _resume_phase and _resume_phase != "collection":
-                logger.info(
-                    f"[PhaseCheckpoint] {self.store_id}: "
-                    f"'{_resume_phase}'부터 재개 (이전 Phase 완료됨)"
-                )
+            _use_checkpoint = not collect_only
+            if _use_checkpoint:
+                _checkpoint = PhaseCheckpoint("daily_order", self.store_id)
+                _resume_phase = _checkpoint.get_resume_phase()
+                if _resume_phase and _resume_phase != "collection":
+                    logger.info(
+                        f"[PhaseCheckpoint] {self.store_id}: "
+                        f"'{_resume_phase}'부터 재개 (이전 Phase 완료됨)"
+                    )
+            else:
+                _checkpoint = None
 
             # Phase 1.0~1.35: 데이터 수집
-            if not _checkpoint.is_completed("collection"):
+            if not (_checkpoint and _checkpoint.is_completed("collection")):
                 from src.scheduler.phases.collection import run_collection_phases
                 _t0 = time.time()
                 ctx = run_collection_phases(ctx, self)
                 _dur = round(time.time() - _t0, 1)
                 phase_timings["collection"] = _dur
-                if ctx["collection_success"]:
+                if ctx["collection_success"] and _checkpoint:
                     _checkpoint.mark_completed("collection", _dur)
             else:
                 logger.info(f"[PhaseCheckpoint] {self.store_id}: collection 스킵 (완료)")
@@ -265,27 +271,29 @@ class DailyCollectionJob:
                 )
             else:
                 # Phase 1.5~1.67: 보정/검증 (수집 성공 시)
-                if not _checkpoint.is_completed("calibration"):
+                if not (_checkpoint and _checkpoint.is_completed("calibration")):
                     _t0 = time.time()
                     if ctx["collection_success"]:
                         from src.scheduler.phases.calibration import run_calibration_phases
                         ctx = run_calibration_phases(ctx)
                     _dur = round(time.time() - _t0, 1)
                     phase_timings["calibration"] = _dur
-                    _checkpoint.mark_completed("calibration", _dur)
+                    if _checkpoint:
+                        _checkpoint.mark_completed("calibration", _dur)
                 else:
                     logger.info(f"[PhaseCheckpoint] {self.store_id}: calibration 스킵 (완료)")
                     phase_timings["calibration"] = 0
 
                 # Phase 1.68~1.95: 발주 준비 (수집 성공 시)
-                if not _checkpoint.is_completed("preparation"):
+                if not (_checkpoint and _checkpoint.is_completed("preparation")):
                     _t0 = time.time()
                     if ctx["collection_success"]:
                         from src.scheduler.phases.preparation import run_preparation_phases
                         ctx = run_preparation_phases(ctx, self)
                     _dur = round(time.time() - _t0, 1)
                     phase_timings["preparation"] = _dur
-                    _checkpoint.mark_completed("preparation", _dur)
+                    if _checkpoint:
+                        _checkpoint.mark_completed("preparation", _dur)
                 else:
                     logger.info(f"[PhaseCheckpoint] {self.store_id}: preparation 스킵 (완료)")
                     phase_timings["preparation"] = 0
@@ -296,7 +304,8 @@ class DailyCollectionJob:
                 ctx = run_execution_phases(ctx, self)
                 _dur = round(time.time() - _t0, 1)
                 phase_timings["execution"] = _dur
-                _checkpoint.mark_completed("execution", _dur)
+                if _checkpoint:
+                    _checkpoint.mark_completed("execution", _dur)
 
             # 결과 통합
             collection_results = ctx["collection_results"]
