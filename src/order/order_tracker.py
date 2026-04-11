@@ -113,7 +113,7 @@ class OrderTracker:
                 arrival_time = order_datetime + timedelta(days=1)
                 try:
                     pd_repo = ProductDetailRepository()
-                    pd_info = pd_repo.get(item_cd)
+                    pd_info = pd_repo.get(item_cd, store_id=self.store_id)
                     exp_days = pd_info.get('expiration_days') if pd_info else None
                     if exp_days and exp_days > 0:
                         # [원본 보존] 기존: expiry_time = arrival_time(order_date) + exp_days

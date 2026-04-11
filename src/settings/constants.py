@@ -252,7 +252,7 @@ BATCH_EXPIRY_ALERT_DAYS = 1             # 폐기 N일 전 알림
 
 # DB 스키마 버전
 # =====================================================================
-DB_SCHEMA_VERSION = 76  # v76: prediction_logs.association_boost + stage_trace 스키마 드리프트 복구 (food-underprediction-secondary B안)
+DB_SCHEMA_VERSION = 77  # v77: product_details PK를 (store_id, item_cd)로 변경 — 매장별 orderable_day 분리
 
 # =====================================================================
 # Order Unit Qty Integrity v2 (order-unit-qty-integrity-v2)

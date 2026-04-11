@@ -20,11 +20,12 @@ class ProductDetailRepository(BaseRepository):
 
     db_type = "common"
 
-    def exists(self, item_cd: str) -> bool:
+    def exists(self, item_cd: str, store_id: Optional[str] = None) -> bool:
         """상품 상세 정보 존재 여부 확인
 
         Args:
             item_cd: 상품 코드
+            store_id: 매장 코드 (None이면 매장 무관)
 
         Returns:
             존재하면 True
@@ -33,22 +34,33 @@ class ProductDetailRepository(BaseRepository):
         try:
             cursor = conn.cursor()
 
-            cursor.execute(
-                "SELECT 1 FROM product_details WHERE item_cd = ?",
-                (item_cd,)
-            )
+            if store_id is not None:
+                cursor.execute(
+                    "SELECT 1 FROM product_details WHERE store_id = ? AND item_cd = ?",
+                    (store_id, item_cd)
+                )
+            else:
+                cursor.execute(
+                    "SELECT 1 FROM product_details WHERE item_cd = ?",
+                    (item_cd,)
+                )
             result = cursor.fetchone()
             return result is not None
         finally:
             conn.close()
 
-    def save(self, item_cd: str, info: Dict[str, Any]) -> None:
+    def save(self, item_cd: str, info: Dict[str, Any],
+             store_id: str = "") -> None:
         """상품 상세 정보 저장 (upsert)
 
         Args:
             item_cd: 상품 코드
             info: 상품 상세 정보 (유통기한, 발주 요일, 단위 등)
+            store_id: 매장 코드 (v77: 매장별 분리)
         """
+        # info에 store_id가 있으면 우선 사용
+        effective_store_id = info.get("store_id") or store_id or ""
+
         conn = self._get_conn()
         try:
             cursor = conn.cursor()
@@ -57,12 +69,13 @@ class ProductDetailRepository(BaseRepository):
             cursor.execute(
                 """
                 INSERT INTO product_details
-                (item_cd, item_nm, expiration_days, orderable_day, orderable_status,
+                (store_id, item_cd, item_nm, expiration_days, orderable_day,
+                 orderable_status,
                  order_unit_name, order_unit_qty, case_unit_qty, lead_time_days,
                  sell_price, margin_rate,
                  fetched_at, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(item_cd) DO UPDATE SET
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(store_id, item_cd) DO UPDATE SET
                     item_nm = excluded.item_nm,
                     expiration_days = excluded.expiration_days,
                     orderable_day = excluded.orderable_day,
@@ -77,6 +90,7 @@ class ProductDetailRepository(BaseRepository):
                     updated_at = excluded.updated_at
                 """,
                 (
+                    effective_store_id,
                     item_cd,
                     info.get("item_nm") or info.get("product_name"),
                     self._to_int(info.get("expiration_days")),
@@ -98,11 +112,12 @@ class ProductDetailRepository(BaseRepository):
         finally:
             conn.close()
 
-    def get(self, item_cd: str) -> Optional[Dict[str, Any]]:
+    def get(self, item_cd: str, store_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """상품 상세 정보 조회
 
         Args:
             item_cd: 상품 코드
+            store_id: 매장 코드 (None이면 아무 매장이나 1건 반환, 호환용)
 
         Returns:
             상품 상세 정보 dict 또는 None
@@ -111,17 +126,26 @@ class ProductDetailRepository(BaseRepository):
         try:
             cursor = conn.cursor()
 
-            cursor.execute(
-                "SELECT * FROM product_details WHERE item_cd = ?",
-                (item_cd,)
-            )
+            if store_id is not None:
+                cursor.execute(
+                    "SELECT * FROM product_details WHERE store_id = ? AND item_cd = ?",
+                    (store_id, item_cd)
+                )
+            else:
+                cursor.execute(
+                    "SELECT * FROM product_details WHERE item_cd = ?",
+                    (item_cd,)
+                )
             row = cursor.fetchone()
             return dict(row) if row else None
         finally:
             conn.close()
 
-    def get_all(self) -> List[Dict[str, Any]]:
+    def get_all(self, store_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """모든 상품 상세 정보 조회
+
+        Args:
+            store_id: 매장 코드 (None이면 전체)
 
         Returns:
             전체 상품 상세 정보 목록
@@ -130,7 +154,13 @@ class ProductDetailRepository(BaseRepository):
         try:
             cursor = conn.cursor()
 
-            cursor.execute("SELECT * FROM product_details ORDER BY item_cd")
+            if store_id is not None:
+                cursor.execute(
+                    "SELECT * FROM product_details WHERE store_id = ? ORDER BY item_cd",
+                    (store_id,)
+                )
+            else:
+                cursor.execute("SELECT * FROM product_details ORDER BY item_cd")
             rows = cursor.fetchall()
             return [dict(row) for row in rows]
         finally:
@@ -246,7 +276,8 @@ class ProductDetailRepository(BaseRepository):
         finally:
             conn.close()
 
-    def bulk_update_order_unit_qty(self, items: List[Dict[str, Any]]) -> int:
+    def bulk_update_order_unit_qty(self, items: List[Dict[str, Any]],
+                                     store_id: str = "") -> int:
         """발주단위(order_unit_qty)만 일괄 갱신
 
         BGF 사이트 발주현황조회 "전체" 탭에서 수집한 ORD_UNIT_QTY를
@@ -254,6 +285,7 @@ class ProductDetailRepository(BaseRepository):
 
         Args:
             items: [{"item_cd", "item_nm", "mid_cd", "order_unit_qty"}, ...]
+            store_id: 매장 코드
 
         Returns:
             처리된 건수
@@ -268,6 +300,7 @@ class ProductDetailRepository(BaseRepository):
 
             data = [
                 (
+                    store_id,
                     item["item_cd"],
                     item.get("item_nm", ""),
                     self._to_int(item.get("order_unit_qty", 1)),
@@ -280,9 +313,9 @@ class ProductDetailRepository(BaseRepository):
 
             cursor.executemany(
                 """INSERT INTO product_details
-                   (item_cd, item_nm, order_unit_qty, created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?)
-                   ON CONFLICT(item_cd) DO UPDATE SET
+                   (store_id, item_cd, item_nm, order_unit_qty, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(store_id, item_cd) DO UPDATE SET
                        order_unit_qty = excluded.order_unit_qty,
                        item_nm = COALESCE(
                            NULLIF(excluded.item_nm, ''),
@@ -293,18 +326,20 @@ class ProductDetailRepository(BaseRepository):
             )
             conn.commit()
             count = len(data)
-            logger.info(f"발주단위 일괄 갱신: {count}건")
+            logger.info(f"발주단위 일괄 갱신: {count}건 (store={store_id})")
             return count
         finally:
             conn.close()
 
-    def bulk_update_demand_pattern(self, patterns: Dict[str, str]) -> int:
+    def bulk_update_demand_pattern(self, patterns: Dict[str, str],
+                                     store_id: str = "") -> int:
         """수요 패턴(demand_pattern) 일괄 갱신
 
         DemandClassifier에서 분류한 패턴을 product_details에 반영.
 
         Args:
             patterns: {item_cd: "daily"|"frequent"|"intermittent"|"slow"}
+            store_id: 매장 코드
 
         Returns:
             처리된 건수
@@ -318,7 +353,7 @@ class ProductDetailRepository(BaseRepository):
             now = self._now()
 
             data = [
-                (pattern, now, item_cd)
+                (pattern, now, store_id, item_cd)
                 for item_cd, pattern in patterns.items()
                 if item_cd and pattern
             ]
@@ -326,22 +361,24 @@ class ProductDetailRepository(BaseRepository):
             cursor.executemany(
                 """UPDATE product_details
                    SET demand_pattern = ?, updated_at = ?
-                   WHERE item_cd = ?""",
+                   WHERE store_id = ? AND item_cd = ?""",
                 data,
             )
             conn.commit()
             count = cursor.rowcount
-            logger.info(f"수요 패턴 일괄 갱신: {count}건")
+            logger.info(f"수요 패턴 일괄 갱신: {count}건 (store={store_id})")
             return count
         finally:
             conn.close()
 
-    def update_orderable_day(self, item_cd: str, orderable_day: str) -> bool:
+    def update_orderable_day(self, item_cd: str, orderable_day: str,
+                               store_id: str = "") -> bool:
         """발주가능요일만 단독 업데이트 (검증 교정용)
 
         Args:
             item_cd: 상품 코드
             orderable_day: 새 발주가능요일 (예: "월화수목금토")
+            store_id: 매장 코드
 
         Returns:
             업데이트 성공 여부
@@ -351,18 +388,20 @@ class ProductDetailRepository(BaseRepository):
             cursor = conn.cursor()
             now = self._now()
             cursor.execute(
-                "UPDATE product_details SET orderable_day = ?, updated_at = ? WHERE item_cd = ?",
-                (orderable_day, now, item_cd)
+                "UPDATE product_details SET orderable_day = ?, updated_at = ? "
+                "WHERE store_id = ? AND item_cd = ?",
+                (orderable_day, now, store_id, item_cd)
             )
             conn.commit()
             updated = cursor.rowcount > 0
             if updated:
-                logger.info(f"[DB교정] {item_cd}: orderable_day → {orderable_day}")
+                logger.info(f"[DB교정] {item_cd} (store={store_id}): orderable_day → {orderable_day}")
             return updated
         finally:
             conn.close()
 
-    def get_items_needing_detail_fetch(self, limit: int = 200) -> List[str]:
+    def get_items_needing_detail_fetch(self, limit: int = 200,
+                                         store_id: Optional[str] = None) -> List[str]:
         """상세 정보 수집이 필요한 상품 코드 목록
 
         대상 조건 (OR):
@@ -383,23 +422,39 @@ class ProductDetailRepository(BaseRepository):
         conn = self._get_conn()
         try:
             cursor = conn.cursor()
-            cursor.execute("""
-                SELECT DISTINCT p.item_cd
-                FROM products p
-                LEFT JOIN product_details pd ON p.item_cd = pd.item_cd
-                WHERE pd.fetched_at IS NULL
-                   OR pd.expiration_days IS NULL
-                   OR pd.orderable_day = '일월화수목금토'
-                   OR p.mid_cd IN ('999', '')
-                   OR pd.large_cd IS NULL
-                ORDER BY p.updated_at DESC
-                LIMIT ?
-            """, (limit,))
+            if store_id is not None:
+                cursor.execute("""
+                    SELECT DISTINCT p.item_cd
+                    FROM products p
+                    LEFT JOIN product_details pd ON p.item_cd = pd.item_cd
+                        AND pd.store_id = ?
+                    WHERE pd.fetched_at IS NULL
+                       OR pd.expiration_days IS NULL
+                       OR pd.orderable_day = '일월화수목금토'
+                       OR p.mid_cd IN ('999', '')
+                       OR pd.large_cd IS NULL
+                    ORDER BY p.updated_at DESC
+                    LIMIT ?
+                """, (store_id, limit))
+            else:
+                cursor.execute("""
+                    SELECT DISTINCT p.item_cd
+                    FROM products p
+                    LEFT JOIN product_details pd ON p.item_cd = pd.item_cd
+                    WHERE pd.fetched_at IS NULL
+                       OR pd.expiration_days IS NULL
+                       OR pd.orderable_day = '일월화수목금토'
+                       OR p.mid_cd IN ('999', '')
+                       OR pd.large_cd IS NULL
+                    ORDER BY p.updated_at DESC
+                    LIMIT ?
+                """, (limit,))
             return [row[0] for row in cursor.fetchall()]
         finally:
             conn.close()
 
-    def bulk_update_from_popup(self, item_cd: str, data: Dict[str, Any]) -> bool:
+    def bulk_update_from_popup(self, item_cd: str, data: Dict[str, Any],
+                                store_id: str = "") -> bool:
         """팝업에서 수집한 데이터로 product_details 부분 업데이트
 
         기존에 정확한 값이 있는 필드는 덮어쓰지 않음:
@@ -412,30 +467,33 @@ class ProductDetailRepository(BaseRepository):
         Args:
             item_cd: 상품코드
             data: 팝업에서 추출된 데이터
+            store_id: 매장 코드
 
         Returns:
             성공 여부
         """
+        effective_store_id = data.get("store_id") or store_id or ""
         now = self._now()
         conn = self._get_conn()
         try:
             cursor = conn.cursor()
             cursor.execute(
-                "SELECT COUNT(*) as cnt FROM product_details WHERE item_cd = ?",
-                (item_cd,)
+                "SELECT COUNT(*) as cnt FROM product_details WHERE store_id = ? AND item_cd = ?",
+                (effective_store_id, item_cd)
             )
             exists = cursor.fetchone()[0] > 0
 
             if not exists:
                 cursor.execute("""
                     INSERT INTO product_details
-                    (item_cd, item_nm, expiration_days, orderable_day,
+                    (store_id, item_cd, item_nm, expiration_days, orderable_day,
                      orderable_status, order_unit_name, order_unit_qty,
                      case_unit_qty, sell_price, fetched_at,
                      large_cd, small_cd, small_nm, class_nm,
                      created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
+                    effective_store_id,
                     item_cd,
                     data.get("item_nm"),
                     self._to_int(data.get("expiration_days")) if data.get("expiration_days") else None,
@@ -489,7 +547,7 @@ class ProductDetailRepository(BaseRepository):
                         class_nm = COALESCE(class_nm, ?),
                         fetched_at = ?,
                         updated_at = ?
-                    WHERE item_cd = ?
+                    WHERE store_id = ? AND item_cd = ?
                 """, (
                     exp_days,
                     ord_day,
@@ -504,6 +562,7 @@ class ProductDetailRepository(BaseRepository):
                     class_nm_val,
                     fetched,
                     now,
+                    effective_store_id,
                     item_cd,
                 ))
 
@@ -597,7 +656,8 @@ class ProductDetailRepository(BaseRepository):
         finally:
             conn.close()
 
-    def bulk_update_category_force(self, items: List[Dict[str, Any]]) -> int:
+    def bulk_update_category_force(self, items: List[Dict[str, Any]],
+                                     store_id: str = "") -> int:
         """카테고리 정보 강제 일괄 갱신 (일회성 벌크 업데이트용)
 
         기존 값과 무관하게 large_cd, small_cd, small_nm, class_nm을 덮어씀.
@@ -606,6 +666,7 @@ class ProductDetailRepository(BaseRepository):
         Args:
             items: [{item_cd, mid_cd, mid_nm, large_cd, large_nm,
                      small_cd, small_nm, class_nm}, ...]
+            store_id: 매장 코드
 
         Returns:
             처리된 건수
@@ -635,17 +696,17 @@ class ProductDetailRepository(BaseRepository):
                     UPDATE product_details
                     SET large_cd = ?, small_cd = ?, small_nm = ?,
                         class_nm = ?, fetched_at = ?, updated_at = ?
-                    WHERE item_cd = ?
-                """, (large_cd, small_cd, small_nm, class_nm, now, now, item_cd))
+                    WHERE store_id = ? AND item_cd = ?
+                """, (large_cd, small_cd, small_nm, class_nm, now, now, store_id, item_cd))
 
                 if cursor.rowcount == 0:
                     # product_details에 없으면 INSERT
                     cursor.execute("""
                         INSERT OR IGNORE INTO product_details
-                        (item_cd, item_nm, large_cd, small_cd, small_nm,
+                        (store_id, item_cd, item_nm, large_cd, small_cd, small_nm,
                          class_nm, fetched_at, created_at, updated_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """, (item_cd, item.get("item_nm", ""),
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (store_id, item_cd, item.get("item_nm", ""),
                           large_cd, small_cd, small_nm, class_nm, now, now, now))
 
                 # products.mid_cd 갱신 (API 응답값으로 강제)

@@ -46,9 +46,10 @@ COMMON_SCHEMA = [
         updated_at TEXT NOT NULL
     )""",
 
-    # product_details
+    # product_details (v77: 매장별 분리 — PK=(store_id, item_cd))
     """CREATE TABLE IF NOT EXISTS product_details (
-        item_cd TEXT PRIMARY KEY,
+        store_id TEXT NOT NULL DEFAULT '',
+        item_cd TEXT NOT NULL,
         item_nm TEXT,
         expiration_days INTEGER,
         orderable_day TEXT DEFAULT '일월화수목금토',
@@ -67,11 +68,12 @@ COMMON_SCHEMA = [
         promo_updated TEXT,
         sell_price INTEGER,
         margin_rate REAL,
-        store_id TEXT,
         large_cd TEXT,
         small_cd TEXT,
         small_nm TEXT,
         class_nm TEXT,
+        demand_pattern TEXT,
+        PRIMARY KEY (store_id, item_cd),
         FOREIGN KEY (item_cd) REFERENCES products(item_cd)
     )""",
 

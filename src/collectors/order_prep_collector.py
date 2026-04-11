@@ -500,7 +500,7 @@ class OrderPrepCollector:
 
         try:
             # 기존 정보 조회
-            existing = self._product_repo.get(item_cd)
+            existing = self._product_repo.get(item_cd, store_id=self.store_id)
 
             if existing:
                 # 기존 유통기한이 있고 force_update가 아니면 유통기한은 유지
@@ -528,7 +528,7 @@ class OrderPrepCollector:
                     'margin_rate': margin_rate,
                 }
 
-            self._product_repo.save(item_cd, info)
+            self._product_repo.save(item_cd, info, store_id=self.store_id or "")
             return True
         except Exception as e:
             logger.error(f"유통기한/매가 DB 저장 실패: {e}")
