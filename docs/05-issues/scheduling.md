@@ -1,7 +1,27 @@
 # 스케줄링 이슈 체인
 
-> 최종 갱신: 2026-04-07
-> 현재 상태: scheduler-wrapper-restart RESOLVED + claude-respond-traceability WATCHING
+> 최종 갱신: 2026-04-11
+> 현재 상태: scheduler-job-guard 구현 중 + scheduler-wrapper-restart RESOLVED
+
+---
+
+## [OPEN] 07시 스케줄 인터넷 장애 + 중복 실행 (04-11)
+
+**문제**: 07:00 daily_order 실행 중 인터넷 장애 발생 → 오류 종료. 
+수동 재실행 시 기존 프로세스와 중복 실행 → 동일 매장 중복 로그인/발주 위험.
+
+**근본 원인**:
+1. 작업 수준 lock 없음 — scheduler.lock은 프로세스 수준이라 같은 프로세스 내 job 중복 못 막음
+2. 실패 시 재시도 없음 — 인터넷 복구돼도 다음날 07:00까지 발주 불가
+3. 매장별 완료 추적 없음 — 재시도 시 성공한 매장도 다시 실행
+4. Phase 체크포인트 없음 — 수집 완료 후 발주 실패 시 수집부터 다시
+
+**3단계 해결 계획**:
+- 1단계: 작업 락 (중복 실행 방지) — `job_guard.py`
+- 2단계: 실패 매장 15분 재시도 (3회) — `job_retry.py`
+- 3단계: Phase 체크포인트 (실패 Phase부터 재개) — 향후
+
+Issue-Chain: scheduling#daily-order-retry-guard
 
 ---
 

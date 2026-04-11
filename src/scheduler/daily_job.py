@@ -233,11 +233,29 @@ class DailyCollectionJob:
             # Phase별 시간 측정
             phase_timings = {}
 
+            # ── 3단계: PhaseCheckpoint (재시도 시 완료 Phase 스킵) ──
+            from src.application.scheduler.job_guard import PhaseCheckpoint
+            _checkpoint = PhaseCheckpoint("daily_order", self.store_id)
+            _resume_phase = _checkpoint.get_resume_phase()
+            if _resume_phase and _resume_phase != "collection":
+                logger.info(
+                    f"[PhaseCheckpoint] {self.store_id}: "
+                    f"'{_resume_phase}'부터 재개 (이전 Phase 완료됨)"
+                )
+
             # Phase 1.0~1.35: 데이터 수집
-            from src.scheduler.phases.collection import run_collection_phases
-            _t0 = time.time()
-            ctx = run_collection_phases(ctx, self)
-            phase_timings["collection"] = round(time.time() - _t0, 1)
+            if not _checkpoint.is_completed("collection"):
+                from src.scheduler.phases.collection import run_collection_phases
+                _t0 = time.time()
+                ctx = run_collection_phases(ctx, self)
+                _dur = round(time.time() - _t0, 1)
+                phase_timings["collection"] = _dur
+                if ctx["collection_success"]:
+                    _checkpoint.mark_completed("collection", _dur)
+            else:
+                logger.info(f"[PhaseCheckpoint] {self.store_id}: collection 스킵 (완료)")
+                ctx["collection_success"] = True
+                phase_timings["collection"] = 0
 
             # collect_only 모드: 보정/준비/실행 Phase 전체 스킵
             if collect_only:
@@ -247,24 +265,38 @@ class DailyCollectionJob:
                 )
             else:
                 # Phase 1.5~1.67: 보정/검증 (수집 성공 시)
-                _t0 = time.time()
-                if ctx["collection_success"]:
-                    from src.scheduler.phases.calibration import run_calibration_phases
-                    ctx = run_calibration_phases(ctx)
-                phase_timings["calibration"] = round(time.time() - _t0, 1)
+                if not _checkpoint.is_completed("calibration"):
+                    _t0 = time.time()
+                    if ctx["collection_success"]:
+                        from src.scheduler.phases.calibration import run_calibration_phases
+                        ctx = run_calibration_phases(ctx)
+                    _dur = round(time.time() - _t0, 1)
+                    phase_timings["calibration"] = _dur
+                    _checkpoint.mark_completed("calibration", _dur)
+                else:
+                    logger.info(f"[PhaseCheckpoint] {self.store_id}: calibration 스킵 (완료)")
+                    phase_timings["calibration"] = 0
 
                 # Phase 1.68~1.95: 발주 준비 (수집 성공 시)
-                _t0 = time.time()
-                if ctx["collection_success"]:
-                    from src.scheduler.phases.preparation import run_preparation_phases
-                    ctx = run_preparation_phases(ctx, self)
-                phase_timings["preparation"] = round(time.time() - _t0, 1)
+                if not _checkpoint.is_completed("preparation"):
+                    _t0 = time.time()
+                    if ctx["collection_success"]:
+                        from src.scheduler.phases.preparation import run_preparation_phases
+                        ctx = run_preparation_phases(ctx, self)
+                    _dur = round(time.time() - _t0, 1)
+                    phase_timings["preparation"] = _dur
+                    _checkpoint.mark_completed("preparation", _dur)
+                else:
+                    logger.info(f"[PhaseCheckpoint] {self.store_id}: preparation 스킵 (완료)")
+                    phase_timings["preparation"] = 0
 
                 # Phase 2.0~3.0: 발주 실행
                 from src.scheduler.phases.execution import run_execution_phases
                 _t0 = time.time()
                 ctx = run_execution_phases(ctx, self)
-                phase_timings["execution"] = round(time.time() - _t0, 1)
+                _dur = round(time.time() - _t0, 1)
+                phase_timings["execution"] = _dur
+                _checkpoint.mark_completed("execution", _dur)
 
             # 결과 통합
             collection_results = ctx["collection_results"]

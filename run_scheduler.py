@@ -221,35 +221,131 @@ def job_wrapper_multi_store() -> None:
     BGF 사이트 로그인 → 데이터 수집 → 입고/제외 수집 →
     평가 보정 → 예측 로깅 → 자동 발주 실행 → 실패 사유 수집
     전체 플로우를 DailyCollectionJob이 처리합니다.
+
+    scheduler-job-guard (04-11):
+      - JobGuard: 동일 daily_order 중복 실행 차단
+      - RetryManager: 실패 매장 추적 + 15분 재시도 (최대 3회)
     """
-    logger.info("=" * 80)
-    logger.info(f"Multi-Store Daily job triggered at {datetime.now().isoformat()}")
-    logger.info("=" * 80)
-
-    def _run_daily_order(ctx):
-        from src.scheduler.daily_job import DailyCollectionJob
-
-        job = DailyCollectionJob(store_id=ctx.store_id)
-        result = job.run_optimized(run_auto_order=True, use_improved_predictor=True)
-
-        # Phase별 시간 로깅
-        timings = result.get("phase_timings", {})
-        if timings:
-            logger.info(
-                "[%s] Phase timings: %s (total=%.1fs)",
-                ctx.store_id,
-                " | ".join(f"{k}={v}s" for k, v in timings.items()),
-                result.get("duration", 0),
-            )
-        return result
-
-    _runner.run_parallel(
-        task_fn=_run_daily_order,
-        task_name="daily_order",
+    from src.application.scheduler.job_guard import (
+        JobGuard, RetryManager, MAX_RETRY_ATTEMPTS, RETRY_INTERVAL_MINUTES,
     )
 
-    # PythonAnywhere DB 동기화 (멀티매장 완료 후)
-    _try_cloud_sync()
+    # ── 1단계: 작업 락 ──
+    guard = JobGuard("daily_order")
+    if not guard.acquire():
+        logger.warning("[daily_order] 이미 실행 중 — 이번 스케줄 스킵")
+        return
+
+    try:
+        logger.info("=" * 80)
+        logger.info(f"Multi-Store Daily job triggered at {datetime.now().isoformat()}")
+        logger.info("=" * 80)
+
+        # ── 2단계: RetryManager 초기화 ──
+        retry = RetryManager("daily_order")
+        retry.start_attempt()
+
+        # 재시도 대상 매장만 실행 (첫 시도는 전체, 재시도는 실패분만)
+        retry_targets = retry.get_retry_targets()
+        if not retry_targets:
+            logger.info("[daily_order] 모든 매장 이미 완료 — 스킵")
+            return
+
+        if retry.attempt > 1:
+            logger.info(
+                f"[daily_order] 재시도 {retry.attempt}/{MAX_RETRY_ATTEMPTS}: "
+                f"대상 매장 {retry_targets}"
+            )
+
+        def _run_daily_order(ctx):
+            # 재시도 대상이 아니면 스킵
+            if ctx.store_id not in retry_targets:
+                logger.info(f"[{ctx.store_id}] 이미 완료 — 스킵")
+                return {"success": True, "skipped": True}
+
+            from src.scheduler.daily_job import DailyCollectionJob
+
+            try:
+                job = DailyCollectionJob(store_id=ctx.store_id)
+                result = job.run_optimized(run_auto_order=True, use_improved_predictor=True)
+
+                # Phase별 시간 로깅
+                timings = result.get("phase_timings", {})
+                if timings:
+                    logger.info(
+                        "[%s] Phase timings: %s (total=%.1fs)",
+                        ctx.store_id,
+                        " | ".join(f"{k}={v}s" for k, v in timings.items()),
+                        result.get("duration", 0),
+                    )
+
+                # 성공 기록
+                if result.get("success"):
+                    retry.mark_completed(ctx.store_id)
+                else:
+                    retry.mark_failed(ctx.store_id, str(result.get("error", "unknown")))
+
+                return result
+
+            except Exception as e:
+                retry.mark_failed(ctx.store_id, str(e))
+                raise
+
+        _runner.run_parallel(
+            task_fn=_run_daily_order,
+            task_name="daily_order",
+        )
+
+        # ── 재시도 스케줄 등록 ──
+        summary = retry.get_summary()
+        if summary["retry_targets"] and retry.can_retry():
+            retry_time = (
+                datetime.now() + timedelta(minutes=RETRY_INTERVAL_MINUTES)
+            ).strftime("%H:%M")
+            logger.warning(
+                f"[daily_order] 실패 매장 {summary['retry_targets']} "
+                f"→ {retry_time}에 재시도 예약 "
+                f"({retry.attempt}/{MAX_RETRY_ATTEMPTS})"
+            )
+            import schedule as _sched
+            _sched.every().day.at(retry_time).do(
+                _retry_daily_order_once
+            ).tag("daily_order_retry")
+
+        elif summary["retry_targets"] and not retry.can_retry():
+            # 최종 실패 → 카카오 알림
+            logger.error(
+                f"[daily_order] {MAX_RETRY_ATTEMPTS}회 실패! "
+                f"미완료 매장: {summary['retry_targets']}"
+            )
+            try:
+                from src.notification.kakao_notifier import KakaoNotifier
+                notifier = KakaoNotifier()
+                notifier.send_message(
+                    f"[발주 실패 알림]\n"
+                    f"{MAX_RETRY_ATTEMPTS}회 재시도 후 최종 실패\n"
+                    f"미완료 매장: {', '.join(summary['retry_targets'])}\n"
+                    f"수동 확인 필요: run_scheduler.py --now --store {summary['retry_targets'][0]}"
+                )
+            except Exception as e:
+                logger.warning(f"[daily_order] 실패 알림 발송 실패: {e}")
+
+        # PythonAnywhere DB 동기화 (멀티매장 완료 후)
+        _try_cloud_sync()
+
+    finally:
+        guard.release()
+
+
+def _retry_daily_order_once():
+    """재시도 one-shot 실행 후 자동 제거"""
+    import schedule as _sched
+    logger.info("[daily_order] 재시도 실행 시작")
+    try:
+        job_wrapper_multi_store()
+    finally:
+        # one-shot: 실행 후 태그로 자기 자신 제거
+        _sched.clear("daily_order_retry")
 
 
 def job_wrapper() -> None:
