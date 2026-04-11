@@ -77,8 +77,13 @@ BGF 리테일(CU 편의점) 다매장 자동 발주 시스템
 <!-- ISSUE_TABLE_START -->
 | 상태 | 우선순위 | 이슈 | 파일 | 비고 |
 |:---:|:---:|------|------|------|
+| OPEN | P1 | BatchSync 가드 우회 건수 18→250건 급증 (04-10) — 재진입 패턴 의심 | expiry-tracking.md |  |
+| OPEN | - | 07시 스케줄 인터넷 장애 + 중복 실행 (04-11) | scheduling.md |  |
+| OPEN | - | BatchSync 과잉 차감 — remaining=0인데 실물 잔존 (04-11) | expiry-tracking.md |  |
+| OPEN | - | batch-sync-guard가 유통기한 1일 상품 FIFO 차감 전면 차단 (04-10) | expiry-tracking.md |  |
 | OPEN | - | product_details order_unit_qty 불일치 → 과발주 | order-execution.md |  |
-| WATCHING | - | 46704 폐기 검증 보고서 정시 생성 실패 (04-08 수정) | expiry-tracking.md | 04-09 10:00 정밀폐기 세션에서 46704 포함 4매장 보고서 파 |
+| OPEN | - | 폐기추적 근본 개선 — 판매 시점 배치 차감 (04-11) | expiry-tracking.md |  |
+| WATCHING | - | 46704 폐기 검증 보고서 정시 생성 실패 (04-08 수정) | expiry-tracking.md | 04-09 22:00 정밀폐기 세션 동일 검증 |
 | WATCHING | - | BatchSync 0판매 + 만료 임박 → 잘못된 consumed 마킹 (04-07 수정) | expiry-tracking.md | **🚨 라이브 발견 1**: 4매장 모두 false consumed 발생 |
 | WATCHING | - | D-1 부스트 발주 execute_single_order 누락 + scheduler 모듈 캐시 | expiry-tracking.md | scheduler 재시작 (운영자 수동) |
 | WATCHING | - | K4 expiry_time_mismatch 31일 NOT_MET — 식품 전용 재정의 (04-07 수정) | scheduling.md | 다음 milestone_snapshots K4 NOT_MET → ACHI |
@@ -87,28 +92,29 @@ BGF 리테일(CU 편의점) 다매장 자동 발주 시스템
 | WATCHING | - | delivery_match 타이밍 불일치 → 2차 매칭 실패 | expiry-tracking.md |  |
 | WATCHING | - | ops_metrics waste_rate mid_cd 컬럼 부재 | scheduling.md | 다음 23:55 OpsMetricsCollector 실행에서 `waste |
 | WATCHING | - | scheduler 모듈 캐시 — 코드 fix 무력화 | scheduling.md | 운영자가 start_scheduler_loop.bat으로 전환 후 다음  |
-| RESOLVED | - | 묶음 가드 우회 — 49965 햄/소시지·라면 과발주 (04-09 검증) | order-execution.md | 두 상품 미발주 확인, L3 가드 mid=023/032 정상 동작 |
+| WATCHING | - | 디저트 STOP_RECOMMEND 즉시 차단 + 자동 확정 (04-10) | order-execution.md | 다음 발주(04-11 07:00) 로그에서 "디저트 발주정지 N개 (CO |
+| WATCHING | - | 스케줄러 SrcWatcher auto-reload 후 장기 다운 (04-09) | scheduling.md | 04-10 22:00 정밀폐기 세션 정상 실행 확인 (4매장 파일 생성) |
 | WATCHING | - | 슬롯 기반 폐기 추적 검증 도입 (04-07) | expiry-tracking.md | 04-09 07:00 스케줄에서 4매장 `waste_verificatio |
+| WATCHING | - | 조리면(006) 2차 배송 미분류 → 14시 폐기 감지 누락 (04-10) | expiry-tracking.md | 다음 조리면 입고 시 delivery_type='2차', expiry_d |
 | WATCHING | - | 푸드 has_stock 그룹 약한 과소예측 — 2차 원인 | order-execution.md | 8800279678588 에 대해 라이브 predict 실행하여 WMA→ |
-| RESOLVED | - | 푸드 체계적 과소예측 — 도시락/김밥/샌드위치/햄버거 (04-09 검증) | order-execution.md | 전체 bias 72% 개선(0.455→0.127), 5/6 mid 50%+ ✓ |
-| WATCHING | - | 행사 종료 임박 상품 발주 감량 자동화 | order-execution.md | 다음 행사 종료 상품에서 D-5~D-4 감량 로그 확인 (수동) |
+| WATCHING | - | 행사 종료 임박 상품 발주 감량 자동화 | order-execution.md | 없음 |
 | PLANNED | P1 | 예측 정확도 하락 조사 (4개 카테고리) | prediction.md | 없음 |
 | PLANNED | P1 | 자전 시스템 미해결 항목 (expiry_time_mismatch) | scheduling.md | 없음 |
 | PLANNED | P2 | 010 폐기율 상승 조사 | expiry-tracking.md | 없음 |
-| OPEN | P1 | BatchSync 가드 우회 건수 18→250건 급증 (04-10) — 재진입 패턴 의심 | expiry-tracking.md | 04-10 야간 21:51~21:52 4회 탐지, 중복 상품코드 재진입 의심 |
-| PLANNED | P2 | mid_cd 048/049 MAE 동시 악화 — 봄 계절전환 계절계수 지연 | prediction.md | 04-17 1주 관측 후 계절계수 조정 검토 |
-| PLANNED | P2 | mid_cd 073 전자담배 MAE 급등 — TobaccoStrategy 파라미터 불일치 | prediction.md | 없음 |
-| PLANNED | P2 | mid_cd 032 면류 MAE 악화 + 폐기율 동시 상승 — RamenStrategy 과예측 전환 의심 | prediction.md | Phase A 보정 간섭 가능성 조사 |
 | PLANNED | P2 | CLEAR_GHOST_STOCK 자동실행 승격 검토 | scheduling.md | integrity_checks 2주 누적 데이터에서 food_ghost_ |
 | PLANNED | P2 | ML is_payday DB 반영 효과 검증 | prediction.md | f0657a8 커밋 반영 후 최소 2주 운영 데이터 필요 |
 | PLANNED | P2 | PaydayAnalyzer 결과를 ML 학습 데이터에도 반영 | prediction.md | (밀도 승격) P2 효과 검증 완료 후 양수 효과 확인 시 |
 | PLANNED | P2 | mid_cd 016 과자류 MAE 20 이상 이상 급등 — 행사/수집 원인 미규명 | prediction.md | 없음 |
+| PLANNED | P2 | mid_cd 032 면류 MAE 악화 + 폐기율 동시 상승 — RamenStrategy 과예측 전환 의심 | prediction.md | 없음 |
+| PLANNED | P2 | mid_cd 048/049 MAE 동시 악화 — 봄 계절전환 계절계수 지연 | prediction.md | 04-17 1주 관측 완료 후 조정 여부 결정 (급격한 상수 변경은 데이 |
+| PLANNED | P2 | mid_cd 073 전자담배 MAE 급등 — TobaccoStrategy 파라미터 불일치 | prediction.md | 없음 |
 | PLANNED | P2 | mid_cd 605 DefaultStrategy 오분류 — 카테고리 매핑 누락 | prediction.md | 없음 |
+| PLANNED | P2 | 비식품 20개+ 카테고리 폐기율 동반 상승 — order_unit_qty 522건 보정(2dbc763) 파급 효과 의심 | order-execution.md | 없음 |
 | PLANNED | P2 | 폐기 알림 OT 폴백 완전 제거 | expiry-tracking.md | (밀도 승격) [WATCHING] 과도기 알림 누락 → [RESOLVED] 전환 후 |
 | PLANNED | P2 | 하네스 엔지니어링 Week 3 — AI 요약 서비스 | scheduling.md | executed_at 검증 완료 (WATCHING 이슈 해결) |
 | PLANNED | P3 | hourly 시간대별 판매 소급 수집 안정화 | data-collection.md | 없음 (독립 작업) |
 | PLANNED | - | 8801043016049 site 발주 출처 추적 (P3, 04-08 ~) | order-execution.md |  |
-| PLANNED | P2 | 상품별 묶음 신뢰도 모델 — 카테고리 접근 폐기 (04-09 ~) | order-execution.md | bundle-suspect-dynamic-master SUPERSEDED 후 전환 |
+| PLANNED | - | 상품별 묶음 신뢰도 모델 (P2, 04-09 ~) | order-execution.md |  |
 <!-- ISSUE_TABLE_END -->
 
 > 이 테이블은 `python scripts/sync_issue_table.py`로 자동 갱신됩니다.
