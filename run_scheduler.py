@@ -493,19 +493,20 @@ def expiry_pre_collect_wrapper(expiry_hour: int) -> Callable[[], None]:
         logger.info("=" * 60)
 
         def collect_and_alert_task(ctx):
-            # 1) 판매 + 폐기전표 수집 (경량 모드)
+            # 1) 전체 수집 (Selenium 로그인 → 실시간 재고/판매 갱신)
+            #    경량화(collect_only) 제거 — 07:00 이후 판매 데이터가 미갱신되어
+            #    배치 remaining_qty 오차 → 폐기 감지 누락 문제 해소
             try:
                 from src.scheduler.daily_job import DailyCollectionJob
 
                 job = DailyCollectionJob(store_id=ctx.store_id)
                 result = job.run_optimized(
                     run_auto_order=False,
-                    collect_only=["sales", "waste_slip"],
                 )
 
                 if result["success"]:
                     total = result.get("total_items", 0)
-                    logger.info(f"[{ctx.store_id}] 폐기 전 수집 완료 (lightweight): {total}건")
+                    logger.info(f"[{ctx.store_id}] 폐기 전 수집 완료: {total}건")
                 else:
                     logger.warning(f"[{ctx.store_id}] 폐기 전 수집 실패: "
                                    f"{result.get('error', 'Unknown')}")
@@ -616,20 +617,19 @@ def expiry_confirm_wrapper(expiry_hour: int) -> Callable[[], None]:
         logger.info("=" * 60)
 
         def confirm_task(ctx):
-            # 1) 폐기전표만 수집 (Phase 1.15+1.16 경량 모드)
+            # 1) 전체 수집 (Selenium 로그인 → 실시간 판매/폐기전표 갱신)
             try:
                 from src.scheduler.daily_job import DailyCollectionJob
 
                 job = DailyCollectionJob(store_id=ctx.store_id)
                 result = job.run_optimized(
                     run_auto_order=False,
-                    collect_only=["waste_slip"],
                 )
 
                 if result["success"]:
-                    logger.info(f"[{ctx.store_id}] 폐기전표 수집 완료 (lightweight)")
+                    logger.info(f"[{ctx.store_id}] 폐기 확정 수집 완료")
                 else:
-                    logger.warning(f"[{ctx.store_id}] 폐기전표 수집 실패")
+                    logger.warning(f"[{ctx.store_id}] 폐기 확정 수집 실패")
             except Exception as e:
                 logger.error(f"[{ctx.store_id}] 폐기전표 수집 error: {e}")
 
