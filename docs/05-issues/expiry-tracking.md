@@ -82,6 +82,31 @@ Issue-Chain: expiry-tracking#batch-sync-over-consume
 
 ---
 
+## [OPEN] 폐기추적 근본 개선 — 판매 시점 배치 차감 (04-11)
+
+**문제**: BatchSync가 stock_qty(상품 전체 재고)에서 역산으로 FIFO 차감 → 배치별 판매 귀속 부정확 → 폐기 감지 누락/과다.
+- 04-10: 가드 차단 → remaining 과다 (폐기 과다 알림)
+- 04-11: 가드 면제 → remaining 과소 (폐기 감지 누락)
+- 진자 운동: stock 역산 방식의 구조적 한계
+
+**설계 의도 (미달성)**:
+1. 10:30 발주목록 수집 → 폐기 추적 대상 확정
+2. 입고 매칭 → 배치 생성 + 폐기시간 카운트 시작
+3. 판매 시점에 해당 배치 remaining 차감
+4. 정밀폐기 시간에 remaining > 0만 폐기 안내
+
+**현재 실제 동작 (문제)**:
+- 3단계에서 **판매 시점 차감이 아닌 stock_qty 역산 일괄 차감**
+- stock_qty는 전체 재고 → 어떤 배치에서 팔렸는지 모름
+- 결과: 배치 remaining이 실물과 괴리
+
+**해결 방향**: save_daily_sales() 시점에 sale_qty만큼 즉시 FIFO 차감
+- hourly_sales_detail 활용 가능 (시간대별 판매 → 배치 귀속 정밀화)
+
+Issue-Chain: expiry-tracking#batch-sale-time-consume
+
+---
+
 ## [RESOLVED] remaining_qty 미갱신 → 입고 기반 재설계 (03-29 ~ 04-05)
 
 **문제**: order_tracking.remaining_qty가 판매 후에도 안 줄어듦
