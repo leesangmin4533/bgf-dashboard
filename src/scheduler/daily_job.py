@@ -234,10 +234,11 @@ class DailyCollectionJob:
             phase_timings = {}
 
             # ── 3단계: PhaseCheckpoint (재시도 시 완료 Phase 스킵) ──
-            # collect_only 모드(정밀폐기 수집 등)에서는 체크포인트 비활성화
-            # — 07:00 발주 체크포인트가 13:50 폐기 수집을 스킵하는 문제 방지
+            # 07:00 발주 플로우(run_auto_order=True)에서만 체크포인트 활성화
+            # 정밀폐기 수집 등(run_auto_order=False)에서는 비활성화
+            # — 07:00 체크포인트가 13:50/22:00 수집을 스킵하는 문제 방지
             from src.application.scheduler.job_guard import PhaseCheckpoint
-            _use_checkpoint = not collect_only
+            _use_checkpoint = run_auto_order
             if _use_checkpoint:
                 _checkpoint = PhaseCheckpoint("daily_order", self.store_id)
                 _resume_phase = _checkpoint.get_resume_phase()
