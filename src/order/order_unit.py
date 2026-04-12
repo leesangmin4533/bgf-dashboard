@@ -131,10 +131,6 @@ class OrderUnitConverter:
 
         return result
 
-    # 일요일에 기본값("일월화수목금토")이어도 발주 허용하는 카테고리 (식품 등)
-    # 실제 BGF 수집 데이터 기준: 001~005(식품), 007(샐러드) 만 일요일 발주 가능
-    _SUNDAY_ALLOWED_MIDS = {"001", "002", "003", "004", "005", "007"}
-
     def is_orderable_today(
         self,
         product_info: Dict[str, Any],
@@ -168,14 +164,6 @@ class OrderUnitConverter:
         }
 
         today_char = day_map.get(today_weekday, "")
-
-        # ★ 일요일 + 기본값(미수집) + 비식품 → 발주 차단
-        # BGF 실제 데이터 기준: 식품(001~005)/샐러드(007) 외에는 100% 일요일 불가
-        if today_char == "일" and orderable_day == "일월화수목금토":
-            mid_cd = product_info.get("mid_cd", "")
-            if mid_cd and mid_cd not in self._SUNDAY_ALLOWED_MIDS:
-                return False
-
         return today_char in orderable_day
 
 
