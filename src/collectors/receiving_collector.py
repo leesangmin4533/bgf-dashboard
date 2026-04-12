@@ -1432,7 +1432,7 @@ class ReceivingCollector:
                 "item_nm": item_nm,
                 "expiration_days": expiry_days,
                 "order_unit_qty": product.get("order_unit_qty", 1),
-            }, store_id=store_id)
+            })
             registered["details"] = True
         except Exception as e:
             logger.warning(f"product_details 등록 실패 ({item_cd}): {e}")

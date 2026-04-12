@@ -210,7 +210,7 @@ def run_calibration_phases(ctx: Dict[str, Any]) -> Dict[str, Any]:
                         item_cd: result.pattern.value
                         for item_cd, result in batch_results.items()
                     }
-                    updated = pd_repo.bulk_update_demand_pattern(patterns, store_id=store_id)
+                    updated = pd_repo.bulk_update_demand_pattern(patterns)
                     from collections import Counter
                     counts = Counter(patterns.values())
                     logger.info(

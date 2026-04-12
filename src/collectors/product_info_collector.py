@@ -34,10 +34,8 @@ class ProductInfoCollector:
     MENU_PRODUCT = "mainframe.HFrameSet00.VFrameSet00.TopFrame.form.div_topMenu.form.STMB000_M0:icontext"  # 상품 메뉴
     SUBMENU_PRODUCT_SEARCH = "상품조회"  # 서브메뉴 텍스트
 
-    def __init__(self, driver: Optional[Any] = None,
-                 store_id: str = "") -> None:
+    def __init__(self, driver: Optional[Any] = None) -> None:
         self.driver = driver
-        self.store_id = store_id
         self._in_product_search_screen: bool = False
 
     def set_driver(self, driver: Any) -> None:
@@ -61,22 +59,13 @@ class ProductInfoCollector:
         try:
             cursor = conn.cursor()
 
-            if self.store_id:
-                cursor.execute("""
-                    SELECT item_cd, item_nm, expiration_days, orderable_day, orderable_status,
-                           order_unit_name, order_unit_qty, case_unit_qty, fetched_at,
-                           promo_type, promo_name, promo_start, promo_end, promo_updated
-                    FROM product_details
-                    WHERE store_id = ? AND item_cd = ?
-                """, (self.store_id, item_cd))
-            else:
-                cursor.execute("""
-                    SELECT item_cd, item_nm, expiration_days, orderable_day, orderable_status,
-                           order_unit_name, order_unit_qty, case_unit_qty, fetched_at,
-                           promo_type, promo_name, promo_start, promo_end, promo_updated
-                    FROM product_details
-                    WHERE item_cd = ?
-                """, (item_cd,))
+            cursor.execute("""
+                SELECT item_cd, item_nm, expiration_days, orderable_day, orderable_status,
+                       order_unit_name, order_unit_qty, case_unit_qty, fetched_at,
+                       promo_type, promo_name, promo_start, promo_end, promo_updated
+                FROM product_details
+                WHERE item_cd = ?
+            """, (item_cd,))
 
             row = cursor.fetchone()
         finally:
@@ -117,16 +106,10 @@ class ProductInfoCollector:
 
         try:
             # 기존 레코드 확인 (orderable_day/order_unit_qty 보존용)
-            if self.store_id:
-                existing = cursor.execute(
-                    "SELECT orderable_day, order_unit_qty FROM product_details WHERE store_id = ? AND item_cd = ?",
-                    (self.store_id, item_cd)
-                ).fetchone()
-            else:
-                existing = cursor.execute(
-                    "SELECT orderable_day, order_unit_qty FROM product_details WHERE item_cd = ?",
-                    (item_cd,)
-                ).fetchone()
+            existing = cursor.execute(
+                "SELECT orderable_day, order_unit_qty FROM product_details WHERE item_cd = ?",
+                (item_cd,)
+            ).fetchone()
 
             # ★ orderable_day: 새 값이 None이면 기존 DB 값 보존 (그리드에 ORD_ADAY 없는 경우)
             new_orderable_day = data.get("orderable_day")
@@ -142,12 +125,11 @@ class ProductInfoCollector:
 
             cursor.execute("""
                 INSERT OR REPLACE INTO product_details
-                (store_id, item_cd, item_nm, expiration_days, orderable_day, orderable_status,
+                (item_cd, item_nm, expiration_days, orderable_day, orderable_status,
                  order_unit_name, order_unit_qty, case_unit_qty, fetched_at, created_at, updated_at,
                  promo_type, promo_name, promo_start, promo_end, promo_updated)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
-                self.store_id or "",
                 item_cd,
                 data.get("item_nm"),
                 data.get("expiration_days"),

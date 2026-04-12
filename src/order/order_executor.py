@@ -109,7 +109,7 @@ class OrderExecutor:
         self.driver = driver
         self.store_id = store_id
         self._scripts_loaded = False
-        self.product_collector = ProductInfoCollector(driver, store_id=store_id)
+        self.product_collector = ProductInfoCollector(driver)
         self._last_selected_date = None  # select_order_day()에서 실제 선택된 날짜
 
     def _wait_for_dataset_ready(self, max_wait: int = 15, interval: float = 0.5) -> bool:

@@ -593,7 +593,7 @@ class ProductDetailBatchCollector:
                     large_nm=large_nm,
                 )
 
-        # 3. product_details 부분 업데이트 (매장별 분리)
+        # 3. product_details 부분 업데이트
         self._detail_repo.bulk_update_from_popup(item_cd, {
             "item_nm": data.get("item_nm"),
             "expiration_days": data.get("expiration_days"),
@@ -608,7 +608,7 @@ class ProductDetailBatchCollector:
             "small_nm": data.get("small_nm"),
             "class_nm": data.get("class_nm"),
             "fetched_at": now,
-        }, store_id=self.store_id or "")
+        })
 
     # ──────────────────────────────────────────
     # 팝업 닫기 (3단계 폴백)

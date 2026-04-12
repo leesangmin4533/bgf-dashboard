@@ -767,9 +767,7 @@ class AutoOrderSystem:
                 unit = 1
                 try:
                     if item_cd not in self._product_detail_cache:
-                        self._product_detail_cache[item_cd] = self._product_repo.get(
-                            item_cd, store_id=self.store_id
-                        )
+                        self._product_detail_cache[item_cd] = self._product_repo.get(item_cd)
                     _pd = self._product_detail_cache.get(item_cd)
                     unit = max(1, int(_pd.get("order_unit_qty") or 1)) if _pd else 1
                 except Exception:
@@ -960,11 +958,9 @@ class AutoOrderSystem:
         Returns:
             기존 발주 목록과 호환되는 dict
         """
-        # 상품 상세 정보 조회 (캐시 활용, 매장별 분리)
+        # 상품 상세 정보 조회 (캐시 활용)
         if result.item_cd not in self._product_detail_cache:
-            self._product_detail_cache[result.item_cd] = self._product_repo.get(
-                result.item_cd, store_id=self.store_id
-            )
+            self._product_detail_cache[result.item_cd] = self._product_repo.get(result.item_cd)
         product_detail = self._product_detail_cache[result.item_cd]
 
         orderable_day = DEFAULT_ORDERABLE_DAYS  # 기본값
@@ -2294,7 +2290,7 @@ class AutoOrderManager:
         self.product_repo = ProductDetailRepository()  # db_type="common"
         self.order_repo = OrderRepository(store_id=self.store_id)
         self.sales_repo = SalesRepository(store_id=self.store_id)
-        self.product_collector = ProductInfoCollector(driver, store_id=self.store_id)
+        self.product_collector = ProductInfoCollector(driver)
         self._driver = driver
 
     def set_driver(self, driver: Any) -> None:
@@ -2380,8 +2376,8 @@ class AutoOrderManager:
         for rec in recommendations:
             item_cd = rec.get("item_cd")
 
-            # 상품 상세 정보 (매장별 분리)
-            product_info = self.product_repo.get(item_cd, store_id=self.store_id)
+            # 상품 상세 정보
+            product_info = self.product_repo.get(item_cd)
 
             # 발주 가능 여부 확인
             if check_orderable and product_info:

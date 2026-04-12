@@ -118,36 +118,22 @@ def in_memory_db():
         )
     """)
 
-    # product_details 테이블 (v77: 매장별 분리)
+    # product_details 테이블
     conn.execute("""
         CREATE TABLE product_details (
-            store_id TEXT NOT NULL DEFAULT '',
-            item_cd TEXT NOT NULL,
+            item_cd TEXT PRIMARY KEY,
             item_nm TEXT,
             mid_cd TEXT,
             order_unit_qty INTEGER DEFAULT 1,
             expiration_days INTEGER,
             orderable_day TEXT DEFAULT '일월화수목금토',
-            orderable_status TEXT,
-            order_unit_name TEXT DEFAULT '낱개',
-            case_unit_qty INTEGER DEFAULT 1,
             demand_pattern TEXT DEFAULT NULL,
             sell_price INTEGER,
             margin_rate REAL,
             lead_time_days INTEGER DEFAULT 1,
             large_cd TEXT,
             small_cd TEXT,
-            small_nm TEXT,
-            class_nm TEXT,
-            fetched_at TEXT,
-            created_at TEXT,
-            updated_at TEXT,
-            promo_type TEXT,
-            promo_name TEXT,
-            promo_start TEXT,
-            promo_end TEXT,
-            promo_updated TEXT,
-            PRIMARY KEY (store_id, item_cd)
+            class_nm TEXT
         )
     """)
 
