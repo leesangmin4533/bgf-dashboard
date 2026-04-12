@@ -1900,6 +1900,106 @@ CREATE UNIQUE INDEX IF NOT EXISTS ux_waste_slips_store_date_no
 ALTER TABLE prediction_logs ADD COLUMN association_boost REAL;
 ALTER TABLE prediction_logs ADD COLUMN stage_trace TEXT;
     """,
+
+    77: """
+-- v77: product_details PK를 (store_id, item_cd)로 변경 (매장별 분리 시도)
+-- ※ v78에서 즉시 철회됨 — orderable_day는 매장 공통이므로 분리 불필요
+CREATE TABLE IF NOT EXISTS product_details_v77 (
+    store_id TEXT NOT NULL DEFAULT '',
+    item_cd TEXT NOT NULL,
+    item_nm TEXT,
+    expiration_days INTEGER,
+    orderable_day TEXT DEFAULT '일월화수목금토',
+    orderable_status TEXT,
+    order_unit_name TEXT DEFAULT '낱개',
+    order_unit_qty INTEGER DEFAULT 1,
+    case_unit_qty INTEGER DEFAULT 1,
+    lead_time_days INTEGER DEFAULT 1,
+    fetched_at TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    promo_type TEXT,
+    promo_name TEXT,
+    promo_start TEXT,
+    promo_end TEXT,
+    promo_updated TEXT,
+    sell_price INTEGER,
+    margin_rate REAL,
+    large_cd TEXT,
+    small_cd TEXT,
+    small_nm TEXT,
+    class_nm TEXT,
+    demand_pattern TEXT,
+    PRIMARY KEY (store_id, item_cd),
+    FOREIGN KEY (item_cd) REFERENCES products(item_cd)
+);
+INSERT OR IGNORE INTO product_details_v77
+    SELECT COALESCE(store_id, '') AS store_id,
+           item_cd, item_nm, expiration_days, orderable_day, orderable_status,
+           order_unit_name, order_unit_qty, case_unit_qty, lead_time_days,
+           fetched_at, created_at, updated_at,
+           promo_type, promo_name, promo_start, promo_end, promo_updated,
+           sell_price, margin_rate, large_cd, small_cd, small_nm, class_nm, demand_pattern
+    FROM product_details;
+DROP TABLE product_details;
+ALTER TABLE product_details_v77 RENAME TO product_details;
+CREATE INDEX IF NOT EXISTS idx_product_details_item ON product_details(item_cd);
+CREATE INDEX IF NOT EXISTS idx_product_details_promo ON product_details(promo_type);
+CREATE INDEX IF NOT EXISTS idx_product_details_store ON product_details(store_id, item_cd);
+CREATE INDEX IF NOT EXISTS idx_product_details_large ON product_details(large_cd);
+CREATE INDEX IF NOT EXISTS idx_product_details_small ON product_details(small_cd);
+CREATE INDEX IF NOT EXISTS idx_pd_demand_pattern ON product_details(demand_pattern);
+    """,
+
+    78: """
+-- v78: product_details PK 원복 (item_cd 단일) — v77 store_id 분리 철회
+-- orderable_day는 매장 공통 속성이므로 store_id 분리 불필요.
+-- 실제 문제는 orderable_day 기본값(미수집) 상품의 재수집이 필요한 것.
+CREATE TABLE IF NOT EXISTS product_details_v78 (
+    item_cd TEXT PRIMARY KEY,
+    item_nm TEXT,
+    expiration_days INTEGER,
+    orderable_day TEXT DEFAULT '일월화수목금토',
+    orderable_status TEXT,
+    order_unit_name TEXT DEFAULT '낱개',
+    order_unit_qty INTEGER DEFAULT 1,
+    case_unit_qty INTEGER DEFAULT 1,
+    lead_time_days INTEGER DEFAULT 1,
+    fetched_at TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    promo_type TEXT,
+    promo_name TEXT,
+    promo_start TEXT,
+    promo_end TEXT,
+    promo_updated TEXT,
+    sell_price INTEGER,
+    margin_rate REAL,
+    store_id TEXT,
+    large_cd TEXT,
+    small_cd TEXT,
+    small_nm TEXT,
+    class_nm TEXT,
+    demand_pattern TEXT,
+    FOREIGN KEY (item_cd) REFERENCES products(item_cd)
+);
+INSERT OR IGNORE INTO product_details_v78
+    SELECT item_cd, item_nm, expiration_days, orderable_day, orderable_status,
+           order_unit_name, order_unit_qty, case_unit_qty, lead_time_days,
+           fetched_at, created_at, updated_at,
+           promo_type, promo_name, promo_start, promo_end, promo_updated,
+           sell_price, margin_rate, store_id,
+           large_cd, small_cd, small_nm, class_nm, demand_pattern
+    FROM product_details;
+DROP TABLE product_details;
+ALTER TABLE product_details_v78 RENAME TO product_details;
+CREATE INDEX IF NOT EXISTS idx_product_details_item ON product_details(item_cd);
+CREATE INDEX IF NOT EXISTS idx_product_details_promo ON product_details(promo_type);
+CREATE INDEX IF NOT EXISTS idx_product_details_store ON product_details(store_id, item_cd);
+CREATE INDEX IF NOT EXISTS idx_product_details_large ON product_details(large_cd);
+CREATE INDEX IF NOT EXISTS idx_product_details_small ON product_details(small_cd);
+CREATE INDEX IF NOT EXISTS idx_pd_demand_pattern ON product_details(demand_pattern);
+    """,
 }
 
 
