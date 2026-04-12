@@ -63,8 +63,51 @@ from src.utils.logger import cleanup_old_logs
 cleanup_old_logs(max_age_days=30, max_file_mb=50)
 
 
-def _is_pid_running(pid: int) -> bool:
-    """PID가 실행 중인지 확인 (Windows/Unix 호환)"""
+def _get_process_create_time(pid: int) -> float | None:
+    """프로세스 생성 시각 반환 (Unix timestamp). 실패 시 None."""
+    if sys.platform == 'win32':
+        try:
+            import ctypes
+            from ctypes import wintypes
+            kernel32 = ctypes.windll.kernel32
+            PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+            handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+            if not handle:
+                return None
+            try:
+                creation = wintypes.FILETIME()
+                exit_t = wintypes.FILETIME()
+                kern_t = wintypes.FILETIME()
+                user_t = wintypes.FILETIME()
+                ok = kernel32.GetProcessTimes(
+                    handle,
+                    ctypes.byref(creation), ctypes.byref(exit_t),
+                    ctypes.byref(kern_t), ctypes.byref(user_t),
+                )
+                if not ok:
+                    return None
+                # FILETIME → Unix timestamp (100ns 단위, 1601-01-01 기준)
+                ft = (creation.dwHighDateTime << 32) | creation.dwLowDateTime
+                EPOCH_DIFF = 116444736000000000  # 1601→1970 차이 (100ns)
+                return (ft - EPOCH_DIFF) / 10_000_000.0
+            finally:
+                kernel32.CloseHandle(handle)
+        except Exception:
+            return None
+    else:
+        try:
+            import psutil
+            return psutil.Process(pid).create_time()
+        except Exception:
+            return None
+
+
+def _is_pid_running(pid: int, recorded_create_time: float | None = None) -> bool:
+    """PID가 실행 중인지 확인 (Windows/Unix 호환).
+
+    recorded_create_time이 주어지면 프로세스 생성 시각까지 비교하여
+    PID 재활용(reboot 후 다른 프로세스에 할당)을 감지한다.
+    """
     if sys.platform == 'win32':
         import ctypes
         kernel32 = ctypes.windll.kernel32
@@ -72,11 +115,20 @@ def _is_pid_running(pid: int) -> bool:
         handle = kernel32.OpenProcess(SYNCHRONIZE, False, pid)
         if handle:
             kernel32.CloseHandle(handle)
+            # PID는 살아있지만 생성 시각이 다르면 다른 프로세스 (PID 재활용)
+            if recorded_create_time is not None:
+                actual_time = _get_process_create_time(pid)
+                if actual_time is not None and abs(actual_time - recorded_create_time) > 2.0:
+                    return False
             return True
         return False
     else:
         try:
             os.kill(pid, 0)
+            if recorded_create_time is not None:
+                actual_time = _get_process_create_time(pid)
+                if actual_time is not None and abs(actual_time - recorded_create_time) > 2.0:
+                    return False
             return True
         except OSError:
             return False
@@ -107,33 +159,44 @@ LOCK_FILE = project_root / "data" / "scheduler.lock"
 
 
 def acquire_lock() -> bool:
-    """락 파일 생성 (중복 실행 방지)"""
+    """락 파일 생성 (중복 실행 방지).
+
+    락 파일 형식: "{pid} {create_time}" (공백 구분)
+    create_time은 프로세스 생성 Unix timestamp. PID 재활용 감지에 사용.
+    """
     try:
         # data 폴더 생성
         LOCK_FILE.parent.mkdir(parents=True, exist_ok=True)
 
         # 락 파일 존재 확인
         if LOCK_FILE.exists():
-            # 락 파일 내용 확인 (PID)
+            # 락 파일 내용 확인 (PID + 생성시각)
             try:
                 with open(LOCK_FILE, 'r') as f:
-                    old_pid = int(f.read().strip())
+                    parts = f.read().strip().split()
+                    old_pid = int(parts[0])
+                    old_create_time = float(parts[1]) if len(parts) > 1 else None
 
-                # 해당 프로세스가 실행 중인지 확인
-                if _is_pid_running(old_pid):
+                # 해당 프로세스가 실행 중인지 확인 (생성시각 비교 포함)
+                if _is_pid_running(old_pid, old_create_time):
                     print(f"[ERROR] 스케줄러가 이미 실행 중입니다 (PID: {old_pid})")
                     print(f"[INFO] 강제 종료하려면: taskkill /PID {old_pid} /F")
                     return False
                 else:
-                    # 프로세스가 없으면 오래된 락 파일 삭제
-                    print("[WARN] 오래된 락 파일 발견. 삭제합니다.")
+                    # 프로세스가 없거나 PID 재활용 → 오래된 락 파일 삭제
+                    print("[WARN] 오래된 락 파일 발견 (PID 재활용 또는 비정상 종료). 삭제합니다.")
                     LOCK_FILE.unlink()
             except (ValueError, FileNotFoundError):
                 LOCK_FILE.unlink()
 
-        # 새 락 파일 생성
+        # 새 락 파일 생성 (PID + 생성시각)
+        my_pid = os.getpid()
+        my_create_time = _get_process_create_time(my_pid)
         with open(LOCK_FILE, 'w') as f:
-            f.write(str(os.getpid()))
+            if my_create_time is not None:
+                f.write(f"{my_pid} {my_create_time}")
+            else:
+                f.write(str(my_pid))
 
         return True
     except Exception as e:
